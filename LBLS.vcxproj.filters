@@ -1,0 +1,183 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="source\LBLS.cpp" />
+    <ClCompile Include="source\Array.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="source\clDisplay.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="source\clProblem.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="source\clVariablesLB.cpp">
+      <Filter>Fluid\LBM</Filter>
+    </ClCompile>
+    <ClCompile Include="source\clVariablesFD.cpp">
+      <Filter>Fluid\Thermal</Filter>
+    </ClCompile>
+    <ClCompile Include="source\oclEnvironment.cpp">
+      <Filter>OpenCL</Filter>
+    </ClCompile>
+    <ClCompile Include="source\SparseMatrix.cpp">
+      <Filter>OpenCL</Filter>
+    </ClCompile>
+    <ClCompile Include="source\clVariablesTR.cpp">
+      <Filter>Particles</Filter>
+    </ClCompile>
+    <ClCompile Include="source\clVariablesFL.cpp">
+      <Filter>Walls</Filter>
+    </ClCompile>
+    <ClCompile Include="source\clVariablesLS.cpp">
+      <Filter>Walls</Filter>
+    </ClCompile>
+    <ClCompile Include="source\SourceGenerator.cpp">
+      <Filter>OpenCL</Filter>
+    </ClCompile>
+    <ClCompile Include="source\Kernels.cpp">
+      <Filter>OpenCL</Filter>
+    </ClCompile>
+    <ClCompile Include="source\ReduceGenerator.cpp">
+      <Filter>OpenCL</Filter>
+    </ClCompile>
+    <ClCompile Include="source\Reducer.cpp">
+      <Filter>OpenCL</Filter>
+    </ClCompile>
+    <ClCompile Include="source\BiCGStabGenerator.cpp">
+      <Filter>OpenCL</Filter>
+    </ClCompile>
+    <ClCompile Include="source\BiCGStabSolver.cpp">
+      <Filter>OpenCL</Filter>
+    </ClCompile>
+    <ClCompile Include="source\HelperFuncs.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Fluid">
+      <UniqueIdentifier>{4762d8cc-a333-465f-b508-d34a811b22db}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Particles">
+      <UniqueIdentifier>{c7eb129b-ff9f-472c-a58d-e9b0b57579f3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core">
+      <UniqueIdentifier>{743009ca-e3c5-46ae-87fe-04094fac30bd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="OpenCL">
+      <UniqueIdentifier>{5a06d30c-f5aa-487b-a908-bb41d732904b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Walls">
+      <UniqueIdentifier>{94619594-4617-499a-9ca4-435ff82298aa}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="OpenCL\Kernels">
+      <UniqueIdentifier>{32ef61b8-3ee2-441f-b7b4-827cb7c036fb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Fluid\Thermal">
+      <UniqueIdentifier>{846f0420-593b-4cd1-84e2-43e2529e5e9f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Fluid\LBM">
+      <UniqueIdentifier>{c483266a-8af2-4d60-8310-a95ea773421f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Tests">
+      <UniqueIdentifier>{633d1ec3-cc2c-4e32-856d-05e8d7b08f2d}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="source\Array.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="source\clDisplay.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="source\clProblem.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="source\ConstDef.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="source\StdAfx.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="source\clVariablesLB.h">
+      <Filter>Fluid\LBM</Filter>
+    </ClInclude>
+    <ClInclude Include="source\clVariablesFD.h">
+      <Filter>Fluid\Thermal</Filter>
+    </ClInclude>
+    <ClInclude Include="source\Kernels.h">
+      <Filter>OpenCL</Filter>
+    </ClInclude>
+    <ClInclude Include="source\oclEnvironment.h">
+      <Filter>OpenCL</Filter>
+    </ClInclude>
+    <ClInclude Include="source\SparseMatrix.h">
+      <Filter>OpenCL</Filter>
+    </ClInclude>
+    <ClInclude Include="source\clVariablesTR.h">
+      <Filter>Particles</Filter>
+    </ClInclude>
+    <ClInclude Include="source\clVariablesFL.h">
+      <Filter>Walls</Filter>
+    </ClInclude>
+    <ClInclude Include="source\clVariablesLS.h">
+      <Filter>Walls</Filter>
+    </ClInclude>
+    <ClInclude Include="source\SourceGenerator.h">
+      <Filter>OpenCL</Filter>
+    </ClInclude>
+    <ClInclude Include="source\ReduceGenerator.h">
+      <Filter>OpenCL</Filter>
+    </ClInclude>
+    <ClInclude Include="source\Reducer.h">
+      <Filter>OpenCL</Filter>
+    </ClInclude>
+    <ClInclude Include="source\BiCGStabGenerator.h">
+      <Filter>OpenCL</Filter>
+    </ClInclude>
+    <ClInclude Include="source\BiCGStabSolver.h">
+      <Filter>OpenCL</Filter>
+    </ClInclude>
+    <ClInclude Include="source\ReduceTests.h">
+      <Filter>Tests</Filter>
+    </ClInclude>
+    <ClInclude Include="source\HelperFuncs.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="source\Kernels\Heading.cl">
+      <Filter>OpenCL\Kernels</Filter>
+    </None>
+    <None Include="source\Kernels\Structures.cl">
+      <Filter>OpenCL\Kernels</Filter>
+    </None>
+    <None Include="source\Kernels\csrmvKernels.cl">
+      <Filter>OpenCL\Kernels</Filter>
+    </None>
+    <None Include="source\Kernels\flKernels.cl">
+      <Filter>OpenCL\Kernels</Filter>
+    </None>
+    <None Include="source\Kernels\lbKernels.cl">
+      <Filter>OpenCL\Kernels</Filter>
+    </None>
+    <None Include="source\Kernels\outputKernels.cl">
+      <Filter>OpenCL\Kernels</Filter>
+    </None>
+    <None Include="source\Kernels\sortKernels.cl">
+      <Filter>OpenCL\Kernels</Filter>
+    </None>
+    <None Include="source\Kernels\tfdKernels.cl">
+      <Filter>OpenCL\Kernels</Filter>
+    </None>
+    <None Include="source\Kernels\trKernels.cl">
+      <Filter>OpenCL\Kernels</Filter>
+    </None>
+    <None Include="source\Kernels\kOmegaKernels.cl">
+      <Filter>OpenCL\Kernels</Filter>
+    </None>
+    <None Include="source\Kernels\csrmvGeneralKernels.cl">
+      <Filter>OpenCL\Kernels</Filter>
+    </None>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,12 @@
+# Parameters for Fouling simulation
+--- # System Parameters
+ParamsName: 1
+Device ID: !!int                0
+ nX: !!int              100
+ nY: !!int               50
+ Pipe radius: !!float               25
+ 
+--- # LS Parameters
+ParamsName: 5
+nN: !!int              200
+ 
