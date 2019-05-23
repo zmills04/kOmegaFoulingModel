@@ -1,4 +1,4 @@
-#define GET_GLOBAL_IDX(gx,gy)	(gx + gy*CHANNEL_LENGTH_FULL)
+
 
 
 inline void compute_0th_moment(const FTYPE *Fi, FTYPE *out)

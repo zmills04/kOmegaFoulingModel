@@ -7,8 +7,9 @@
 // TODO: remove old files from source folder that are no longer needed.
 //			specifically clOutput, FileReader/Writer and Structures
 // TODO: consolidate error printing functions
-// TODO: get rid of BOOL typedef and replace with regular bools
-
+// TODO: get rid of bool typedef and replace with regular bools
+// TODO: Make sure all classes include setSourceDefines function,
+//			and that they are called before generating source code
 #include "StdAfx.h"
 #include "oclEnvironment.h"
 #include "Reducer.h"
@@ -82,10 +83,11 @@ void ini()
 		vlb.getInitialFlow();
 	}
 
-	if (vfd.thermalSolverFlag && !vfd.tempLoadedFlag)
+	if (vfd.thermalSolverFlag && !vfd.restartRunFlag)
 	{
 		vlb.getIntialFlowAndTemp();
 	}
+
 
 
 	if (!vtr.restartRunFlag)
@@ -133,17 +135,17 @@ void step()
 #endif
 };
 
-BOOL testFinish()
+bool testFinish()
 {
 #ifdef PROFILING
 	if (vlb.count_profile == 1001)
-		return TRUE;
+		return true;
 #endif
 
 	if (p.Time >= p.StopTime)
-		return TRUE;
+		return true;
 
-	return FALSE;
+	return false;
 };
 
 void Solve_LB_only()
@@ -319,7 +321,7 @@ void run()
 
 	//	step();
 
-	//	if (testFinish() == TRUE)
+	//	if (testFinish() == true)
 	//	{
 	//		p.finishQueues();
 	//		break;

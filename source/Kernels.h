@@ -13,12 +13,6 @@
 
 #include "StdAfx.h"
 #include "HelperFuncs.h"
-typedef int BOOL;
-
-#ifndef TRUE
-#define FALSE 0
-#define TRUE 1
-#endif
 
 
 
@@ -47,6 +41,7 @@ protected:
 
 public:
 	enum Dimension { X = 0, Y = 1, Z = 2 };
+
 	Kernel()
 	{
 		optionInd = -1;
@@ -60,6 +55,21 @@ public:
 	~Kernel()
 	{
 		free_memory();
+	}
+
+	size_t getLocalSize(Dimension dim_ = X)
+	{
+		return local_size[dim_];
+	}
+
+	size_t getGlobalSize(Dimension dim_ = X)
+	{
+		return global_size[dim_];
+	}
+
+	cl_command_queue* getDefaultQueue()
+	{
+		return queue;
 	}
 
 	void free_memory()
@@ -299,7 +309,7 @@ public:
 class DualKernel
 {
 protected:
-    Kernel kerA, kerB;
+	Kernel kerA, kerB;
 	int alter;
 	
 public:

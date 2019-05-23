@@ -183,7 +183,7 @@ public:
 		next_ind = 0;
 	}
 
-	BOOL reduce(cl_command_queue *que_ = NULL, int num_wait = 0, cl_event *wait = NULL, cl_event *evt = NULL)
+	bool reduce(cl_command_queue *que_ = NULL, int num_wait = 0, cl_event *wait = NULL, cl_event *evt = NULL)
 	{
 		if (que_ == NULL)
 		{
@@ -206,9 +206,9 @@ public:
 		{
 			redVals.append2file_from_device();
 			next_ind = 0;
-			return TRUE;
+			return true;
 		}
-		return FALSE;
+		return false;
 	}
 
 	T reduceSingle(cl_command_queue *que_ = NULL, int num_wait = 0, cl_event *wait = NULL, cl_event *evt = NULL)

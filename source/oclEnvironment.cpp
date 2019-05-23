@@ -120,7 +120,7 @@ void clEnv::printBuildInfo(cl_program &program, int status, std::string name_)
 	char *log = (char *)malloc(log_size);
 	cl_err = clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
 	
-	std::ofstream ofs(name_ + "_build_output.txt", std::ofstream::out);
+	std::ofstream ofs("x64" SLASH "clSource" SLASH + name_ + "_build_output.txt", std::ofstream::out);
 	if (log_size > 1)
 	{
 		ofs << log;

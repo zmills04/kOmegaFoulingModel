@@ -81,16 +81,19 @@ public:
 		clFlush(TRqueue);
 	}
 
-	void iniOpenCL(int deviceid_)
+	void iniOpenCL(int deviceid_, bool useOpenGL)
 	{
 		iniPlatform();
 		iniDevice((cl_uint)deviceid_);
-#ifndef USE_OPENGL
-		iniContext();
-#else
-		iniCLGLContext();
-#endif
+		if (!useOpenGL)
+			iniContext();
+		else // GL implementation not working at the moment
+			iniCLGLContext();
 		iniQueues();
+	}
+
+	void iniCLGLContext()
+	{
 	}
 
 

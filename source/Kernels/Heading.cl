@@ -9,8 +9,8 @@
 #define MAX(A, B)		(((A) > (B)) ? (A) : (B))
 #define MIN(A, B)		(((A) < (B)) ? (A) : (B))
 #define EPSILON			1.11e-16
-#define TRUE			1
-#define FALSE			0
+#define true			1
+#define false			0
 #define EQUALS2D(A, B)	((A.x == B.x) && (A.y == B.y))
 #define NEQUALS2D(A, B)	((A.x != B.x) || (A.y != B.y))
 #define CEPS			1.0e-5
@@ -95,6 +95,50 @@ void AtomicAdd(__global double *val, double delta)
 	} while (atom_cmpxchg((volatile __global ulong *)val, old.i, new.i) != old.i);
 }
 #endif
+
+////////////////////////////////////////////////
+////// Random number generator Functions  //////
+////////////////////////////////////////////////
+
+//! Return a 32-bit integer in the range [0..2^32)
+
+uint2 MWC64X_NextUint(uint2 s, double* resd)
+{
+	uint res = s.x ^ s.y;
+	uint X = s.x, C = s.y;
+
+	uint Xn = MWC64X_A * X + C;
+	uint carry = (uint)(Xn < C);				// The (Xn<C) will be zero or one for scalar
+	uint Cn = mad_hi(MWC64X_A, X, carry);
+
+	s.x = Xn;
+	s.y = Cn;
+	*resd = convert_double(res) / RAND_MAX;
+	return s;
+}
+
+uint2 MWC64X_NextUint2(uint2 s, double2* resd)
+{
+	uint res = s.x ^ s.y;
+
+	(*resd).x = convert_double(res) / RAND_MAX;
+	uint X = s.x, C = s.y;
+
+	uint Xn = MWC64X_A * X + C;
+	uint carry = (uint)(Xn < C);				// The (Xn<C) will be zero or one for scalar
+	uint Cn = mad_hi(MWC64X_A, X, carry);
+
+	res = Xn ^ Cn;
+	(*resd).y = convert_double(res) / RAND_MAX;
+	Xn = MWC64X_A * X + C;
+	carry = (uint)(Xn < C);				// The (Xn<C) will be zero or one for scalar
+	Cn = mad_hi(MWC64X_A, X, carry);
+
+	s.x = Xn;
+	s.y = Cn;
+	return s;
+}
+
 
 #define C_DIR 0
 #define E_DIR 1
@@ -221,4 +265,22 @@ void AtomicAdd(__global double *val, double delta)
 #define KO_VON_KARMAN		(0.41)
 #define KO_GAMMA1			(5./9.)
 #define KO_GAMMA2			(0.44)
+
+
+#define GET_GLOBAL_IDX(gx,gy)	(gx + gy*CHANNEL_LENGTH_FULL)
+
+void decodeFullGlobalIdx(const int gid, int* xval, int* yval, int* qval)
+{
+	*qval = gid / DIST_SIZE;
+	int xyval = gid % DIST_SIZE;
+	*xval = xyval % CHANNEL_LENGTH_FULL;
+	*yval = xyval / CHANNEL_LENGTH_FULL;
+}
+
+void decodeGlobalIdx(const int gid, int* xval, int* yval)
+{
+	*xval = gid % CHANNEL_LENGTH_FULL;
+	*yval = gid / CHANNEL_LENGTH_FULL;
+}
+
 

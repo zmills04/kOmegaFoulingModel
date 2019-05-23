@@ -90,14 +90,10 @@
 #pragma warning( disable : 4146)
 #include <yaml-cpp/yaml.h>
 #pragma warning( pop )
-typedef int BOOL;
+
 typedef unsigned int localSize_t;
 typedef cl_uint globalSize_t;
 
-#ifndef TRUE
-#define FALSE	0
-#define TRUE	1
-#endif
 
 
 
@@ -256,145 +252,17 @@ enum FileMode {FileIn, FileOut, FileAppend, BinaryIn, BinaryOut};
 									exit(__LINE__);
 #endif
 
-
-typedef struct Particle
-{
-	cl_double2 pos;		///position vector
-	cl_uint Num_rep;	///number of particles represented by this particle
-	cl_short type;		///type of particle (cooresponds to Param element
-	cl_short Dep_Flag; 	//-2 if waiting for re-release, -1 for not deposited, > 0 signifies the BL location it has deposited at.
-	cl_ushort Dep_timer;	//timer set to specified value once particle deposits and decrements at 0, particle is deposited
-	cl_ushort timer;		///time for use in re-releasing
-	cl_int loc;			//Node number particle is located within
-
-} par;
-
-typedef struct Particle_Param
-{
-	cl_double2 Q_A_prime;	///Used in deposition/rebound calculation
-	cl_double2 Q_A;			///used in dep/reb
-	cl_double2 tau_crit;	///critical shear stress
-	double Dp;			///particle diameter
-	double Mp;			///particle mass
-	double Kth;			///Thermophoretic Coeff
-	double D_dist;		///% of particles distributed in bin
-	double L_coeff;		///Lift coefficient (Lift force = L_coeff*Tau^1.5)
-	double D_coeff;		///Drag coefficient (Drag force = D_coeff*Tau)
-
-
-} Pparam;
-
 typedef struct Nodetemp
 {
 	cl_double2 dX;		//Initial spacings between lattice points and walls
 	cl_double2 dX_cur;	//current spacings between lattice points and walls
-	cl_int4 neigh;		//Indicies of 4 lattice points enclosing square (U and T array are of size p.nX*(p.Channel_Height+1))
+	cl_int4 neigh;		//Indicies of 4 lattice points enclosing square (U and T array are of size vlb.nX*(vlb.Channel_Height+1))
 	//where additional lattice point is used to represent lattice points in wall
 	cl_short BLind[MAX_BL_PER_NODE];	//Inidices of three closest boundary links (-1 used to represent when less than three BL's near)
 	cl_short type;		//type of of node (determined by types of nodes neighbors are)
 	cl_char Wall_Flag;  //0 is no walls nearby, 1 if bottom wall nearby and 2 if top wall nearby
 	cl_char Pad[(14 - MAX_BL_PER_NODE * 2)];
-
 } nodet;
-
-typedef struct Neighbors
-{
-	cl_int2 ii00;
-	cl_int2 ii10;
-	cl_int2 ii01;
-	cl_int2 ii11;
-
-} Nact;
-
-
-typedef struct NodeCoeff
-{
-	cl_double4 CoeffT00;
-	cl_double4 CoeffT10;
-	cl_double4 CoeffT01;
-	cl_double4 CoeffT11;
-	cl_double4 CoeffU00;
-	cl_double4 CoeffU10;
-	cl_double4 CoeffU01;
-	cl_double4 CoeffU11;
-	cl_int4 neigh;		//Indicies of 4 lattice points enclosing square (U and T array are of size p.nX*(p.Channel_Height+1))
-	cl_char Pad[16];
-
-
-} nodeC;
-
-typedef struct NodeInfo
-{
-	cl_short BLind[MAX_BL_PER_NODE];	//Inidices of three closest boundary links (-1 used to represent when less than three BL's near)
-	cl_short Wall_Flag;  //0 is no walls nearby, 1 if bottom wall nearby and 2 if top wall nearby, -1 if inactive
-	cl_char Pad[14 - 2 * MAX_BL_PER_NODE];
-
-
-} nodeI;
-
-typedef struct NodeVar
-{
-	cl_double4 Temps;
-	cl_double2 U00;
-	cl_double2 U10;
-	cl_double2 U01;
-	cl_double2 U11;
-
-
-} nodeV;
-
-
-typedef struct BL_bounds
-{
-	cl_int MIN_BL_BOT;
-	cl_int	MAX_BL_BOT;
-	cl_int MIN_BL_TOP;
-	cl_int MAX_BL_TOP;
-
-} BLbound;
-
-typedef struct BL_Links
-{
-	cl_double2 vP0;		//Location of left node
-	cl_double2 vP1;		//Location of right node
-	cl_double2 vTvec;	//tangential vector (points to the right)
-	cl_double2 vNvec;   //normal vector pointing into domain
-	cl_double Tau;		//Shear stress at location
-	cl_double blLen;	//length of BL
-	cl_int Node_loc;	//points to location BL is located in (or majority of BL when across two)
-	cl_int Color_ind;
-	cl_short P0ind;		//index of right node in vls.C array (maybe unnecessary)
-	cl_short P1ind;		//index of left node in vls.C array
-	cl_short dir;		//direction of shear stress
-	cl_short int_type;
-} bLinks;
-
-typedef struct Tr_Param
-{//Used for re-releasing particles
-	cl_double Top_location;	//Y value of uppermost node
-	cl_double Bottom_location;	//Y value of lowermost node
-	cl_double umax_val;		//Max velocity at inlet
-	cl_double bval;			//spacing between upper and lower wall at particle inlet
-	cl_double offset_y;		//Location of wall at particle inlet
-	cl_double X_release;	//X location of release
-	cl_uint BL_rel_bot;	//index of bottom BL at particle inlet (shifted to put bottom wall at zero) 
-	cl_uint BL_rel_top;	//index of top BL at particle inlet (shifted to put bottom wall at zero)
-	cl_uint Uvals_start;	//location of starting point for Uvals used in re-distribution
-	cl_char Pad[4];		//padding
-
-} Trparam;
-
-typedef struct FoulInfo
-{
-	cl_double4 WeightsL;	//Weights applied to BL deposits to left
-	cl_double4 WeightsR;	//Weights applied to BL deposits to right
-	cl_double2 vN;			//Normal vector of C node
-	cl_double disp;			//Current displacement distance
-	cl_uint BL_ind;			//index of BL to left of node
-	cl_uint C_ind;			//index of wall node this struct corresponds to
-
-} foulI;
-
 
 //typedef struct Ramp_info
 //{

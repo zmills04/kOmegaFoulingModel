@@ -133,15 +133,15 @@ int bcFindIntersectionNusselt(double *dist, double2 vLd, double2 vPL, double2 vN
 {
 	double den = dot(vN, vLd);
 	if (den == 0.)
-		return FALSE;
+		return false;
 
 	*dist = dot(vN, vPL) / den;
 	
 	if ((*dist) >= 0. && (*dist) <= 1.)
 	{
-		return TRUE;
+		return true;
 	}
-	return FALSE;
+	return false;
 }
 
 double Get_dT(double T, double Tn, double dX_cur, double dX0)

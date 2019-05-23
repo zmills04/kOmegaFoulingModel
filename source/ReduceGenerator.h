@@ -517,16 +517,16 @@ struct buildInfo
 //		return ReduceOneVal(i);
 //	}
 //
-//	virtual BOOL reduce(int num_wait = 0, cl_event *wait = NULL, cl_event *evt = NULL)
+//	virtual bool reduce(int num_wait = 0, cl_event *wait = NULL, cl_event *evt = NULL)
 //	{
 //		Gen_Error_Msg(-1000, "Trying to call reduce() with single output reduce kernel. Use reduceSingle() instead");
-//		return FALSE;
+//		return false;
 //	}
 //
-//	virtual BOOL reduce(cl_command_queue *que_, int num_wait = 0, cl_event *wait = NULL, cl_event *evt = NULL)
+//	virtual bool reduce(cl_command_queue *que_, int num_wait = 0, cl_event *wait = NULL, cl_event *evt = NULL)
 //	{
 //		Gen_Error_Msg(-1000, "Trying to call reduce() with single output reduce kernel. Use reduceSingle() instead");
-//		return FALSE;
+//		return false;
 //	}
 //
 //	virtual T reduceSingle(int num_wait = 0, cl_event *wait = NULL, cl_event *evt = NULL)
@@ -625,7 +625,7 @@ struct buildInfo
 //		next_ind = 0;
 //	}
 //
-//	BOOL reduce(cl_command_queue *que_, int num_wait = 0, cl_event *wait = NULL, cl_event *evt = NULL)
+//	bool reduce(cl_command_queue *que_, int num_wait = 0, cl_event *wait = NULL, cl_event *evt = NULL)
 //	{
 //		cur_ind = next_ind;
 //		int status = clSetKernelArg(ker, 3, sizeof(int), &cur_ind);
@@ -644,12 +644,12 @@ struct buildInfo
 //		{
 //			ReduceVals.read_from_buffer(*queue, CL_TRUE);
 //			next_ind = 0;
-//			return TRUE;
+//			return true;
 //		}
-//		return FALSE;
+//		return false;
 //	}
 //
-//	BOOL reduce(int num_wait = 0, cl_event *wait = NULL, cl_event *evt = NULL)
+//	bool reduce(int num_wait = 0, cl_event *wait = NULL, cl_event *evt = NULL)
 //	{
 //		return reduce(queue, num_wait, wait, evt);
 //	}
@@ -702,12 +702,12 @@ struct buildInfo
 //		return getLastRead();
 //	}
 //
-//	BOOL savetxt()
+//	bool savetxt()
 //	{
 //		return ReduceVals.savetxt(Name.c_str());
 //	}
 //
-//	BOOL save_txt_from_device()
+//	bool save_txt_from_device()
 //	{
 //		ReduceVals.read_from_buffer(*que, CL_TRUE);
 //		return ReduceVals.save_txt_w_skip(Name.c_str(), skip_val);

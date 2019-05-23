@@ -4,7 +4,7 @@
 //////////////////////////////////////////////////////////////////////
 
 // TODO: add pinned memory array
-
+// TODO: check if necessary to set name in all derived array classes
 
 #if !defined(AFX_ARRAY_H__INCLUDED_)
 #define AFX_ARRAY_H__INCLUDED_
@@ -15,12 +15,6 @@
 #include "oclEnvironment.h"
 #include "Kernels.h"
 
-
-typedef int BOOL;
-#ifndef TRUE
-#define FALSE 0
-#define TRUE 1
-#endif
 
 #ifdef _DEBUG
 #define ARRAY_DEBUG
@@ -617,14 +611,14 @@ public:
 /////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////
 	
-	BOOL Test_Negatives()
+	bool Test_Negatives()
 	{
 		for (int i = 0; i < FullSize; i++)
 		{
 			if (Array[i] < 0)
-				return TRUE;
+				return true;
 		}
-		return FALSE;
+		return false;
 	}
 
 
@@ -750,6 +744,15 @@ public:
 		FillBufferFunc((void*)&fillval, queue, sizeof(T), fillsize, 0, num_wait, wait, evt);
 	}
 
+	// Fills with a generic type (i.e. if filling Array1Dv2d with cl_double)
+	// fillsize needs to be provided here since we are most likely filling with different
+	// sized types
+	void FillBuffer(void* fillval, size_t typesize, int fillsize, int offset = 0, cl_command_queue *queue = NULL, int num_wait = 0,
+		cl_event *wait = NULL, cl_event *evt = NULL)
+	{
+		FillBufferFunc(fillval, queue, typesize, fullsize, offset, num_wait, wait, evt);
+	}
+	
 	// dont use frequently as this sets entire padded array to zero and then fills it
 	void fill(const T val)
 	{
@@ -948,14 +951,14 @@ public:
 /////////////////////////////////////////////////////////////////////////////////
 ///////// Generic Save/Load functions which read/write text and binaries ////////
 /////////////////////////////////////////////////////////////////////////////////
-	BOOL save(std::string FileName = "")
+	bool save(std::string FileName = "")
 	{
 		if (FileName.length() == 0)
 			FileName = Name;
 		return savetxt(FileName) && ArrayBase<T>::savebin(FileName);
 	}
 
-	BOOL save_from_device(std::string FileName = "")
+	bool save_from_device(std::string FileName = "")
 	{
 		int delflag = 0;
 		if (ArrayBase<T>::Host_Alloc_Flag == 0)
@@ -964,7 +967,7 @@ public:
 		}
 
 		read_from_buffer();
-		BOOL ret = save(FileName);
+		bool ret = save(FileName);
 		if (delflag)
 			ArrayBase<T>::FreeHost();
 		return ret;
@@ -974,15 +977,15 @@ public:
 	//SFINAE to avoid trying to read structure arrays from text files
 	//https://www.fluentcpp.com/2018/05/15/make-sfinae-pretty-1-what-value-sfinae-brings-to-code/
 	template<typename T_ = T>
-	BOOL load(std::string FileName = "", typename std::enable_if< !std::is_class<T_>::value, std::nullptr_t >::type = nullptr)
+	bool load(std::string FileName = "", typename std::enable_if< !std::is_class<T_>::value, std::nullptr_t >::type = nullptr)
 	{
-		return !((ArrayBase<T>::loadbin(FileName) == FALSE) && (loadtxt(FileName) == FALSE));
+		return !((ArrayBase<T>::loadbin(FileName) == false) && (loadtxt(FileName) == false));
 	}
 
 	template<typename T_ = T>
-	BOOL load(std::string FileName = "", typename std::enable_if< std::is_class<T_>::value, std::nullptr_t >::type = nullptr)
+	bool load(std::string FileName = "", typename std::enable_if< std::is_class<T_>::value, std::nullptr_t >::type = nullptr)
 	{
-		return !((loadbin(FileName) == FALSE));
+		return !((loadbin(FileName) == false));
 	}
 
 	// Can not load structs using plain text (with generic programming and ease atleast, so this will cause the function to
@@ -995,17 +998,17 @@ public:
 /////////  (save2file is imlemented in derived classes i.e pure virtual) ////////
 /////////////////////////////////////////////////////////////////////////////////
 
-	BOOL savetxt(std::string FileName = "")
+	bool savetxt(std::string FileName = "")
 	{
 		return save2file(FileName);
 	}
 
-	BOOL savetxt_full(std::string FileName = "")
+	bool savetxt_full(std::string FileName = "")
 	{
 		return save2file_full(FileName);
 	}
 
-	BOOL save_txt_from_device(std::string FileName = "", cl_command_queue *queue = NULL)
+	bool save_txt_from_device(std::string FileName = "", cl_command_queue *queue = NULL)
 	{ // savetxt will convert to Name if FileName = "", so no need to convert it here
 		int delflag = 0;
 		if (ArrayBase<T>::Host_Alloc_Flag == 0)
@@ -1014,14 +1017,14 @@ public:
 		}
 
 		read_from_buffer(queue);
-		BOOL ret = savetxt(FileName);
+		bool ret = savetxt(FileName);
 
 		if (delflag)
 			ArrayBase<T>::FreeHost();
 		return ret;
 	}
 
-	BOOL save_txt_from_device_full(std::string FileName = "", cl_command_queue *queue = NULL)
+	bool save_txt_from_device_full(std::string FileName = "", cl_command_queue *queue = NULL)
 	{// savetxt will convert to Name if FileName = "", so no need to convert it here
 		int delflag = 0;
 		if (ArrayBase<T>::Host_Alloc_Flag == 0)
@@ -1030,16 +1033,16 @@ public:
 		}
 
 		read_from_buffer(queue);
-		BOOL ret = savetxt_full(FileName);
+		bool ret = savetxt_full(FileName);
 
 		if (delflag)
 			ArrayBase<T>::FreeHost();
 		return ret;
 	}
 
-	virtual BOOL save2file(std::string FileName = "") = 0;
+	virtual bool save2file(std::string FileName = "") = 0;
 	
-	virtual BOOL save2file_full(std::string FileName = "")
+	virtual bool save2file_full(std::string FileName = "")
 	{
 		return save2file(FileName);
 	}
@@ -1048,10 +1051,10 @@ public:
 /////////////////////////////////////////////////////////////////////////////////
 ///////// Save Binary functions, (not virtual as it works for all arrays) ///////
 /////////////////////////////////////////////////////////////////////////////////
-	BOOL savebin(std::string FileName = "")
+	bool savebin(std::string FileName = "")
 	{//appends .bin to end of file name and directory to beginning
 #ifndef CREATE_BIN_FILES
-		return TRUE;
+		return true;
 #endif //CREATE_BIN_FILES
 		if (FileName.length() == 0)
 			FileName = Name;
@@ -1060,13 +1063,13 @@ public:
 
 		std::fstream stream;
 		if (fileopen(stream, Buf, BinaryOut) == false)
-			return FALSE;
+			return false;
 		stream.write((char*)Array, FullSize*sizeof(T));
 		stream.close();
-		return TRUE;
+		return true;
 	};
 
-	BOOL savebin_ignore_flag(std::string FileName = "")
+	bool savebin_ignore_flag(std::string FileName = "")
 	{//appends .bin to end of file name and directory to beginning
 		if (FileName.length() == 0)
 			FileName = Name;
@@ -1075,13 +1078,13 @@ public:
 
 		std::fstream stream;
 		if (fileopen(stream, Buf, BinaryOut) == false)
-			return FALSE;
+			return false;
 		stream.write((char*)Array, FullSize*sizeof(T));
 		stream.close();
-		return TRUE;
+		return true;
 	}
 
-	BOOL save_bin_from_device(std::string FileName = "", cl_command_queue *queue = NULL)
+	bool save_bin_from_device(std::string FileName = "", cl_command_queue *queue = NULL)
 	{ //calls savebin, which will set FileName correctly if defaults to ""
 		int delflag = 0;
 		if (ArrayBase<T>::Host_Alloc_Flag == 0)
@@ -1090,13 +1093,13 @@ public:
 		}
 
 		read_from_buffer(queue);
-		BOOL ret = savebin(FileName);
+		bool ret = savebin(FileName);
 		if (delflag)
 			ArrayBase<T>::FreeHost();
 		return ret;
 	}
 
-	BOOL save_bin_from_device_ignore_flag(std::string FileName = "", cl_command_queue *queue = NULL)
+	bool save_bin_from_device_ignore_flag(std::string FileName = "", cl_command_queue *queue = NULL)
 	{ //calls savebin, which will set FileName correctly if defaults to ""
 		int delflag = 0;
 		if (ArrayBase<T>::Host_Alloc_Flag == 0)
@@ -1106,7 +1109,7 @@ public:
 		if (FileName.length() == 0)
 			FileName = Name;
 		read_from_buffer(queue);
-		BOOL ret = savebin_ignore_flag(FileName);
+		bool ret = savebin_ignore_flag(FileName);
 		if (delflag)
 			ArrayBase<T>::FreeHost();
 		return ret;
@@ -1117,7 +1120,7 @@ public:
 /////////////////////////////////////////////////////////////////////////////////
 ///////// Save Binary functions, (not virtual as it works for all arrays) ///////
 /////////////////////////////////////////////////////////////////////////////////
-	BOOL loadbin(std::string FileName = "")
+	bool loadbin(std::string FileName = "")
 	{//appends .bin to end of file name
 		if (FileName.length() == 0)
 			FileName = Name;
@@ -1126,13 +1129,13 @@ public:
 
 		std::fstream stream;
 		if (fileopen(stream, Buf, BinaryIn) == false)
-			return FALSE;
+			return false;
 		stream.read((char*)Array, FullSize*sizeof(T));
 		stream.close();
-		return TRUE;
+		return true;
 	};
 
-	virtual BOOL loadtxt(std::string FileName = "") = 0;
+	virtual bool loadtxt(std::string FileName = "") = 0;
 
 // TODO: test all binary read/write/count functions
 /////////////////////////////////////////////////////////////////////////////////
@@ -1178,7 +1181,7 @@ public:
 				
 		std::fstream stream;
 		if (fileopen(stream, FileName, FileIn) == false)
-			return FALSE;
+			return false;
 
 		while (stream >> Buf)
 			counter++;
@@ -1595,13 +1598,13 @@ public:
 	}
 
 	
-	BOOL savetxt_as_2D(const int Xsize_, const int XsizeFull_, const int Ysize_, 
+	bool savetxt_as_2D(const int Xsize_, const int XsizeFull_, const int Ysize_, 
 		std::string FileName = "")
 	{
 		return save2file_as_2D(Xsize_, XsizeFull_, Ysize_, FileName);
 	}
 	
-	BOOL save_txt_from_device_as_2D(const int Xsize_, const int XsizeFull_, const int Ysize_, 
+	bool save_txt_from_device_as_2D(const int Xsize_, const int XsizeFull_, const int Ysize_, 
 		std::string FileName = "", cl_command_queue *queue = NULL)
 	{
 		int delflag = 0;
@@ -1610,19 +1613,19 @@ public:
 			delflag = 1;
 		}
 		read_from_buffer(queue);
-		BOOL ret = savetxt_as_2D(Xsize_, XsizeFull_, Ysize_, FileName);
+		bool ret = savetxt_as_2D(Xsize_, XsizeFull_, Ysize_, FileName);
 		if (delflag)
 			ArrayBase<T>::FreeHost();
 		return ret;
 	}
 	
-	BOOL savetxt_w_skip(int skip_val, std::string FileName = "")
+	bool savetxt_w_skip(int skip_val, std::string FileName = "")
 	{
 		return save2file_w_skip(Buf, skip_val);
 	}
 
 
-	BOOL save2file(std::string FileName = "")
+	bool save2file(std::string FileName = "")
 	{
 		int i;
 		if (FileName.length() == 0)
@@ -1631,18 +1634,18 @@ public:
 
 		std::fstream stream;
 		if (fileopen(stream, FileName, FileOut) == false)
-			return FALSE;
+			return false;
 
 		for (i = 0; i < ArrayBase<T>::SizeX; i++)
 		{
 			stream << getEl(i) << "\n";
 		}
 		stream.close();
-		return TRUE;
+		return true;
 	}
 
 
-	BOOL append2file_from_device(int toind_ = -1, std::string FileName = "",
+	bool append2file_from_device(int toind_ = -1, std::string FileName = "",
 		cl_command_queue *queue = NULL)
 	{
 		int delflag = 0;
@@ -1652,7 +1655,7 @@ public:
 		}
 
 		read_from_buffer(queue);
-		BOOL ret = append2file(toind_, FileName);
+		bool ret = append2file(toind_, FileName);
 
 		if (delflag)
 			ArrayBase<T>::FreeHost();
@@ -1661,7 +1664,7 @@ public:
 
 	// Kind of hacky, but passing -2 will overwrite existing file
 	// with an empty one.
-	BOOL append2file(int toind_ = -1, std::string FileName = "")
+	bool append2file(int toind_ = -1, std::string FileName = "")
 	{
 		if (toind_ == -1)
 			toind_ = SizeX;
@@ -1673,10 +1676,10 @@ public:
 
 			std::fstream stream;
 			if (fileopen(stream, FileName, FileOut) == false)
-				return FALSE;
+				return false;
 			stream.close();
 
-			return TRUE;
+			return true;
 		}
 
 
@@ -1687,18 +1690,18 @@ public:
 
 		std::fstream stream;
 		if (fileopen(stream, FileName, FileAppend) == false)
-			return FALSE;
+			return false;
 
 		for (i = 0; i < toind_; i++)
 		{
 			stream << getEl(i) << "\n";
 		}
 		stream.close();
-		return TRUE;
+		return true;
 	}
 
 
-	BOOL save2file_full(std::string FileName = "")
+	bool save2file_full(std::string FileName = "")
 	{
 		int i;
 		if (FileName.length() == 0)
@@ -1706,18 +1709,18 @@ public:
 		FileName.append(".txt");
 		std::fstream stream;
 		if (fileopen(stream, FileName, FileOut) == false)
-			return FALSE;
+			return false;
 
 		for (i = 0; i < ArrayBase<T>::SizeX; i++)
 		{
 			stream << getEl(i) << "\n";
 		}
 		stream.close();
-		return TRUE;
+		return true;
 	}
 
 
-	BOOL save2file_as_2D(const int Xsize_, const int XsizeFull_, const int Ysize_, std::string FileName = "")
+	bool save2file_as_2D(const int Xsize_, const int XsizeFull_, const int Ysize_, std::string FileName = "")
 	{
 		int i, j;
 		if (FileName.length() == 0)
@@ -1725,7 +1728,7 @@ public:
 		FileName.append(".txt");
 		std::fstream stream;
 		if (fileopen(stream, FileName, FileOut) == false)
-			return FALSE;
+			return false;
 
 		for (i = 0; i < Xsize_; i++)
 		{
@@ -1736,13 +1739,13 @@ public:
 			stream << "\n";
 		}
 		stream.close();
-		return TRUE;
+		return true;
 	}
 
 	// Could have been a function that I used for debugging, but is no
 	// longer needed
 	// TODO: check if this is still used and remove if it isnt.
-	BOOL save2file_w_skip(int skip, std::string FileName = "")
+	bool save2file_w_skip(int skip, std::string FileName = "")
 	{
 		int i;
 		if (FileName.length() == 0)
@@ -1750,18 +1753,18 @@ public:
 		FileName.append(".txt");
 		std::fstream stream;
 		if (fileopen(stream, FileName, FileOut) == false)
-			return FALSE;
+			return false;
 
 		for (i = 0; i < ArrayBase<T>::SizeX; i++)
 		{
 			stream << getEl(i*skip) << "\n";
 		}
 		stream.close();
-		return TRUE;
+		return true;
 	}
 
 
-	virtual BOOL loadtxt(std::string FileName = "") override
+	virtual bool loadtxt(std::string FileName = "") override
 	{
 		if (FileName.length() == 0)
 			FileName = Name;
@@ -1772,30 +1775,30 @@ public:
 
 		std::fstream stream;
 		if (fileopen(stream, FileName, FileIn) == false)
-			return FALSE;
+			return false;
 		for (i = 0; i < ArrayBase<T>::SizeX; i++)
 		{	
 			stream >> Buf;
 			setEl(Buf, i);
 		}
 		stream.close();
-		return TRUE;
+		return true;
 	}
 
 
-	virtual BOOL loadtxtnew(std::string FileName = "")
+	virtual bool loadtxtnew(std::string FileName = "")
 	{
 		zeros(counttxt(FileName));
 		return loadtxt(FileName);
 	}
 
-	BOOL loadbinnew(std::string FileName = "")
+	bool loadbinnew(std::string FileName = "")
 	{
 		zeros(countbin(FileName));
 		return loadbin(FileName);
 	}
 
-	BOOL loadnew(std::string FileName = "")
+	bool loadnew(std::string FileName = "")
 	{
 		int counter = countbin(FileName);
 		if (counter > 0)
@@ -1818,12 +1821,93 @@ typedef  Array1D <float> Array1Df;
 typedef  Array1D <unsigned int> Array1Du;
 typedef  Array1D <cl_short> Array1Ds;
 
-typedef  Array1D <par> Array1DP;
-typedef  Array1D <bLinks> Array1DBL;
-typedef  Array1D <Pparam> Array1DPP;
+//typedef  Array1D <par> Array1DP;
+//typedef  Array1D <bLinks> Array1DBL;
+//typedef  Array1D <Pparam> Array1DPP;
 typedef  Array1D <rampI> Array1DRI;
-typedef  Array1D <foulI> Array1DFI;
+//typedef  Array1D <foulI> Array1DFI;
 
+
+// Variable size array (use append to add element to array)
+// will increase array size by set multiple (resizeMult) of wgSize
+// when element is appended to end of current array size (append function
+// will return true if array is appended to inform that buffer needs to be
+// reallocated as this is not done when host array is reallocated to avoid
+// multiple reallocations of buffer).
+
+template <typename T>
+class DynamicArray1D : public Array1D<T>
+{
+protected:
+	int wgSize;
+	int curEl;
+	int resizeMult;
+
+public:
+	DynamicArray1D(std::string name_ = "default", const int wgsize_ = 128,
+		const int resizem_ = RESIZE_MULTIPLIER, int inisize = 0) : 
+		Array1D<T>(name_), wgSize(wgsize_), curEl(0), resizeMult(resizem_)
+	{
+		if (inisize == 0)
+			inisize = wgSize;
+
+		Array1D<T>::zeros(inisize);
+	}
+
+	bool append(const T val_)
+	{
+		Array1D<T>::operator()(curEl) = val_;
+
+		curEl++;
+		if (curEl < FullSize)
+			return false;
+
+		int newSize = FullSize * resizeMult*wgSize;
+		reallocate_host(newSize);
+
+		SizeX = newSize;
+		FullSize = newSize;
+		FullSizeX = newSize;
+		return true;
+	}
+
+	void zeros()
+	{
+		curEl = 0;
+		Array1D<T>::zeros();
+	}
+
+	void reset()
+	{
+		curEl = 0;
+	}
+
+	void copy_dynamic_to_buffer()
+	{
+		ArrayBase<T>::copy_to_buffer_size(curEl)
+	}
+
+	// memory reallocation on device, which copies current host
+	// contents to newly reallocated buffer rather than copying 
+	// values held previously in buffer.
+	void reallocate_device_dynamic()
+	{
+		FreeDevice();
+		allocate_buffer_size(FullSize);
+		ArrayBase<T>::copy_to_buffer_size(curEl)
+	}
+
+	void curSize() { return curEl; }
+	void curFullSize() { return FullSize; }
+
+};
+
+typedef  DynamicArray1D <double> DynArray1Dd;
+typedef  DynamicArray1D <int> DynArray1Di;
+typedef  DynamicArray1D <signed char> DynArray1Dc;
+typedef  DynamicArray1D <float> DynArray1Df;
+typedef  DynamicArray1D <unsigned int> DynArray1Du;
+typedef  DynamicArray1D <cl_short> DynArray1Ds;
 
 
 template <typename T, typename Tbase, int VecSize_> 
@@ -1845,7 +1929,7 @@ public:
 	{
 		ArrayBase<T>::ini(name_);
 	}
-	//BOOL loadtxtnew(std::string FileName = "") override
+	//bool loadtxtnew(std::string FileName = "") override
 	//{
 	//	zeros(counttxt(FileName) / 2);
 	//	return loadtxt(FileName);
@@ -1870,6 +1954,19 @@ YAML::Emitter& operator << (YAML::Emitter& out, Array1D<T>& arr)
 	out << YAML::EndSeq;
 	return out;
 }
+
+typedef  Array1Dv <cl_short2, cl_short, 2> Array1Dv2s;
+typedef  Array1Dv <cl_short3, cl_short, 3> Array1Dv3s;
+typedef  Array1Dv <cl_short4, cl_short, 4> Array1Dv4s;
+typedef  Array1Dv <cl_short8, cl_short, 8> Array1Dv8s;
+typedef  Array1Dv <cl_short16, cl_short, 16> Array1Dv16s;
+
+typedef  Array1Dv <cl_ushort2, cl_ushort, 2> Array1Dv2us;
+typedef  Array1Dv <cl_ushort3, cl_ushort, 3> Array1Dv3us;
+typedef  Array1Dv <cl_ushort4, cl_ushort, 4> Array1Dv4us;
+typedef  Array1Dv <cl_ushort8, cl_ushort, 8> Array1Dv8us;
+typedef  Array1Dv <cl_ushort16, cl_ushort, 16> Array1Dv16us;
+
 
 typedef  Array1Dv <cl_double2, double, 2> Array1Dv2d;
 typedef  Array1Dv <cl_double3, double, 3> Array1Dv3d;
@@ -2154,7 +2251,7 @@ public:
 	};
 
 
-	virtual BOOL save2file(std::string FileName = "")
+	virtual bool save2file(std::string FileName = "")
 	{
 		int i,j;
 		if (FileName.length() == 0)
@@ -2162,7 +2259,7 @@ public:
 		FileName.append(".txt");
 		std::fstream stream;
 		if (fileopen(stream, FileName, FileOut) == false)
-			return FALSE;
+			return false;
 
 		for (i = 0; i < ArrayBase<T>::SizeX; i++)
 		{
@@ -2173,10 +2270,10 @@ public:
 			stream << "\n";
 		}
 		stream.close();
-		return TRUE;
+		return true;
 	}
 
-	virtual BOOL savetxt_as_1D(std::string FileName = "")
+	virtual bool savetxt_as_1D(std::string FileName = "")
 	{
 		int i, j;
 		if (FileName.length() == 0)
@@ -2184,7 +2281,7 @@ public:
 		FileName.append(".txt");
 		std::fstream stream;
 		if (fileopen(stream, FileName, FileOut) == false)
-			return FALSE;
+			return false;
 
 		for (i = 0; i < ArrayBase<T>::FullSizeX; i++)
 		{
@@ -2195,10 +2292,10 @@ public:
 			stream << "\n";
 		}
 		stream.close();
-		return TRUE;
+		return true;
 	}
 
-	BOOL save_txt_from_device_as_1D(std::string FileName = "", cl_command_queue *queue = NULL)
+	bool save_txt_from_device_as_1D(std::string FileName = "", cl_command_queue *queue = NULL)
 	{ // savetxt will convert to Name if FileName = "", so no need to convert it here
 		int delflag = 0;
 		if (ArrayBase<T>::Host_Alloc_Flag == 0)
@@ -2207,14 +2304,14 @@ public:
 		}
 
 		read_from_buffer(queue);
-		BOOL ret = savetxt_as_1D(FileName);
+		bool ret = savetxt_as_1D(FileName);
 
 		if (delflag)
 			ArrayBase<T>::FreeHost();
 		return ret;
 	}
 	
-	virtual BOOL save2file_full(std::string FileName = "")
+	virtual bool save2file_full(std::string FileName = "")
 	{
 		int i,j;
 		if (FileName.length() == 0)
@@ -2222,7 +2319,7 @@ public:
 		FileName.append(".txt");
 		std::fstream stream;
 		if (fileopen(stream, FileName, FileOut) == false)
-			return FALSE;
+			return false;
 
 		for (i = 0; i < ArrayBase<T>::SizeX; i++)
 		{
@@ -2233,10 +2330,10 @@ public:
 			stream << "\n";
 		}
 		stream.close();
-		return TRUE;
+		return true;
 	}
 
-	BOOL loadtxt(std::string FileName = "")
+	bool loadtxt(std::string FileName = "")
 	{
 		int i, j;
 		T Buf;
@@ -2247,7 +2344,7 @@ public:
 
 		std::fstream stream;
 		if (fileopen(stream, FileName, FileIn) == false)
-			return FALSE;
+			return false;
 
 		for (i = 0; i < ArrayBase<T>::SizeX; i++)
 		{
@@ -2257,23 +2354,23 @@ public:
 				setEl(Buf, i, j);
 			}
 		}
-		return TRUE;
+		return true;
 	}
 
 
-	virtual BOOL loadtxtnew(const int s2, std::string FileName = "")
+	virtual bool loadtxtnew(const int s2, std::string FileName = "")
 	{
 		zeros(counttxt(FileName) / s2, s2);
 		return loadtxt(FileName);
 	}
 
-	BOOL loadbinnew(const int s2, std::string FileName = "")
+	bool loadbinnew(const int s2, std::string FileName = "")
 	{
 		zeros(countbin(FileName) / s2, s2);
 		return loadbin(FileName);
 	}
 
-	BOOL loadnew(const int s2, std::string FileName = "")
+	bool loadnew(const int s2, std::string FileName = "")
 	{
 		int counter = ArrayBase<T>::countbin(FileName);
 		if (counter > 0)
@@ -2290,11 +2387,7 @@ typedef  Array2D <int> Array2Di;
 typedef  Array2D <signed char> Array2Dc;
 typedef  Array2D <float> Array2Df;
 typedef  Array2D <unsigned int> Array2Du;
-typedef  Array2D <nodeI> Array2DNI;
-typedef  Array2D <nodeC> Array2DNC;
-typedef  Array2D <nodeV> Array2DNV;
-typedef  Array2D <nodet> Array2DNT;
-typedef  Array2D <Nact> Array2DNA;
+
 
 
 
@@ -2457,7 +2550,7 @@ public:
 			ArrayBase<T>::FullSizeX *ArrayBase<T>::FullSizeY * n3);
 	}
 
-	T getEl(const int n1, const int n2, const int n3, BOOL testfl)
+	T getEl(const int n1, const int n2, const int n3, bool testfl)
 	{
 #ifdef ARRAY_DEBUG
 		if (testfl)
@@ -2536,7 +2629,7 @@ public:
 		ArrayBase<T>::zeros();
 	}
 
-	BOOL save_txt_from_device_as_multi2D(std::string FileName = "", BOOL FullFlag = FALSE)
+	bool save_txt_from_device_as_multi2D(std::string FileName = "", bool FullFlag = false)
 	{
 		int delflag = 0;
 		if (ArrayBase<T>::Host_Alloc_Flag == 0)
@@ -2544,13 +2637,13 @@ public:
 			delflag = 1;
 		}
 		read_from_buffer();
-		BOOL ret = savetxt_as_multi2D(FileName, FullFlag);
+		bool ret = savetxt_as_multi2D(FileName, FullFlag);
 		if (delflag)
 			ArrayBase<T>::FreeHost();
 		return ret;
 	}
 
-	virtual BOOL save2file(std::string FileName = "")
+	virtual bool save2file(std::string FileName = "")
 	{
 		int i, j, k;
 		if (FileName.length() == 0)
@@ -2558,7 +2651,7 @@ public:
 		FileName.append(".txt");
 		std::fstream stream;
 		if (fileopen(stream, FileName, FileOut) == false)
-			return FALSE;
+			return false;
 
 		for (i = 0; i < SizeX; i++)
 		{
@@ -2573,10 +2666,10 @@ public:
 			stream << "\n";
 		}
 		stream.close();
-		return TRUE;
+		return true;
 	}
 
-	virtual BOOL savetxt_as_multi2D(std::string FileName = "", BOOL FullFlag = FALSE)
+	virtual bool savetxt_as_multi2D(std::string FileName = "", bool FullFlag = false)
 	{
 		if (FileName.length() == 0)
 			FileName = Name;
@@ -2591,7 +2684,7 @@ public:
 			std::string FileNameOut = FileName + "_" + std::to_string(k) + ".txt";
 			std::fstream stream;
 			if (fileopen(stream, FileNameOut, FileOut) == false)
-				return FALSE;
+				return false;
 
 
 			for (i = 0; i < Xbounds; i++)
@@ -2605,10 +2698,10 @@ public:
 			stream.close();
 		}
 
-		return TRUE;
+		return true;
 	}
 	
-	virtual BOOL loadtxt(std::string FileName = "")
+	virtual bool loadtxt(std::string FileName = "")
 	{
 		int i, j, k;
 		T Buf;
@@ -2618,7 +2711,7 @@ public:
 
 		std::fstream stream;
 		if (fileopen(stream, FileName, FileIn) == false)
-			return FALSE;
+			return false;
 
 		for (i = 0; i < ArrayBase<T>::SizeX; i++)
 		{
@@ -2632,7 +2725,7 @@ public:
 			}
 		}
 		stream.close();
-		return TRUE;
+		return true;
 	}
 
 	void reallocate_host(const int n1, const int n2, int n3)
@@ -2670,6 +2763,11 @@ public:
 
 		delete [] p;
 	};
+
+	void fill(const T val_)
+	{
+		std::fill(Array, Array + FullSize, val_);
+	}
 };
 
 typedef  Array3D <double> Array3Dd;
@@ -2688,18 +2786,21 @@ public:
 	GLuint GLpos, GLcol;
 	cl_float3 ColorVec;
 	cl_mem ColorBuf;
-	BOOL ColorVBO_flag;
-	BOOL Point_flag;
+	bool ColorVBO_flag;
+	bool Point_flag;
 	int Device_Col_Alloc_Flag;
 	float *ColArray;
 	int FullSize_col;
 	int Host_Color_Alloc_Flag;
-	Array1DGL()
+	Array1DGL(std::string name_ = "")
 	{
+		if (name_.length == 0)
+			name_ = "default";
+		Name = name_;
 		GLpos = -1;
 		GLcol = -1;
 		ColorVec = { { -1.f, -1.f, -1.f } };
-		ColorBuf = NULL;
+		ColorBuf = nullptr;
 		ColorVBO_flag = -1;
 		Point_flag = -1;
 		Device_Col_Alloc_Flag = 0;
@@ -2712,496 +2813,360 @@ public:
 		Array1DGL::delete_array();
 	}
 
-	//void FreeDeviceColor()
-	//{
-	//	if (Device_Col_Alloc_Flag)
-	//	{
-	//		clReleaseMemObject(ColorBuf);
-	//		Device_Col_Alloc_Flag = 0;
-	//		ColorVBO_flag = -1;
-	//		ColorVec = { { -1.f, -1.f, -1.f } };
-	//	}
-	//}
-
-	//void FreeHostColor()
-	//{
-	//	FREE(ColArray);
-	//	Host_Color_Alloc_Flag = 0;
-	//}
-
-	//void FreeGLColor()
-	//{
-	//	if (Device_Col_Alloc_Flag)
-	//		FreeDeviceColor();
-
-	//	if (GLcol != -1)
-	//	{
-	//		glDeleteBuffers(1, &GLcol);
-	//		GLcol = -1;
-	//	}
-
-	//}
-
-	//void FreeGLArray()
-	//{
-	//	if (GLpos != -1)
-	//	{
-	//		glDeleteBuffers(1, &GLpos);
-	//		GLpos = -1;
-	//	}
-	//	Point_flag = -1;
-	//}
-
-	//void delete_array()
-	//{
-	//	FreeGLColor();
-	//	FreeHostColor();
-	//	ArrayBase<float>::FreeDevice();
-	//	FreeGLArray();
-	//	if (Host_Buffer_Alloc_Flag)
-	//	{
-	//		printf("pinned memory must be freed with delete_array(queue)");
-	//		exit(0);
-	//	}
-	//	else
-	//		ArrayBase<float>::FreeHost();
-	//}
-
-	//void delete_array(cl_command_queue queue)
-	//{
-	//	FreeGLColor();
-	//	FreeHostColor();
-	//	ArrayBase<float>::FreeDevice();
-	//	FreeGLArray();
-	//	if (Host_Buffer_Alloc_Flag)
-	//		ArrayBase<float>::FreeHostPinned(queue);
-	//	else
-	//		ArrayBase<float>::FreeHost();
-	//}
-
-	//void CreateVBO_position(BOOL vbo_type, cl_context context, int clflags)
-	//{
-	//	Point_flag = vbo_type;
-	//	if (Host_Alloc_Flag == 0)
-	//	{
-	//		printf("trying to create VBO with empty array\n");
-	//		exit(0);
-
-	//	}
-	//	int err = 0;
-	//	GLenum target = GL_ARRAY_BUFFER;
-	//	GLenum usage = GL_DYNAMIC_DRAW;
-	//	int dataSize = sizeof(cl_float)*FullSize;
-	//	GLuint pid = 0;
-	//	glGenBuffers(1, &pid);
-	//	err += glGetError();
-	//	glBindBuffer(target, pid);
-	//	err += glGetError();
-	//	glBufferData(target, dataSize, (void*)Array, usage);
-	//	err += glGetError();
-	//	int bsize = 0;
-	//	glGetBufferParameteriv(target, GL_BUFFER_SIZE, &bsize);
-	//	err += glGetError();
-	//	if (dataSize != bsize)
-	//	{
-	//		glDeleteBuffers(1, &pid);
-	//		err += glGetError();
-	//		pid = 0;
-	//		printf("[createVBO()] Data size is mismatch with input array\n");
-	//	}
-	//	glBindBuffer(target, 0);
-	//	err += glGetError();
-	//	GLpos = pid;
-	//	glFinish();
-	//	err += glGetError();
-	//	if (err)
-	//	{
-	//		printf("OpenGL error in create position VBO\n");
-	//		exit(0);
-
-	//	}
-	//	create_pos_buffer_from_gl(context, clflags);
-	//}
-
-	//void CreateVBO_position(BOOL vbo_type)
-	//{
-	//	Point_flag = vbo_type;
-	//	if (Host_Alloc_Flag == 0)
-	//	{
-	//		printf("trying to create VBO with empty array\n");
-	//		exit(0);
-
-	//	}
-	//	int err = 0;
-	//	GLenum target = GL_ARRAY_BUFFER;
-	//	GLenum usage = GL_DYNAMIC_DRAW;
-	//	int dataSize = sizeof(cl_float)*FullSize;
-	//	GLuint pid = 0;
-	//	glGenBuffers(1, &pid);
-	//	err += glGetError();
-	//	glBindBuffer(target, pid);
-	//	err += glGetError();
-	//	glBufferData(target, dataSize, (void*)Array, usage);
-	//	err += glGetError();
-	//	int bsize = 0;
-	//	glGetBufferParameteriv(target, GL_BUFFER_SIZE, &bsize);
-	//	err += glGetError();
-	//	if (dataSize != bsize)
-	//	{
-	//		glDeleteBuffers(1, &pid);
-	//		err += glGetError();
-	//		pid = 0;
-	//		printf("[createVBO()] Data size is mismatch with input array\n");
-	//	}
-	//	glBindBuffer(target, 0);
-	//	err += glGetError();
-	//	GLpos = pid;
-	//	glFinish();
-	//	err += glGetError();
-	//	if (err)
-	//	{
-	//		printf("OpenGL error in create position VBO\n");
-	//		exit(0);
-
-	//	}
-	//}
-
-	//void AllocateColor(int csize)
-	//{
-	//	ColArray = (float*)malloc(csize*sizeof(float));
-	//	FullSize_col = csize;
-	//	Host_Color_Alloc_Flag = 1;
-	//}
-
-	//void CreateVBO_color(cl_context context, int clflags)
-	//{
-	//	ColorVBO_flag = VAR_COLOR_VBO;
-	//	if (Host_Color_Alloc_Flag == 0)
-	//	{
-	//		printf("trying to create VBO with empty array\n");
-	//		exit(0);
-
-	//	}
-	//	int err = 0;
-	//	GLenum target = GL_ARRAY_BUFFER;
-	//	GLenum usage = GL_DYNAMIC_DRAW;
-	//	int dataSize = sizeof(cl_float)*FullSize_col;
-	//	GLuint cid = 0;
-	//	glGenBuffers(1, &cid);
-	//	err += glGetError();
-	//	glBindBuffer(target, cid);
-	//	err += glGetError();
-	//	glBufferData(target, dataSize, (void*)ColArray, usage);
-	//	err += glGetError();
-	//	int bcsize = 0;
-	//	glGetBufferParameteriv(target, GL_BUFFER_SIZE, &bcsize);
-	//	err += glGetError();
-	//	if (dataSize != bcsize)
-	//	{
-	//		glDeleteBuffers(1, &cid);
-	//		err += glGetError();
-	//		cid = 0;
-	//		printf("[createVBO()] Data size is mismatch with input array\n");
-	//	}
-	//	glBindBuffer(target, 0);
-	//	err += glGetError();
-	//	GLcol = cid;
-	//	glFinish();
-	//	err += glGetError();
-	//	if (err)
-	//	{
-	//		printf("OpenGL error in create color VBO\n");
-	//		exit(0);
-
-	//	}
-	//	create_col_buffer_from_gl(context, clflags);
-	//}
-
-	//void CreateVBO_color()
-	//{
-	//	ColorVBO_flag = VAR_COLOR_VBO;
-	//	if (Host_Color_Alloc_Flag == 0)
-	//	{
-	//		printf("trying to create VBO with empty array\n");
-	//		exit(0);
-
-	//	}
-	//	int err = 0;
-	//	GLenum target = GL_ARRAY_BUFFER;
-	//	GLenum usage = GL_DYNAMIC_DRAW;
-	//	int dataSize = sizeof(cl_float)*FullSize_col;
-	//	GLuint cid = 0;
-	//	glGenBuffers(1, &cid);
-	//	err += glGetError();
-	//	glBindBuffer(target, cid);
-	//	err += glGetError();
-	//	glBufferData(target, dataSize, (void*)ColArray, usage);
-	//	err += glGetError();
-	//	int bcsize = 0;
-	//	glGetBufferParameteriv(target, GL_BUFFER_SIZE, &bcsize);
-	//	err += glGetError();
-	//	if (dataSize != bcsize)
-	//	{
-	//		glDeleteBuffers(1, &cid);
-	//		err += glGetError();
-	//		cid = 0;
-	//		printf("[createVBO()] Data size is mismatch with input array\n");
-	//	}
-	//	glBindBuffer(target, 0);
-	//	err += glGetError();
-	//	GLcol = cid;
-	//	glFinish();
-	//	err += glGetError();
-	//	if (err)
-	//	{
-	//		printf("OpenGL error in create color VBO\n");
-	//		exit(0);
-
-	//	}
-	//}
-
-	//void release_gl_objects(cl_command_queue queue)
-	//{
-	//	int status = clEnqueueReleaseGLObjects(queue, 1, &Buffer, 0, 0, 0);
-	//	if (VAR_COLOR_VBO)
-	//	{
-	//		status += clEnqueueReleaseGLObjects(queue, 1, &ColorBuf, 0, 0, 0);
-	//	}
-
-
-	//	if (status)
-	//	{
-	//		FILE *stream;
-	//		stream = fileopen("error.txt", "w+");
-	//		fprintf(stream, "Error releasing gl object with return %d\n", status);
-	//		fclose(stream);
-	//		DumpVariables();
-	//		exit(0);
-	//	}
-	//}
-
-	//void acquire_gl_objects(cl_command_queue queue)
-	//{
-	//	int status = clEnqueueAcquireGLObjects(queue, 1, &Buffer, 0, 0, 0);
-	//	if (VAR_COLOR_VBO)
-	//	{
-	//		status += clEnqueueAcquireGLObjects(queue, 1, &ColorBuf, 0, 0, 0);
-	//	}
-	//	if (status)
-	//	{
-	//		FILE *stream;
-	//		stream = fileopen("error.txt", "w+");
-	//		fprintf(stream, "Error acquiring gl object with return %d\n", status);
-	//		fclose(stream);
-	//		DumpVariables();
-	//		exit(0);
-	//	}
-	//}
-
-	//void CreateVBO_color(cl_float3 color_temp)
-	//{
-	//	ColorVBO_flag = CONST_COLOR_VBO;
-	//	ColorVec = color_temp;
-	//}
-
-
-	//void create_pos_buffer_from_gl(cl_context context, int clflags)
-	//{
-	//	Device_Alloc_Flag = 1;
-	//	clFlags = clflags;
-	//	int status;
-	//	Buffer = clCreateFromGLBuffer(context, clFlags, GLpos, &status);
-	//	if (status)
-	//	{
-	//		printf("Error creating pos buffer from GL Buffer\n");
-	//		exit(0);
-	//	}
-	//}
-
-	//void create_col_buffer_from_gl(cl_context context, int clflags)
-	//{
-	//	if (GLcol == -1)
-	//	{
-	//		printf("Color VBO must be created before clBuffer\n");
-	//		exit(0);
-	//	}
-	//	int status;
-	//	ColorBuf = clCreateFromGLBuffer(context, clflags, GLcol, &status);
-	//	if (status)
-	//	{
-	//		printf("Error creating color buffer from GL Buffer\n");
-	//		exit(0);
-	//	}
-	//	Device_Col_Alloc_Flag = 1;
-	//}
-
-	//void Render_VBO(double size)
-	//{
-	//	if (ColorVBO_flag == VAR_COLOR_VBO)
-	//	{
-	//		if (Point_flag == POINT_VBO)
-	//			Render_Points_Variable(size);
-	//		else
-	//			Render_Lines_Variable(size);
-	//	}
-	//	else
-	//	{
-	//		if (Point_flag == POINT_VBO)
-	//			Render_Points_Const(size);
-	//		else
-	//			Render_Lines_Const(size);
-	//	}
-	//}
-
-	//void* get_col_buf_add()
-	//{
-	//	return (void*)&ColorBuf;
-	//}
-
-	//void Render_Lines_Const(double size)
-	//{
-	//	glEnable(GL_LINE_SMOOTH);
-	//	glLineWidth(size);
-	//	glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
-
-	//	glBindBuffer(GL_ARRAY_BUFFER, GLpos);
-	//	glVertexPointer(2, GL_FLOAT, 0, 0);
-
-	//	glEnableClientState(GL_VERTEX_ARRAY);
-	//	glColor3f(ColorVec.x, ColorVec.y, ColorVec.z);
-
-
-	//	glDisableClientState(GL_NORMAL_ARRAY);
-
-	//	glDrawArrays(GL_LINE_STRIP, 0, FullSize / 2);
-
-	//	glDisableClientState(GL_VERTEX_ARRAY);
-
-	//	glDisableClientState(GL_LINE_SMOOTH);
-	//}
-
-
-	//void Render_Individual_Lines_Const(double size)
-	//{
-	//	glEnable(GL_LINE_SMOOTH);
-	//	glLineWidth(size);
-	//	glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
-
-	//	glBindBuffer(GL_ARRAY_BUFFER, GLpos);
-	//	glVertexPointer(2, GL_FLOAT, 0, 0);
-
-	//	glEnableClientState(GL_VERTEX_ARRAY);
-	//	glColor3f(ColorVec.x, ColorVec.y, ColorVec.z);
-
-
-	//	glDisableClientState(GL_NORMAL_ARRAY);
-
-	//	glDrawArrays(GL_LINES, 0, FullSize / 2);
-
-	//	glDisableClientState(GL_VERTEX_ARRAY);
-
-	//	glDisableClientState(GL_LINE_SMOOTH);
-	//}
-
-	//void set_color_array(cl_float3 cv)
-	//{
-	//	if (Host_Color_Alloc_Flag == 0)
-	//	{
-	//		printf("Trying to write to unallocated color array\n");
-	//		exit(0);
-
-	//	}
-
-	//	for (int i = 0; i < FullSize_col / 3; i++)
-	//	{
-	//		ColArray[i * 3] = cv.x;
-	//		ColArray[i * 3 + 1] = cv.y;
-	//		ColArray[i * 3 + 2] = cv.z;
-	//	}
-
-
-	//}
-
-	//void set_color_vector(cl_float3 cv)
-	//{
-	//	ColorVec = { { cv.x, cv.y, cv.z } };
-	//}
-
-
-	//void Render_Lines_Variable(double size)
-	//{
-	//	glEnable(GL_LINE_SMOOTH);
-	//	glLineWidth(size);
-	//	glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
-
-	//	glBindBuffer(GL_ARRAY_BUFFER, GLcol);
-	//	glColorPointer(3, GL_FLOAT, 0, 0);
-
-	//	glBindBuffer(GL_ARRAY_BUFFER, GLpos);
-	//	glVertexPointer(2, GL_FLOAT, 0, 0);
-
-	//	glEnableClientState(GL_VERTEX_ARRAY);
-	//	glEnableClientState(GL_COLOR_ARRAY);
-
-
-	//	glDisableClientState(GL_NORMAL_ARRAY);
-
-	//	glDrawArrays(GL_LINE_STRIP, 0, FullSize / 2);
-
-	//	glDisableClientState(GL_COLOR_ARRAY);
-	//	glDisableClientState(GL_VERTEX_ARRAY);
-
-	//	glDisable(GL_LINE_SMOOTH);
-	//}
-
-	//void Render_Points_Const(double size)
-	//{
-	//	glEnable(GL_POINT_SMOOTH);
-	//	glPointSize(size);
-
-
-	//	glBindBuffer(GL_ARRAY_BUFFER, GLpos);
-	//	glVertexPointer(2, GL_FLOAT, 0, 0);
-
-	//	glEnableClientState(GL_VERTEX_ARRAY);
-	//	glColor3f(ColorVec.x, ColorVec.y, ColorVec.z);
-
-
-	//	glDisableClientState(GL_NORMAL_ARRAY);
-
-	//	glDrawArrays(GL_POINTS, 0, FullSize / 2);
-
-	//	glDisableClientState(GL_VERTEX_ARRAY);
-
-	//	glDisableClientState(GL_POINT_SMOOTH);
-	//}
-
-	//void Render_Points_Variable(double size)
-	//{
-	//	glEnable(GL_POINT_SMOOTH);
-	//	glPointSize(size);
-
-	//	glBindBuffer(GL_ARRAY_BUFFER, GLcol);
-	//	glColorPointer(3, GL_FLOAT, 0, 0);
-
-	//	glBindBuffer(GL_ARRAY_BUFFER, GLpos);
-	//	glVertexPointer(2, GL_FLOAT, 0, 0);
-
-	//	glEnableClientState(GL_VERTEX_ARRAY);
-	//	glEnableClientState(GL_COLOR_ARRAY);
-
-
-	//	glDisableClientState(GL_NORMAL_ARRAY);
-
-	//	glDrawArrays(GL_POINTS, 0, FullSize / 2);
-
-	//	glDisableClientState(GL_COLOR_ARRAY);
-	//	glDisableClientState(GL_VERTEX_ARRAY);
-
-	//	glDisableClientState(GL_POINT_SMOOTH);
-	//}
-
-	//void DumpVariables();
+	void FreeDeviceColor()
+	{
+		if (Device_Col_Alloc_Flag)
+		{
+			clReleaseMemObject(ColorBuf);
+			Device_Col_Alloc_Flag = 0;
+			ColorVBO_flag = -1;
+			ColorVec = { { -1.f, -1.f, -1.f } };
+		}
+	}
+
+	void FreeHostColor()
+	{
+		delete[] ColArray;
+		Host_Color_Alloc_Flag = 0;
+	}
+
+	void FreeGLColor()
+	{
+		if (Device_Col_Alloc_Flag)
+			FreeDeviceColor();
+
+		if (GLcol != -1)
+		{
+			glDeleteBuffers(1, &GLcol);
+			GLcol = -1;
+		}
+
+	}
+
+	void FreeGLArray()
+	{
+		if (GLpos != -1)
+		{
+			glDeleteBuffers(1, &GLpos);
+			GLpos = -1;
+		}
+		Point_flag = -1;
+	}
+
+	void delete_array()
+	{
+		FreeGLColor();
+		FreeHostColor();
+		ArrayBase<float>::FreeDevice();
+		FreeGLArray();
+		ArrayBase<float>::FreeHost();
+	}
+
+	void CreateVBO_position(bool vbo_type, int clflags = CL_MEM_READ_WRITE)
+	{
+		Point_flag = vbo_type;
+		CHECK_ARRAY_ERROR(Host_Alloc_Flag == 0, 
+			"trying to create VBO with empty array", ERROR_IN_OPENGL_ARRAY);
+		GLenum target = GL_ARRAY_BUFFER;
+		GLenum usage = GL_DYNAMIC_DRAW;
+		int dataSize = sizeof(cl_float)*FullSize;
+		GLuint pid = 0;
+		int err;
+		glGenBuffers(1, &pid);
+		err = glGetError();
+		CHECK_ARRAY_ERROR(err, "Error generating glbuffer", err);
+		
+		glBindBuffer(target, pid);
+		err = glGetError();
+		CHECK_ARRAY_ERROR(err, "Error binding glbuffer", err);
+		
+		glBufferData(target, dataSize, (void*)Array, usage);
+		err = glGetError();
+		CHECK_ARRAY_ERROR(err, "Error writing to glbuffer", err);
+		
+		int bsize = 0;
+		glGetBufferParameteriv(target, GL_BUFFER_SIZE, &bsize);
+		err = glGetError();
+		CHECK_ARRAY_ERROR(err, "Error calling glGetBufferParameteriv", err);
+		
+		if (dataSize != bsize)
+		{
+			glDeleteBuffers(1, &pid);
+			CHECK_ARRAY_ERROR(true, "[createVBO()] Data size is mismatched with input array",
+				ERROR_IN_OPENGL_ARRAY);
+			pid = 0;
+		}
+		glBindBuffer(target, 0);
+		err = glGetError();
+		CHECK_ARRAY_ERROR(err, "Error error binding buffer", err);
+		
+		GLpos = pid;
+		glFinish();
+		err = glGetError();
+		CHECK_ARRAY_ERROR(err, "glFinish returned error", err);
+
+		create_pos_buffer_from_gl(*context, clflags);
+	}
+
+	void AllocateColor(int csize)
+	{
+		ColArray = new float[csize];
+		FullSize_col = csize;
+		Host_Color_Alloc_Flag = 1;
+	}
+
+	void CreateVBO_color(int clflags = CL_MEM_READ_WRITE)
+	{
+		ColorVBO_flag = VAR_COLOR_VBO;
+		CHECK_ARRAY_ERROR(Host_Color_Alloc_Flag == 0, 
+			"trying to create color VBO with empty array", ERROR_IN_OPENGL_ARRAY);
+	
+		int err = 0;
+		GLenum target = GL_ARRAY_BUFFER;
+		GLenum usage = GL_DYNAMIC_DRAW;
+		int dataSize = sizeof(cl_float)*FullSize_col;
+		GLuint cid = 0;
+		
+		glGenBuffers(1, &cid);
+		err = glGetError();
+		CHECK_ARRAY_ERROR(err, "Error generating VBO color buffer", err);
+
+		glBindBuffer(target, cid);
+		err = glGetError();
+		CHECK_ARRAY_ERROR(err, "Error binding VBO color buffer", err);
+
+		glBufferData(target, dataSize, (void*)ColArray, usage);
+		err = glGetError();
+		CHECK_ARRAY_ERROR(err, "Error copying to VBO color buffer", err);
+
+
+		int bcsize = 0;
+		glGetBufferParameteriv(target, GL_BUFFER_SIZE, &bcsize);
+		err = glGetError();
+		CHECK_ARRAY_ERROR(err, "Error calling glGetBufferParameteriv", err);
+
+		if (dataSize != bcsize)
+		{
+			glDeleteBuffers(1, &cid);
+			CHECK_ARRAY_ERROR(true, "[createVBO()] Data size is mismatched with input array",
+				ERROR_IN_OPENGL_ARRAY);
+			cid = 0;
+		}
+		glBindBuffer(target, 0);
+		err = glGetError();
+		CHECK_ARRAY_ERROR(err, "Error binding buffer", err);
+
+		GLcol = cid;
+		glFinish();
+		err = glGetError();
+		CHECK_ARRAY_ERROR(err, "Error call glFinish()", err);
+		
+		create_col_buffer_from_gl(*context, clflags);
+	}
+
+	void release_gl_objects(cl_command_queue queue)
+	{
+		int status = clEnqueueReleaseGLObjects(queue, 1, &Buffer, 0, 0, 0);
+		CHECK_ARRAY_ERROR(status, "Error releasing GL objects", status);
+		if (VAR_COLOR_VBO)
+		{
+			status = clEnqueueReleaseGLObjects(queue, 1, &ColorBuf, 0, 0, 0);
+			CHECK_ARRAY_ERROR(status, "Error releasing GL Color objects", status);
+		}
+	}
+
+	void acquire_gl_objects(cl_command_queue queue)
+	{
+		int status = clEnqueueAcquireGLObjects(queue, 1, &Buffer, 0, 0, 0);
+		CHECK_ARRAY_ERROR(status, "Error acquiring GL objects", status);
+		if (VAR_COLOR_VBO)
+		{
+			status += clEnqueueAcquireGLObjects(queue, 1, &ColorBuf, 0, 0, 0);
+			CHECK_ARRAY_ERROR(status, "Error releasing GL color objects", status);
+		}
+	}
+
+	void CreateVBO_color(cl_float3 color_temp)
+	{
+		ColorVBO_flag = CONST_COLOR_VBO;
+		ColorVec = color_temp;
+	}
+
+
+	void create_pos_buffer_from_gl(cl_context context, int clflags)
+	{
+		Device_Alloc_Flag = 1;
+		clFlags = clflags;
+		int status;
+		Buffer = clCreateFromGLBuffer(context, clFlags, GLpos, &status);
+		CHECK_ARRAY_ERROR(status, "Error creating pos buffer from GL Buffer", status);
+	}
+
+	void create_col_buffer_from_gl(cl_context context, int clflags)
+	{
+		CHECK_ARRAY_ERROR(GLcol == -1, "Color VBO must be created before clBuffer",
+			ERROR_IN_OPENGL_ARRAY);
+		int status;
+		ColorBuf = clCreateFromGLBuffer(context, clflags, GLcol, &status);
+		CHECK_ARRAY_ERROR(status, "Error creating color buffer from GL Buffer", status);
+		Device_Col_Alloc_Flag = 1;
+	}
+
+	void Render_VBO(double size)
+	{
+		if (ColorVBO_flag == VAR_COLOR_VBO)
+		{
+			if (Point_flag == POINT_VBO)
+				Render_Points_Variable(size);
+			else
+				Render_Lines_Variable(size);
+		}
+		else
+		{
+			if (Point_flag == POINT_VBO)
+				Render_Points_Const(size);
+			else
+				Render_Lines_Const(size);
+		}
+	}
+
+	cl_mem* get_col_buf_add()
+	{
+		return &ColorBuf;
+	}
+
+	void Render_Lines_Const(double size)
+	{
+		glEnable(GL_LINE_SMOOTH);
+		glLineWidth(size);
+		glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+
+		glBindBuffer(GL_ARRAY_BUFFER, GLpos);
+		glVertexPointer(2, GL_FLOAT, 0, 0);
+
+		glEnableClientState(GL_VERTEX_ARRAY);
+		glColor3f(ColorVec.x, ColorVec.y, ColorVec.z);
+
+
+		glDisableClientState(GL_NORMAL_ARRAY);
+
+		glDrawArrays(GL_LINE_STRIP, 0, FullSize / 2);
+
+		glDisableClientState(GL_VERTEX_ARRAY);
+
+		glDisableClientState(GL_LINE_SMOOTH);
+	}
+
+
+	void Render_Individual_Lines_Const(double size)
+	{
+		glEnable(GL_LINE_SMOOTH);
+		glLineWidth(size);
+		glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+
+		glBindBuffer(GL_ARRAY_BUFFER, GLpos);
+		glVertexPointer(2, GL_FLOAT, 0, 0);
+
+		glEnableClientState(GL_VERTEX_ARRAY);
+		glColor3f(ColorVec.x, ColorVec.y, ColorVec.z);
+
+
+		glDisableClientState(GL_NORMAL_ARRAY);
+
+		glDrawArrays(GL_LINES, 0, FullSize / 2);
+
+		glDisableClientState(GL_VERTEX_ARRAY);
+
+		glDisableClientState(GL_LINE_SMOOTH);
+	}
+
+	void set_color_array(cl_float3 cv)
+	{
+		CHECK_ARRAY_ERROR(Host_Color_Alloc_Flag == 0,
+			"Trying to write to unallocated color array", ERROR_IN_OPENGL_ARRAY);
+		
+		for (int i = 0; i < FullSize_col / 3; i++)
+		{
+			ColArray[i * 3] = cv.x;
+			ColArray[i * 3 + 1] = cv.y;
+			ColArray[i * 3 + 2] = cv.z;
+		}
+	}
+
+	void set_color_vector(cl_float3 cv)
+	{
+		ColorVec = { { cv.x, cv.y, cv.z } };
+	}
+
+
+	void Render_Lines_Variable(double size)
+	{
+		glEnable(GL_LINE_SMOOTH);
+		glLineWidth(size);
+		glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+
+		glBindBuffer(GL_ARRAY_BUFFER, GLcol);
+		glColorPointer(3, GL_FLOAT, 0, 0);
+
+		glBindBuffer(GL_ARRAY_BUFFER, GLpos);
+		glVertexPointer(2, GL_FLOAT, 0, 0);
+
+		glEnableClientState(GL_VERTEX_ARRAY);
+		glEnableClientState(GL_COLOR_ARRAY);
+
+		glDisableClientState(GL_NORMAL_ARRAY);
+		glDrawArrays(GL_LINE_STRIP, 0, FullSize / 2);
+
+		glDisableClientState(GL_COLOR_ARRAY);
+		glDisableClientState(GL_VERTEX_ARRAY);
+
+		glDisable(GL_LINE_SMOOTH);
+	}
+
+	void Render_Points_Const(double size)
+	{
+		glEnable(GL_POINT_SMOOTH);
+		glPointSize(size);
+
+		glBindBuffer(GL_ARRAY_BUFFER, GLpos);
+		glVertexPointer(2, GL_FLOAT, 0, 0);
+
+		glEnableClientState(GL_VERTEX_ARRAY);
+		glColor3f(ColorVec.x, ColorVec.y, ColorVec.z);
+
+		glDisableClientState(GL_NORMAL_ARRAY);
+
+		glDrawArrays(GL_POINTS, 0, FullSize / 2);
+
+		glDisableClientState(GL_VERTEX_ARRAY);
+
+		glDisableClientState(GL_POINT_SMOOTH);
+	}
+
+	void Render_Points_Variable(double size)
+	{
+		glEnable(GL_POINT_SMOOTH);
+		glPointSize(size);
+
+		glBindBuffer(GL_ARRAY_BUFFER, GLcol);
+		glColorPointer(3, GL_FLOAT, 0, 0);
+
+		glBindBuffer(GL_ARRAY_BUFFER, GLpos);
+		glVertexPointer(2, GL_FLOAT, 0, 0);
+
+		glEnableClientState(GL_VERTEX_ARRAY);
+		glEnableClientState(GL_COLOR_ARRAY);
+
+		glDisableClientState(GL_NORMAL_ARRAY);
+
+		glDrawArrays(GL_POINTS, 0, FullSize / 2);
+
+		glDisableClientState(GL_COLOR_ARRAY);
+		glDisableClientState(GL_VERTEX_ARRAY);
+
+		glDisableClientState(GL_POINT_SMOOTH);
+	}
+
 
 };
 
