@@ -122,36 +122,29 @@ void clVariablesLB::createKernels()
 {
 	if (kOmegaClass.kOmegaSolverFlag)
 	{
-		Collision_kernel.create_kernel(GetSourceProgram, LBQUEUE_REF,
+		collisionKernel.create_kernel(GetSourceProgram, LBQUEUE_REF,
 			"LB_collision_SRT_Fluid_w_kOmega", "LB_collision_SRT_Fluid_w_kOmega");
 		kOmegaClass.createKernels();
 	}
 	else
 	{
-		Collision_kernel.create_kernel(GetSourceProgram, LBQUEUE_REF,
+		collisionKernel.create_kernel(GetSourceProgram, LBQUEUE_REF,
 			"LB_collision_SRT_Fluid", "LB_collision_SRT_Fluid");
 	}
 
 	int GlobalX = p.XsizeFull;
 	int GlobalY = p.nY;
 
-	Collision_kernel.set_size(GlobalX, WORKGROUPSIZEX_LB, GlobalY, WORKGROUPSIZEY_LB);
+	collisionKernel.set_size(GlobalX, WORKGROUPSIZEX_LB, GlobalY, WORKGROUPSIZEY_LB);
 	
 	calcRoJKernel.create_kernel(GetSourceProgram, LBQUEUE_REF, "Calc_Ro_J");
 	calcRoJKernel.set_size(GlobalX, WORKGROUPSIZEX_LB, GlobalY, WORKGROUPSIZEY_LB);
 
 
+	ibbKernel.create_kernel(GetSourceProgram, LBQUEUE_REF,
+		"lbIBB", "lbIBB");
+	ibbKernel.set_size(vls.ibbArr.curSize(), WORKGROUPSIZE_IBB);
 	
-
-
-
-
-	//IBB_kernel_Fluid[0].create_kernel(p.program, &p.LBqueue, "LB_IBB");
-	//IBB_kernel_Fluid[1].create_kernel(p.program, &p.LBqueue, "LB_IBB");
-
-	//IBB_kernel_Fluid[0].set_size_1D(vls.length_ibb, WORKGROUPSIZE_IBB);
-	//IBB_kernel_Fluid[1].set_size_1D(vls.length_ibb, WORKGROUPSIZE_IBB);
-
 	// Update_output_kernel[0].create_kernel(p.program, &p.LBqueue, "LB_reduce_Ro_J");
 	// Update_output_kernel[0].set_size(p.FullSize, WORKGROUPSIZE_RED);
 
@@ -170,6 +163,7 @@ void clVariablesLB::createKernels()
 
 void clVariablesLB::freeHostArrays()
 {
+	kOmegaClass.freeHostArrays();
 }
 
 
@@ -177,7 +171,7 @@ void clVariablesLB::getInitialFlow()
 {
 	int Time = 0;
 	int option = (OPTION_SAVE_MACRO_FIELDS);
-	Collision_kernel.setOption(&option);
+	collisionKernel.setOption(&option);
 	int NextDumpSteptime = tlbmIniDumpStep - 1;
 	int dump_step_interval = NextDumpSteptime + 1;
 	int stopTime = tlbmNumIniSteps_LB;
@@ -240,7 +234,7 @@ void clVariablesLB::getIntialFlowAndTemp()
 	vfd.solveSSThermal();
 	
 	int option = (OPTION_SAVE_MACRO_FIELDS);
-	Collision_kernel.setOption(&option);
+	collisionKernel.setOption(&option);
 	int NextDumpSteptime = tlbmIniDumpStep - 1;
 	int dump_step_interval = NextDumpSteptime + 1;
 	
@@ -256,7 +250,7 @@ void clVariablesLB::getIntialFlowAndTemp()
 		clFinish(LBQUEUE);
 		if (kOmegaClass.kOmegaSolverFlag)
 			kOmegaClass.Solve();
-		vfd.solveTemp();
+		vfd.Solve();
 
 		Time++;
 		if (Time > NextDumpSteptime)
@@ -306,13 +300,6 @@ void clVariablesLB::getIntialFlowAndTemp()
 
 void clVariablesLB::ini()
 {
-	// Keep IBB arrays for now
-	//IBB_array_len = vls.fullsize_ibb_arrays;
-	//IBB_loc.allocate(IBB_array_len);
-	//IBB_loc.fill({ { 0, 0 } });
-	//IBB_coeff.allocate(IBB_array_len);
-	//IBB_coeff.fill({ { 0., 0. } });
-
 	alter = 0;
 	Save_loc = 0;
 
@@ -404,7 +391,7 @@ void clVariablesLB::iniDists(double Umaxval)
 		while (vls.M(i, j) == LB_SOLID)
 			j++;
 
-		double Yval = vls.dXArrCur(i, j, 3);
+		double Yval = vls.dXArr(i, j, 3);
 		double Feq_temp[9];
 
 		while (vls.M(i, j) != LB_SOLID)
@@ -450,12 +437,12 @@ void clVariablesLB::iniDists(double Umaxval)
 
 
 
-void clVariablesLB::iniIBB()
-{
-	vfl.update_LB_kernel[1].reset_global_size(vls.length_ibb);
-	vfl.update_LB_kernel[1].set_argument(7, &vls.num_el);
-	vfl.update_LB_kernel[1].call_kernel();
-}
+//void clVariablesLB::iniIBB()
+//{
+//	vfl.update_LB_kernel[1].reset_global_size(vls.length_ibb);
+//	vfl.update_LB_kernel[1].set_argument(7, &vls.num_el);
+//	vfl.update_LB_kernel[1].call_kernel();
+//}
 
 void clVariablesLB::iniInletVels()
 {
@@ -484,8 +471,15 @@ void clVariablesLB::iniNodeType()
 	{
 		for (int j = 0; j < p.nY; j++)
 		{
-			if (vls.M(i, j) == LB_SOLID)
+			if (vls.M(i, j) & M0_SOLID_NODE)
 				continue;
+			if (vls.M(i, j) & M_SOLID_NODE)
+			{ //if originally a fluid node, but now solid, it is a 
+			  // a fouling layer node.
+				NodeType(i, j) |= FOULED_NODE;
+				continue;
+			}
+
 
 			int norient = 0;
 			for (int m = 1; m < 9; m++)
@@ -498,12 +492,12 @@ void clVariablesLB::iniNodeType()
 				}
 				int iis = MOD(i + vlb.Cx[m], p.nX);
 				int jjs = j + Cy[m];
-				if (vls.M(iis, jjs) == LB_SOLID)
+				if (vls.M(iis, jjs) & M_SOLID_NODE)
 				{
 					norient |= boundsArr[m];
-					if (vls.dXArrCur(i, j, m - 1) <= 0.5)
+					if (vls.dXArr(i, j, m - 1) <= 0.5)
 						norient |= boundsArrT1[m];
-					else if (vls.dXArrCur(i, j, m - 1) > 0.5)
+					else if (vls.dXArr(i, j, m - 1) > 0.5)
 						norient |= boundsArrT2[m];
 					else
 						printf("dir at (%d,%d) points to solid node, but dx = 1\n", i, j);
@@ -705,20 +699,20 @@ void clVariablesLB::setKernelArgs()
 	cl_int ind = 0;
 	int zer = 0; 
 
-	Collision_kernel.set_argument(ind++, Ro_array.get_buf_add());
-	Collision_kernel.set_argument(ind++, Ux_array.get_buf_add());
-	Collision_kernel.set_argument(ind++, Uy_array.get_buf_add());
-	Collision_kernel.set_separate_arguments(ind++, FA.get_buf_add(), FB.get_buf_add());
-	Collision_kernel.set_separate_arguments(ind++, FB.get_buf_add(), FA.get_buf_add());
-	Collision_kernel.set_argument(ind++, NodeType.get_buf_add());
-	Collision_kernel.set_argument(ind++, vls.dXArrCur.get_buf_add());
-	Collision_kernel.set_argument(ind++, kOmegaClass.WallD.get_buf_add());
-	Collision_kernel.set_argument(ind++, kOmegaClass.Nut_array.get_buf_add());
-	Collision_kernel.set_argument(ind++, kOmegaClass.Kappa.get_add_Macro());
-	Collision_kernel.set_argument(ind++, kOmegaClass.Omega.get_add_Macro());
-	Collision_kernel.set_argument(ind++, kOmegaClass.Sxy_array.get_buf_add());
-	Collision_kernel.setOptionInd(ind);
-	Collision_kernel.set_argument(ind++, &zer);
+	collisionKernel.set_argument(ind++, Ro_array.get_buf_add());
+	collisionKernel.set_argument(ind++, Ux_array.get_buf_add());
+	collisionKernel.set_argument(ind++, Uy_array.get_buf_add());
+	collisionKernel.set_separate_arguments(ind++, FA.get_buf_add(), FB.get_buf_add());
+	collisionKernel.set_separate_arguments(ind++, FB.get_buf_add(), FA.get_buf_add());
+	collisionKernel.set_argument(ind++, NodeType.get_buf_add());
+	collisionKernel.set_argument(ind++, vls.dXArr.get_buf_add());
+	collisionKernel.set_argument(ind++, kOmegaClass.WallD.get_buf_add());
+	collisionKernel.set_argument(ind++, kOmegaClass.Nut_array.get_buf_add());
+	collisionKernel.set_argument(ind++, kOmegaClass.Kappa.get_add_Macro());
+	collisionKernel.set_argument(ind++, kOmegaClass.Omega.get_add_Macro());
+	collisionKernel.set_argument(ind++, kOmegaClass.Sxy_array.get_buf_add());
+	collisionKernel.setOptionInd(ind);
+	collisionKernel.set_argument(ind++, &zer);
 
 	
 	ind = 0;
@@ -734,15 +728,16 @@ void clVariablesLB::setKernelArgs()
 		clFinish(LBQUEUE);
 	}
 
+	ind = 0;
+	ibbKernel.set_argument(ind++, vls.ibbArr.get_buf_add());
+	ibbKernel.set_argument(ind++, vls.dXArr.get_buf_add());
+	ibbKernel.set_separate_arguments(ind++, FB.get_buf_add(),
+		FA.get_buf_add());
+	ibbKernel.set_argument(ind, vls.ibbArr.curSizeAdd());
+	ibbKernel.setOptionInd(ind);
 
 	kOmegaClass.setKernelArgs();
 
-
-	//ind = 0;
-	//IBB_kernel_Fluid.set_argument(ind++, IBB_loc.get_buf_add());
-	//IBB_kernel_Fluid.set_argument(ind++, IBB_coeff.get_buf_add());
-	//IBB_kernel_Fluid.set_argument(ind++, FB.get_buf_add());
-	//IBB_kernel_Fluid.set_argument(ind++, &vls.num_el);
 
 //	ind = 0;
 //	Update_output_kernel[0].set_argument(ind++, Ro_array.get_buf_add());
@@ -771,7 +766,7 @@ void clVariablesLB::setSourceDefines()
 void clVariablesLB::Solve()
 {
 	//cl_event col_evt;
-	Collision_kernel.call_kernel(NULL, 0, NULL, NULL);
+	collisionKernel.call_kernel(NULL, 0, NULL, NULL);
 	clFinish(LBQUEUE);
 
 //	clReleaseEvent(col_evt);
@@ -804,57 +799,8 @@ bool clVariablesLB::testRestartRun()
 // Not implemented
 void clVariablesLB::updateIBBArrays()
 {
-	//int fullsize_ibb_old = vls.fullsize_ibb_arrays;
-	//vls.fullsize_Bnodes_old = vls.fullsize_Bnodes;
-	//vls.update_IBB_arrays();
-
-	//if (fullsize_ibb_old <  vls.fullsize_ibb_arrays)
-	//{
-	//	int newsize = vls.length_ibb * 2;
-	//	vls.fullsize_ibb_arrays = newsize;
-
-	//	vls.ii0_array.reallocate(newsize, p.context, p.IOqueue);
-	//	vls.iis1_array.reallocate(newsize, p.context, p.IOqueue);
-	//	vls.dir_array.reallocate(newsize, p.context, p.IOqueue);
-	//	vls.D_array.reallocate(newsize, p.context, p.IOqueue);
-
-	//	IBB_loc.reallocate_device_only(newsize, p.context, p.IOqueue);
-	//	IBB_coeff.reallocate_device_only(newsize, p.context, p.IOqueue);
-
-	//	clFinish(p.IOqueue);
-
-	//	vfl.update_LB_kernel[1].set_argument(0, IBB_loc.get_buf_add());
-	//	vfl.update_LB_kernel[1].set_argument(1, IBB_coeff.get_buf_add());
-	//	vfl.update_LB_kernel[1].set_argument(2, vls.ii0_array.get_buf_add());
-	//	vfl.update_LB_kernel[1].set_argument(3, vls.iis1_array.get_buf_add());
-	//	vfl.update_LB_kernel[1].set_argument(4, vls.dir_array.get_buf_add());
-	//	vfl.update_LB_kernel[1].set_argument(6, vls.D_array.get_buf_add());
-
-	//	vtr.Update_SS_kernel[0].set_argument(2, vls.dir_array.get_buf_add());
-	//	vtr.Update_SS_kernel[0].set_argument(3, vls.ii0_array.get_buf_add());
-
-	//	IBB_kernel_Fluid[0].set_argument(0, IBB_loc.get_buf_add());
-	//	IBB_kernel_Fluid[1].set_argument(0, IBB_loc.get_buf_add());
-
-	//	IBB_kernel_Fluid[0].set_argument(1, IBB_coeff.get_buf_add());
-	//	IBB_kernel_Fluid[1].set_argument(1, IBB_coeff.get_buf_add());
-	//}
-
-	//vls.ii0_array.copy_to_buffer(p.IOqueue, CL_FALSE, vls.num_el);
-	//vls.iis1_array.copy_to_buffer(p.IOqueue, CL_FALSE, vls.num_el);
-	//vls.dir_array.copy_to_buffer(p.IOqueue, CL_FALSE, vls.num_el);
-	//vls.D_array.copy_to_buffer(p.IOqueue, CL_FALSE, vls.num_el);
-
-	//IBB_kernel_Fluid[0].reset_global_size(vls.length_ibb);
-	//IBB_kernel_Fluid[1].reset_global_size(vls.length_ibb);
-	//vfl.update_LB_kernel[1].reset_global_size(vls.length_ibb);
-
-	//IBB_kernel_Fluid[0].set_argument(3, &vls.num_el);
-	//IBB_kernel_Fluid[1].set_argument(3, &vls.num_el);
-
-	//vfl.update_LB_kernel[1].set_argument(7, &vls.num_el);
-	//clFinish(p.IOqueue);
-	//vfl.update_LB_kernel[1].call_kernel();
+	vls.updateIBBArray();
+	ibbKernel.setOption(vls.ibbArr.curSizeAdd());
 }
 
 

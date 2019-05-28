@@ -282,15 +282,15 @@ typedef struct Ramp_info
 
 
 
-inline std::istream& operator>>(std::istream& is, const par& el)
-{
-	return is;
-}
-
-inline std::istream& operator>>(std::istream& is, const bLinks& el)
-{
-	return is;
-}
+//inline std::istream& operator>>(std::istream& is, const par& el)
+//{
+//	return is;
+//}
+//
+//inline std::istream& operator>>(std::istream& is, const bLinks& el)
+//{
+//	return is;
+//}
 
 
 inline std::istream& operator>>(std::istream& is, const rampI& el)
@@ -298,124 +298,124 @@ inline std::istream& operator>>(std::istream& is, const rampI& el)
 	return is;
 }
 
-inline std::istream& operator>>(std::istream& is, const foulI& el)
-{
-	return is;
-}
+//inline std::istream& operator>>(std::istream& is, const foulI& el)
+//{
+//	return is;
+//}
+//
 
-
-inline std::istream& operator>>(std::istream& is, const Pparam& el)
-{
-	return is;
-}
+//inline std::istream& operator>>(std::istream& is, const Pparam& el)
+//{
+//	return is;
+//}
 
 inline std::istream& operator>>(std::istream& is, const nodet& el)
 {
 	return is;
 }
 
+//
+//inline std::istream& operator>>(std::istream& is, const nodeI& el)
+//{
+//	return is;
+//}
+//
+//inline std::istream& operator>>(std::istream& is, const nodeV& el)
+//{
+//	return is;
+//}
+//
+//inline std::istream& operator>>(std::istream& is, const nodeC& el)
+//{
+//	return is;
+//}
 
-inline std::istream& operator>>(std::istream& is, const nodeI& el)
-{
-	return is;
-}
-
-inline std::istream& operator>>(std::istream& is, const nodeV& el)
-{
-	return is;
-}
-
-inline std::istream& operator>>(std::istream& is, const nodeC& el)
-{
-	return is;
-}
-
-inline std::istream& operator>>(std::istream& is, const Nact& el)
-{
-	return is;
-}
-
-
-
-inline std::ostream& operator<<(std::ostream& os, const BLbound& el)
-{
-	os << "BL_bounds: Bottom (min, max) = (" << el.MIN_BL_BOT << ", " << el.MAX_BL_BOT << ")\n";
-	os << "Top (min, max) = (" << el.MIN_BL_TOP << ", " << el.MAX_BL_TOP << ")\n\n";
-	return os;
-}
-
-inline std::ostream& operator<<(std::ostream& os, const Trparam& el)
-{
-	os << "Tr Params:\n";
-	os << "\tTop Location = " << el.Top_location << "\n";
-	os << "\tBottom Location = " << el.Bottom_location << "\n";
-	os << "\tUmax Value = " << el.umax_val << "\n";
-	os << "\tWall spacing at inlet = " << el.bval << "\n";
-	os << "\tBottom Wall Location at Inlet = " << el.offset_y << "\n";
-	os << "\tX position of Release = " << el.X_release << "\n";
-	os << "\tBL at bottom where released = " << el.BL_rel_bot << "\n";
-	os << "\tBL at top where released = " << el.BL_rel_top << "\n";
-	os << "\tUvals_start = " << el.Uvals_start << "\n";
-	return os;
-}
-
-inline std::ostream& operator<<(std::ostream& os, const par& el)
-{
-#ifdef DUMP_PAR_FULL
-#ifdef ARRAY_DEBUG
-	os << el.type << "\t" << el.Num_rep << "\t" << el.Dep_Flag << "\t"
-		<< el.Dep_timer << "\t" << el.timer << "\t" << el.loc << "\t"
-		<< std::setw(10) << el.pos.x << "\t" << std::setw(10) << el.pos.y;
-#else
-	os << el.type << "\t" << el.Num_rep << "\t" << el.Dep_Flag << "\t"
-		<< el.Dep_timer << "\t" << el.timer << "\t" << el.loc << "\t"
-		<< el.pos.x << "\t" << el.pos.y;
-#endif
-
-#else
-
-#ifdef ARRAY_DEBUG
-	os << std::setw(10) << el.pos.x << "\t" << std::setw(10) << el.pos.y;
-#else
-	os << el.pos.x << "\t" << el.pos.y;
-#endif
-#endif
-	return os;
-}
+//inline std::istream& operator>>(std::istream& is, const Nact& el)
+//{
+//	return is;
+//}
 
 
-// Saves full BL structure
 
-inline std::ostream& operator<<(std::ostream& os, const bLinks& el)
-{
-#ifdef DUMP_BLINKS_FULL
-#ifdef ARRAY_DEBUG
-	os << std::setw(10) << el.vP0.x << "\t" << std::setw(10) << el.vP0.y <<
-		"\t" << std::setw(10) << el.vP1.x << "\t" << std::setw(10) << el.vP1.y <<
-		"\t" << std::setw(10) << el.vTvec.x << "\t" << std::setw(10) << el.vTvec.y <<
-		"\t" << std::setw(10) << el.vNvec.x << "\t" << std::setw(10) << el.vNvec.y <<
-		"\t" << std::setw(10) << el.Tau << "\t" << std::setw(10) << el.blLen <<
-		"\t" << el.Node_loc << "\t" << el.Color_ind << "\t" << el.P0ind << "\t" <<
-		el.P1ind << "\t" << el.dir;
-#else
-	os << el.vP0.x << "\t" << el.vP0.y << "\t" << el.vP1.x << "\t" << el.vP1.y <<
-		"\t" << el.vTvec.x << "\t" << el.vTvec.y << "\t" << el.vNvec.x << "\t" <<
-		el.vNvec.y << "\t" << el.Tau << "\t" << el.blLen << "\t" << el.Node_loc <<
-		"\t" << el.Color_ind << "\t" << el.P0ind << "\t" << el.P1ind << "\t" <<
-		el.dir;
-#endif
-
-#else
-
-#ifdef ARRAY_DEBUG
-	os << std::setw(10) << el.Tau;
-#else
-	os << el.Tau;
-#endif
-
-#endif
-	return os;
-}
+//inline std::ostream& operator<<(std::ostream& os, const BLbound& el)
+//{
+//	os << "BL_bounds: Bottom (min, max) = (" << el.MIN_BL_BOT << ", " << el.MAX_BL_BOT << ")\n";
+//	os << "Top (min, max) = (" << el.MIN_BL_TOP << ", " << el.MAX_BL_TOP << ")\n\n";
+//	return os;
+//}
+//
+//inline std::ostream& operator<<(std::ostream& os, const Trparam& el)
+//{
+//	os << "Tr Params:\n";
+//	os << "\tTop Location = " << el.Top_location << "\n";
+//	os << "\tBottom Location = " << el.Bottom_location << "\n";
+//	os << "\tUmax Value = " << el.umax_val << "\n";
+//	os << "\tWall spacing at inlet = " << el.bval << "\n";
+//	os << "\tBottom Wall Location at Inlet = " << el.offset_y << "\n";
+//	os << "\tX position of Release = " << el.X_release << "\n";
+//	os << "\tBL at bottom where released = " << el.BL_rel_bot << "\n";
+//	os << "\tBL at top where released = " << el.BL_rel_top << "\n";
+//	os << "\tUvals_start = " << el.Uvals_start << "\n";
+//	return os;
+//}
+//
+//inline std::ostream& operator<<(std::ostream& os, const par& el)
+//{
+//#ifdef DUMP_PAR_FULL
+//#ifdef ARRAY_DEBUG
+//	os << el.type << "\t" << el.Num_rep << "\t" << el.Dep_Flag << "\t"
+//		<< el.Dep_timer << "\t" << el.timer << "\t" << el.loc << "\t"
+//		<< std::setw(10) << el.pos.x << "\t" << std::setw(10) << el.pos.y;
+//#else
+//	os << el.type << "\t" << el.Num_rep << "\t" << el.Dep_Flag << "\t"
+//		<< el.Dep_timer << "\t" << el.timer << "\t" << el.loc << "\t"
+//		<< el.pos.x << "\t" << el.pos.y;
+//#endif
+//
+//#else
+//
+//#ifdef ARRAY_DEBUG
+//	os << std::setw(10) << el.pos.x << "\t" << std::setw(10) << el.pos.y;
+//#else
+//	os << el.pos.x << "\t" << el.pos.y;
+//#endif
+//#endif
+//	return os;
+//}
+//
+//
+//// Saves full BL structure
+//
+//inline std::ostream& operator<<(std::ostream& os, const bLinks& el)
+//{
+//#ifdef DUMP_BLINKS_FULL
+//#ifdef ARRAY_DEBUG
+//	os << std::setw(10) << el.vP0.x << "\t" << std::setw(10) << el.vP0.y <<
+//		"\t" << std::setw(10) << el.vP1.x << "\t" << std::setw(10) << el.vP1.y <<
+//		"\t" << std::setw(10) << el.vTvec.x << "\t" << std::setw(10) << el.vTvec.y <<
+//		"\t" << std::setw(10) << el.vNvec.x << "\t" << std::setw(10) << el.vNvec.y <<
+//		"\t" << std::setw(10) << el.Tau << "\t" << std::setw(10) << el.blLen <<
+//		"\t" << el.Node_loc << "\t" << el.Color_ind << "\t" << el.P0ind << "\t" <<
+//		el.P1ind << "\t" << el.dir;
+//#else
+//	os << el.vP0.x << "\t" << el.vP0.y << "\t" << el.vP1.x << "\t" << el.vP1.y <<
+//		"\t" << el.vTvec.x << "\t" << el.vTvec.y << "\t" << el.vNvec.x << "\t" <<
+//		el.vNvec.y << "\t" << el.Tau << "\t" << el.blLen << "\t" << el.Node_loc <<
+//		"\t" << el.Color_ind << "\t" << el.P0ind << "\t" << el.P1ind << "\t" <<
+//		el.dir;
+//#endif
+//
+//#else
+//
+//#ifdef ARRAY_DEBUG
+//	os << std::setw(10) << el.Tau;
+//#else
+//	os << el.Tau;
+//#endif
+//
+//#endif
+//	return os;
+//}
 
 
 inline std::ostream& operator<<(std::ostream& os, const rampI& el)
@@ -431,42 +431,42 @@ inline std::ostream& operator<<(std::ostream& os, const rampI& el)
 }
 
 
-
-inline std::ostream& operator<<(std::ostream& os, const foulI& el)
-{
-#ifdef ARRAY_DEBUG
-	os << std::setw(10) << el.WeightsL.x << "\t" << std::setw(10) <<
-		el.WeightsL.y << "\t" << std::setw(10) << el.WeightsL.z << "\t" << std::setw(10) <<
-		el.WeightsL.w << "\t" << std::setw(10) << el.WeightsR.x << "\t" << std::setw(10) <<
-		el.WeightsR.y << "\t" << std::setw(10) << el.WeightsR.z << "\t" << std::setw(10) <<
-		el.WeightsR.w << "\t" << std::setw(10) << el.vN.x << "\t" << std::setw(10) <<
-		el.vN.y << "\t" << std::setw(10) << el.disp << "\t";
-	os << el.BL_ind << "\t" << el.C_ind;
-#else
-	os << el.WeightsL.x << "\t" << el.WeightsL.y << "\t" << el.WeightsL.z << "\t" << el.WeightsL.w << "\t" << el.WeightsR.x << "\t" << el.WeightsR.y
-		<< "\t" << el.WeightsR.z << "\t" << el.WeightsR.w << "\t" << el.vN.x << "\t" << el.vN.y << "\t" << el.disp << "\t";
-	os << el.BL_ind << "\t" << el.C_ind;
-#endif
-	return os;
-}
-
-
-inline std::ostream& operator<<(std::ostream& os, const Pparam& el)
-{
-#ifdef ARRAY_DEBUG
-	os << std::setw(10) << el.Dp << "\t" << std::setw(10) << el.Mp << "\t" <<
-		std::setw(10) << el.Q_A_prime.x << "\t" << std::setw(10) << el.Q_A.x <<
-		"\t" << std::setw(10) << el.tau_crit.x << "\t" << std::setw(10) <<
-		el.tau_crit.y << "\t" << std::setw(10) << el.Kth << "\t" << std::setw(10) <<
-		el.D_dist << "\t" << std::setw(10) << el.L_coeff << "\t" << std::setw(10) <<
-		el.D_coeff;
-#else
-	os << el.Dp << "\t" << el.Mp << "\t" << el.Q_A_prime.x << "\t" << el.Q_A.x <<
-		"\t" << el.tau_crit.x << "\t" << el.tau_crit.y << "\t" << el.Kth << "\t" <<
-		el.D_dist << "\t" << el.L_coeff << "\t" << el.D_coeff;
-#endif
-	return os;
-}
+//
+//inline std::ostream& operator<<(std::ostream& os, const foulI& el)
+//{
+//#ifdef ARRAY_DEBUG
+//	os << std::setw(10) << el.WeightsL.x << "\t" << std::setw(10) <<
+//		el.WeightsL.y << "\t" << std::setw(10) << el.WeightsL.z << "\t" << std::setw(10) <<
+//		el.WeightsL.w << "\t" << std::setw(10) << el.WeightsR.x << "\t" << std::setw(10) <<
+//		el.WeightsR.y << "\t" << std::setw(10) << el.WeightsR.z << "\t" << std::setw(10) <<
+//		el.WeightsR.w << "\t" << std::setw(10) << el.vN.x << "\t" << std::setw(10) <<
+//		el.vN.y << "\t" << std::setw(10) << el.disp << "\t";
+//	os << el.BL_ind << "\t" << el.C_ind;
+//#else
+//	os << el.WeightsL.x << "\t" << el.WeightsL.y << "\t" << el.WeightsL.z << "\t" << el.WeightsL.w << "\t" << el.WeightsR.x << "\t" << el.WeightsR.y
+//		<< "\t" << el.WeightsR.z << "\t" << el.WeightsR.w << "\t" << el.vN.x << "\t" << el.vN.y << "\t" << el.disp << "\t";
+//	os << el.BL_ind << "\t" << el.C_ind;
+//#endif
+//	return os;
+//}
+//
+//
+//inline std::ostream& operator<<(std::ostream& os, const Pparam& el)
+//{
+//#ifdef ARRAY_DEBUG
+//	os << std::setw(10) << el.Dp << "\t" << std::setw(10) << el.Mp << "\t" <<
+//		std::setw(10) << el.Q_A_prime.x << "\t" << std::setw(10) << el.Q_A.x <<
+//		"\t" << std::setw(10) << el.tau_crit.x << "\t" << std::setw(10) <<
+//		el.tau_crit.y << "\t" << std::setw(10) << el.Kth << "\t" << std::setw(10) <<
+//		el.D_dist << "\t" << std::setw(10) << el.L_coeff << "\t" << std::setw(10) <<
+//		el.D_coeff;
+//#else
+//	os << el.Dp << "\t" << el.Mp << "\t" << el.Q_A_prime.x << "\t" << el.Q_A.x <<
+//		"\t" << el.tau_crit.x << "\t" << el.tau_crit.y << "\t" << el.Kth << "\t" <<
+//		el.D_dist << "\t" << el.L_coeff << "\t" << el.D_coeff;
+//#endif
+//	return os;
+//}
 
 
 
@@ -490,97 +490,97 @@ inline std::ostream& operator<<(std::ostream& os, const nodet& el)
 	return os;
 }
 
-
-inline std::ostream& operator<<(std::ostream& os, const nodeI& el)
-{
-	for (int k = 0; k < MAX_BL_PER_NODE; k++)
-	{
-		os << el.BLind[k] << "\t";
-	}
-	os << el.Wall_Flag;
-	return os;
-}
-
-
-
-
-inline std::ostream& operator<<(std::ostream& os, const nodeV& el)
-{
-#ifdef ARRAY_DEBUG
-	os << std::setw(10) << el.Temps.x << "\t" << std::setw(10) << el.Temps.y << "\t"
-		<< std::setw(10) << el.Temps.z << "\t" << std::setw(10) << el.Temps.w <<
-		"\t";
-	os << std::setw(10) << el.U00.x << "\t" << std::setw(10) << el.U00.y << "\t"
-		<< std::setw(10) << el.U10.x << "\t" << std::setw(10) << el.U10.y <<
-		"\t";
-	os << std::setw(10) << el.U01.x << "\t" << std::setw(10) << el.U01.y << "\t"
-		<< std::setw(10) << el.U11.x << "\t" << std::setw(10) << el.U11.y;
-#else
-	os << el.Temps.x << "\t" << el.Temps.y << "\t" << el.Temps.z << "\t" <<
-		el.Temps.w << "\t" << el.U00.x << "\t" << el.U00.y << "\t" <<
-		el.U10.x << "\t" << el.U10.y << "\t" << el.U01.x << "\t" <<
-		el.U01.y << "\t" << el.U11.x << "\t" << el.U11.y;
-#endif
-	return os;
-}
-
-
-
-
-inline std::ostream& operator<<(std::ostream& os, const nodeC& el)
-{
-#ifdef ARRAY_DEBUG
-	os << std::setw(10) << el.CoeffT00.x << "\t" << std::setw(10) << el.CoeffT00.y << "\t"
-		<< std::setw(10) << el.CoeffT00.z << "\t" << std::setw(10) << el.CoeffT00.w <<
-		"\t";
-	os << std::setw(10) << el.CoeffT01.x << "\t" << std::setw(10) << el.CoeffT01.y << "\t"
-		<< std::setw(10) << el.CoeffT01.z << "\t" << std::setw(10) << el.CoeffT01.w <<
-		"\t";
-	os << std::setw(10) << el.CoeffT10.x << "\t" << std::setw(10) << el.CoeffT10.y << "\t"
-		<< std::setw(10) << el.CoeffT10.z << "\t" << std::setw(10) << el.CoeffT10.w <<
-		"\t";
-	os << std::setw(10) << el.CoeffT11.x << "\t" << std::setw(10) << el.CoeffT11.y << "\t"
-		<< std::setw(10) << el.CoeffT11.z << "\t" << std::setw(10) << el.CoeffT11.w <<
-		"\t";
-	os << std::setw(10) << el.CoeffU00.x << "\t" << std::setw(10) << el.CoeffU00.y << "\t"
-		<< std::setw(10) << el.CoeffU00.z << "\t" << std::setw(10) << el.CoeffU00.w <<
-		"\t";
-	os << std::setw(10) << el.CoeffU01.x << "\t" << std::setw(10) << el.CoeffU01.y << "\t"
-		<< std::setw(10) << el.CoeffU01.z << "\t" << std::setw(10) << el.CoeffU01.w <<
-		"\t";
-	os << std::setw(10) << el.CoeffU10.x << "\t" << std::setw(10) << el.CoeffU10.y << "\t"
-		<< std::setw(10) << el.CoeffU10.z << "\t" << std::setw(10) << el.CoeffU10.w <<
-		"\t";
-	os << std::setw(10) << el.CoeffU11.x << "\t" << std::setw(10) << el.CoeffU11.y << "\t"
-		<< std::setw(10) << el.CoeffU11.z << "\t" << std::setw(10) << el.CoeffU11.w <<
-		"\t";
-#else
-	os << el.CoeffT00.x << "\t" << el.CoeffT00.y << "\t" << el.CoeffT00.z <<
-		"\t" << el.CoeffT00.w << "\t" << el.CoeffT01.x << "\t" << el.CoeffT01.y <<
-		"\t" << el.CoeffT01.z << "\t" << el.CoeffT01.w << "\t" << el.CoeffT10.x <<
-		"\t" << el.CoeffT10.y << "\t" << el.CoeffT10.z << "\t" << el.CoeffT10.w <<
-		"\t" << el.CoeffT11.x << "\t" << el.CoeffT11.y << "\t" << el.CoeffT11.z <<
-		"\t" << el.CoeffT11.w << "\t" << el.CoeffU00.x << "\t" << el.CoeffU00.y <<
-		"\t" << el.CoeffU00.z << "\t" << el.CoeffU00.w << "\t" << el.CoeffU01.x <<
-		"\t" << el.CoeffU01.y << "\t" << el.CoeffU01.z << "\t" << el.CoeffU01.w <<
-		"\t" << el.CoeffU10.x << "\t" << el.CoeffU10.y << "\t" << el.CoeffU10.z <<
-		"\t" << el.CoeffU10.w << "\t" << el.CoeffU11.x << "\t" << el.CoeffU11.y <<
-		"\t" << el.CoeffU11.z << "\t" << el.CoeffU11.w << "\t";
-#endif
-	os << el.neigh.x << "\t" << el.neigh.y << "\t" << el.neigh.z << "\t" <<
-		el.neigh.w;
-	return os;
-}
-
-
-
-inline std::ostream& operator<<(std::ostream& os, const Nact& el)
-{
-	os << el.ii00.x << "\t" << el.ii00.y << "\t" << el.ii10.x << "\t" <<
-		el.ii10.y << "\t" << el.ii01.x << "\t" << el.ii01.y << "\t" <<
-		el.ii11.x << "\t" << el.ii11.y;
-	return os;
-}
+//
+//inline std::ostream& operator<<(std::ostream& os, const nodeI& el)
+//{
+//	for (int k = 0; k < MAX_BL_PER_NODE; k++)
+//	{
+//		os << el.BLind[k] << "\t";
+//	}
+//	os << el.Wall_Flag;
+//	return os;
+//}
+//
+//
+//
+//
+//inline std::ostream& operator<<(std::ostream& os, const nodeV& el)
+//{
+//#ifdef ARRAY_DEBUG
+//	os << std::setw(10) << el.Temps.x << "\t" << std::setw(10) << el.Temps.y << "\t"
+//		<< std::setw(10) << el.Temps.z << "\t" << std::setw(10) << el.Temps.w <<
+//		"\t";
+//	os << std::setw(10) << el.U00.x << "\t" << std::setw(10) << el.U00.y << "\t"
+//		<< std::setw(10) << el.U10.x << "\t" << std::setw(10) << el.U10.y <<
+//		"\t";
+//	os << std::setw(10) << el.U01.x << "\t" << std::setw(10) << el.U01.y << "\t"
+//		<< std::setw(10) << el.U11.x << "\t" << std::setw(10) << el.U11.y;
+//#else
+//	os << el.Temps.x << "\t" << el.Temps.y << "\t" << el.Temps.z << "\t" <<
+//		el.Temps.w << "\t" << el.U00.x << "\t" << el.U00.y << "\t" <<
+//		el.U10.x << "\t" << el.U10.y << "\t" << el.U01.x << "\t" <<
+//		el.U01.y << "\t" << el.U11.x << "\t" << el.U11.y;
+//#endif
+//	return os;
+//}
+//
+//
+//
+//
+//inline std::ostream& operator<<(std::ostream& os, const nodeC& el)
+//{
+//#ifdef ARRAY_DEBUG
+//	os << std::setw(10) << el.CoeffT00.x << "\t" << std::setw(10) << el.CoeffT00.y << "\t"
+//		<< std::setw(10) << el.CoeffT00.z << "\t" << std::setw(10) << el.CoeffT00.w <<
+//		"\t";
+//	os << std::setw(10) << el.CoeffT01.x << "\t" << std::setw(10) << el.CoeffT01.y << "\t"
+//		<< std::setw(10) << el.CoeffT01.z << "\t" << std::setw(10) << el.CoeffT01.w <<
+//		"\t";
+//	os << std::setw(10) << el.CoeffT10.x << "\t" << std::setw(10) << el.CoeffT10.y << "\t"
+//		<< std::setw(10) << el.CoeffT10.z << "\t" << std::setw(10) << el.CoeffT10.w <<
+//		"\t";
+//	os << std::setw(10) << el.CoeffT11.x << "\t" << std::setw(10) << el.CoeffT11.y << "\t"
+//		<< std::setw(10) << el.CoeffT11.z << "\t" << std::setw(10) << el.CoeffT11.w <<
+//		"\t";
+//	os << std::setw(10) << el.CoeffU00.x << "\t" << std::setw(10) << el.CoeffU00.y << "\t"
+//		<< std::setw(10) << el.CoeffU00.z << "\t" << std::setw(10) << el.CoeffU00.w <<
+//		"\t";
+//	os << std::setw(10) << el.CoeffU01.x << "\t" << std::setw(10) << el.CoeffU01.y << "\t"
+//		<< std::setw(10) << el.CoeffU01.z << "\t" << std::setw(10) << el.CoeffU01.w <<
+//		"\t";
+//	os << std::setw(10) << el.CoeffU10.x << "\t" << std::setw(10) << el.CoeffU10.y << "\t"
+//		<< std::setw(10) << el.CoeffU10.z << "\t" << std::setw(10) << el.CoeffU10.w <<
+//		"\t";
+//	os << std::setw(10) << el.CoeffU11.x << "\t" << std::setw(10) << el.CoeffU11.y << "\t"
+//		<< std::setw(10) << el.CoeffU11.z << "\t" << std::setw(10) << el.CoeffU11.w <<
+//		"\t";
+//#else
+//	os << el.CoeffT00.x << "\t" << el.CoeffT00.y << "\t" << el.CoeffT00.z <<
+//		"\t" << el.CoeffT00.w << "\t" << el.CoeffT01.x << "\t" << el.CoeffT01.y <<
+//		"\t" << el.CoeffT01.z << "\t" << el.CoeffT01.w << "\t" << el.CoeffT10.x <<
+//		"\t" << el.CoeffT10.y << "\t" << el.CoeffT10.z << "\t" << el.CoeffT10.w <<
+//		"\t" << el.CoeffT11.x << "\t" << el.CoeffT11.y << "\t" << el.CoeffT11.z <<
+//		"\t" << el.CoeffT11.w << "\t" << el.CoeffU00.x << "\t" << el.CoeffU00.y <<
+//		"\t" << el.CoeffU00.z << "\t" << el.CoeffU00.w << "\t" << el.CoeffU01.x <<
+//		"\t" << el.CoeffU01.y << "\t" << el.CoeffU01.z << "\t" << el.CoeffU01.w <<
+//		"\t" << el.CoeffU10.x << "\t" << el.CoeffU10.y << "\t" << el.CoeffU10.z <<
+//		"\t" << el.CoeffU10.w << "\t" << el.CoeffU11.x << "\t" << el.CoeffU11.y <<
+//		"\t" << el.CoeffU11.z << "\t" << el.CoeffU11.w << "\t";
+//#endif
+//	os << el.neigh.x << "\t" << el.neigh.y << "\t" << el.neigh.z << "\t" <<
+//		el.neigh.w;
+//	return os;
+//}
+//
+//
+//
+//inline std::ostream& operator<<(std::ostream& os, const Nact& el)
+//{
+//	os << el.ii00.x << "\t" << el.ii00.y << "\t" << el.ii10.x << "\t" <<
+//		el.ii10.y << "\t" << el.ii01.x << "\t" << el.ii01.y << "\t" <<
+//		el.ii11.x << "\t" << el.ii11.y;
+//	return os;
+//}
 
 
 

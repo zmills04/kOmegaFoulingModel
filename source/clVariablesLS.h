@@ -289,8 +289,8 @@ public:
 	//With values used to create IBB arrays used in IBB_kernels.
 	//Calls testperiodicindex to determine if distribution
 	//crosses across periodic x boundary
-	void bcSetBoundaryNode(cl_int2 ii0, cl_int2 ii1, int dir, double dist,
-		int bl, cl_double2 vCc, cl_double2 vC0, cl_double2 vC1, cl_double2 vCn);
+	//void bcSetBoundaryNode(cl_int2 ii0, cl_int2 ii1, int dir, double dist,
+	//	int bl, cl_double2 vCc, cl_double2 vC0, cl_double2 vC1, cl_double2 vCn);
 
 	// Fills ibb array based on dXArr values (if not = 1.0 and a fluid node)
 	// called by both iniIBBArray and updateIBBArray
@@ -326,7 +326,7 @@ public:
 	void iniFillMap0();
 
 	//Initializes IBB arrays and calls update_IBB_arrays
-	void iniIBBArray();
+	//void iniIBBArray();
 
 
 	////////////////////////////////////////////////////////////////////////////	

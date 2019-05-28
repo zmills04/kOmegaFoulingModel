@@ -49,8 +49,8 @@ void kOmega::calcDxTerms()
 				continue;
 
 
-			double dx_e = vls.dXArrCur(i, j, 0), dx_w = vls.dXArrCur(i, j, 1), dx = dx_e + dx_w;
-			double dy_n = vls.dXArrCur(i, j, 2), dy_s = vls.dXArrCur(i, j, 3), dy = dy_n + dy_s;
+			double dx_e = vls.dXArr(i, j, 0), dx_w = vls.dXArr(i, j, 1), dx = dx_e + dx_w;
+			double dy_n = vls.dXArr(i, j, 2), dy_s = vls.dXArr(i, j, 3), dy = dy_n + dy_s;
 
 			double Xe_coeff = dx_w / (dx_e * dx), Xw_coeff = -dx_e / (dx_w * dx), Xc_coeff = (dx_e - dx_w) / (dx_e * dx_w);
 			double Yn_coeff = dy_s / (dy_n * dy), Ys_coeff = -dy_n / (dy_s * dy), Yc_coeff = (dy_n - dy_s) / (dy_n * dy_s);
@@ -118,7 +118,7 @@ void kOmega::createKernels()
 
 
 
-void clVariablesLB::freeHostArrays()
+void kOmega::freeHostArrays()
 {
 }
 
@@ -199,12 +199,12 @@ void kOmega::ini()
 		omegaMaxIters, omegaMaxRelTol, omegaMaxAbsTol);
 
 	int i = 0;
-	while (vls.M_o(0, i) == 0)
+	while (vls.M(0, i) & M_SOLID_NODE)
 	{
 		i++;
 	}
 	int wallindlow = i;
-	while (vls.M_o(0, i) == 1)
+	while (vls.M(0, i) & M_FLUID_NODE)
 	{
 		i++;
 	}
@@ -234,11 +234,13 @@ void kOmega::ini()
 }
 
 
+// TODO: Set this up to work with wavy geometry, and create kernel
+//		to do this on device.
 void kOmega::iniWallD()
 {
 	double ystart = 0.;
 	int j = 0;
-	while (vls.M_o(0, j) == 0)
+	while (vls.M(0, j) & M_SOLID_NODE)
 	{
 		j++;
 	}
@@ -252,7 +254,7 @@ void kOmega::iniWallD()
 	{
 		for (j = 0; j < p.nY; j++)
 		{
-			if (vls.M_o(0, j) == 0)
+			if (vls.M(0, j) & M_SOLID_NODE)
 				continue;
 
 			double ytemp = (double)(j - botind) + ystart;

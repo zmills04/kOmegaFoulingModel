@@ -19,7 +19,7 @@
 #define CX_DEF_HI	(double4)(1.,-1.,1.,-1.)
 #define CY_DEF_HI	(double4)(1.,-1.,-1.,1.)
 #define CXX_DEF_HI	(double4)(1.,1.,1.,1.)
-#define CXY_DEF	(double4)(1.,1.,-1.,-1.)
+#define CXY_DEF		(double4)(1.,1.,-1.,-1.)
 
 #define CX_DEF_HIF	(float4)(1.f,-1.f,1.f,-1.f)
 #define CY_DEF_HIF	(float4)(1.f,-1.f,-1.f,1.f)
@@ -212,6 +212,23 @@ uint2 MWC64X_NextUint2(uint2 s, double2* resd)
 #define SE_NEIGH (-CHANNEL_LENGTH_FULL+1)
 #define SW_NEIGH (-CHANNEL_LENGTH_FULL-1)
 
+// adding ibbRev[dir-1] to ibb index give index of the 
+// reverse disribution 
+__constant int ibbRev[8] = { DIST_SIZE, -DIST_SIZE, DIST_SIZE, -DIST_SIZE, DIST_SIZE, -DIST_SIZE, DIST_SIZE, -DIST_SIZE };
+
+// Adding ibbNeigh to ibb index gives index of neighbor in reverse
+// direction (for use with q >= 0.5). This may need to be set in 
+// vlb.setSourceDefines as it requires calculations and im not sure if
+// opencl can handle it.
+__constant int ibbNeigh[8] = {	DIST_SIZE - 1, 
+								-DIST_SIZE + 1,
+								DIST_SIZE - CHANNEL_LENGTH_FULL, 
+								-DIST_SIZE + CHANNEL_LENGTH_FULL,
+								DIST_SIZE - (CHANNEL_LENGTH_FULL + 1),
+								-DIST_SIZE + (CHANNEL_LENGTH_FULL + 1),
+								DIST_SIZE - CHANNEL_LENGTH_FULL + 1, 
+								-DIST_SIZE + CHANNEL_LENGTH_FULL - 1 }
+
 
 #define EVAL1(...) __VA_ARGS__
 
@@ -268,7 +285,7 @@ uint2 MWC64X_NextUint2(uint2 s, double2* resd)
 
 
 #define GET_GLOBAL_IDX(gx,gy)	(gx + gy*CHANNEL_LENGTH_FULL)
-
+#define GET_FULL_GLOBAL_IDX(gx,gy,gdir)	(gx + gy*CHANNEL_LENGTH_FULL + gdir*DIST_SIZE)
 void decodeFullGlobalIdx(const int gid, int* xval, int* yval, int* qval)
 {
 	*qval = gid / DIST_SIZE;
@@ -281,6 +298,16 @@ void decodeGlobalIdx(const int gid, int* xval, int* yval)
 {
 	*xval = gid % CHANNEL_LENGTH_FULL;
 	*yval = gid / CHANNEL_LENGTH_FULL;
+}
+
+uint getRevDist(const int gid)
+{
+	// gid/DIST_SIZE = dist number
+	// gid % DIST_SIZE = i + j*CHANNEL_LENGTH_FULL
+
+
+	return gid % DIST_SIZE + RevDir[(gid / DIST_SIZE) + 1] *
+		DIST_SIZE;
 }
 
 

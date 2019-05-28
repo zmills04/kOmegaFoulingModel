@@ -51,9 +51,9 @@ public:
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 
-	DualKernel Collision_kernel;	// Kernel performs collision and propogation
-	DualKernel IBB_kernel_Fluid;	// Kernel applies IBB BC's
-	DualKernel LB_Outflow;			// Applies Outflow BC, if inflow/outflow is used
+	DualKernel collisionKernel;	// Kernel performs collision and propogation
+	DualKernel ibbKernel;	// Kernel applies IBB BC's
+	DualKernel lbOutflow;			// Applies Outflow BC, if inflow/outflow is used
 	Kernel calcRoJKernel;			// calculates rho, Ux, Uy from Distribution
 									// used when restarting run
 
@@ -285,7 +285,7 @@ public:
 	void iniDists(double Umaxval);
 
 	//creates IBB arrays from arrays in clVariablesLS
-	void iniIBB();
+	//void iniIBB();
 
 	//Initializes velocities at inlet nodes
 	void iniInletVels();

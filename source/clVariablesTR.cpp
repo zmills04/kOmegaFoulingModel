@@ -36,9 +36,15 @@
 
 void clVariablesTR::allocateArrays()
 {
-	P.allocate(nN);
-	NodV.allocate(p.nX - 1, p.nY - 1);//Stores Velocities and Temps used for calculating particle vels
-	NodI.allocate(p.nX - 1, p.nY - 1);//Contains boundary links near lattice site as well as flag for wall 
+	P.setSizes(nN, nN, 1);
+	P.allocateArrays();
+
+	//Stores Velocities and Temps used for calculating particle vels
+	NodV.setSizes(p.nX, p.XsizeFull, p.nY);
+	NodV.allocateArrays();
+
+	//Contains boundary links near lattice site as well as flag for wall 
+	NodI.allocate(p.nX - 1, p.nY - 1);
 	NodC.allocate(p.nX - 1, p.nY - 1);//Coefficients used to calculate NodV each time step
 	BL.allocate(vls.nBL);//Boundary link info
 	Active_flag.zeros(p.nX - 1, p.nY - 1);

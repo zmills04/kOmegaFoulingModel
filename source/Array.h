@@ -1897,8 +1897,9 @@ public:
 		ArrayBase<T>::copy_to_buffer_size(curEl)
 	}
 
-	void curSize() { return curEl; }
-	void curFullSize() { return FullSize; }
+	int curSize() { return curEl; }
+	int* curSizeAdd() { return &curEl; }
+	int curFullSize() { return FullSize; }
 
 };
 

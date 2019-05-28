@@ -3,7 +3,8 @@
 //
 
 
-
+// TODO: Make sure that all variables are same between host and device.
+//		i.e. make sure int is int, uint is uint, etc in kernels
 // TODO: remove old files from source folder that are no longer needed.
 //			specifically clOutput, FileReader/Writer and Structures
 // TODO: consolidate error printing functions
