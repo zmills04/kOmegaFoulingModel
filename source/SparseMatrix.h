@@ -17,12 +17,6 @@
 #include <clsparse_export.h>
 
 
-typedef int BOOL;
-#ifndef TRUE
-#define FALSE 0
-#define TRUE 1
-#endif
-
 #ifdef _DEBUG
 //#define ARRAY_DEBUG
 #endif //_DEBUG
@@ -142,24 +136,24 @@ public:
 		
 		int ind = i + j*XsizeFull;
 		
-		if (testNeigh(i, j, S) == TRUE)
+		if (testNeigh(i, j, S) == true)
 		{
 			IndArray(ind, S) = nnz_++;
 			localcount++;
 		}
-		if (testNeigh(i, j, W) == TRUE)
+		if (testNeigh(i, j, W) == true)
 		{
 			IndArray(ind, W) = nnz_++;
 			localcount++;
 		}
 		localcount++;
 		IndArray(ind, C) = nnz_++;
-		if (testNeigh(i, j, E) == TRUE)
+		if (testNeigh(i, j, E) == true)
 		{
 			IndArray(ind, E) = nnz_++;
 			localcount++;
 		}
-		if (testNeigh(i, j, N) == TRUE)
+		if (testNeigh(i, j, N) == true)
 		{
 			IndArray(ind, N) = nnz_++;
 			localcount++;
@@ -167,7 +161,7 @@ public:
 		return localcount;
 	}
 
-	BOOL testNeigh(int i, int j, const int dir)
+	bool testNeigh(int i, int j, const int dir)
 	{
 		if (dir == E)
 			i++;
@@ -181,14 +175,14 @@ public:
 			printf("error, calling testNeigh with incorrect direction\n");
 				
 		if (i < 0 || i >= Xsize || j < 0 || j >= Ysize)
-			return FALSE;
+			return false;
 
 		if (Map->operator()(i, j) == 1)
 		{
-			return TRUE;
+			return true;
 		}
 
-		return FALSE;
+		return false;
 	}
 
 	virtual void fill_JA()
@@ -285,16 +279,16 @@ public:
 	}
 
 
-	BOOL saveall(std::string prefix_, cl_command_queue *devque = NULL)
+	bool saveall(std::string prefix_, cl_command_queue *devque = NULL)
 	{
-		BOOL ret = saveIA(prefix_, devque);
+		bool ret = saveIA(prefix_, devque);
 		ret &= saveJA(prefix_, devque);
 		ret &= saveRA(prefix_, devque);
 		ret &= saveIndArray(prefix_, devque);
 		return ret;
 	}
 
-	BOOL saveIA(std::string append_, cl_command_queue *devque = NULL)
+	bool saveIA(std::string append_, cl_command_queue *devque = NULL)
 	{
 		append_.append("_IA");
 		if (!(devque == NULL))
@@ -303,7 +297,7 @@ public:
 			return IA.savetxt(append_);
 	}
 
-	BOOL saveRA(std::string append_, cl_command_queue *devque = NULL)
+	bool saveRA(std::string append_, cl_command_queue *devque = NULL)
 	{
 		append_.append("_RA");
 		if (!(devque == NULL))
@@ -312,7 +306,7 @@ public:
 			return RA.savetxt(append_);
 	}
 
-	BOOL saveJA(std::string append_, cl_command_queue *devque = NULL)
+	bool saveJA(std::string append_, cl_command_queue *devque = NULL)
 	{
 		append_.append("_JA");
 		if (!(devque == NULL))
@@ -321,7 +315,7 @@ public:
 			return JA.savetxt(append_);
 	}
 
-	BOOL saveIndArray(std::string append_, cl_command_queue *devque = NULL)
+	bool saveIndArray(std::string append_, cl_command_queue *devque = NULL)
 	{
 		append_.append("_Inds");
 		if (!(devque == NULL))
@@ -330,7 +324,7 @@ public:
 			return IndArray.savetxt(append_);
 	}
 
-	BOOL saveIndArray2DFormat(std::string append_, cl_command_queue *devque = NULL)
+	bool saveIndArray2DFormat(std::string append_, cl_command_queue *devque = NULL)
 	{
 		if (devque != NULL)
 		{
@@ -816,33 +810,33 @@ public:
 //		//Ind buffer allocation must be done separately to avoid multiple allocations
 //	}
 //
-//	void copy_to_device(const int blFlag = TRUE)
+//	void copy_to_device(const int blFlag = true)
 //	{
 //		Acpu.copy_to_buffer(*que, blFlag);
 //	}
 //
-//	void copy_to_host(const int blFlag = TRUE)
+//	void copy_to_host(const int blFlag = true)
 //	{
 //		Acpu.read_from_buffer(*que, blFlag);
 //	}
 //
-//	void copy_inds_to_host(const int blFlag = TRUE)
+//	void copy_inds_to_host(const int blFlag = true)
 //	{
 //		Inds->copy_to_host(*que, blFlag);
 //	}
 //
-//	void copy_inds_to_device(const int blFlag = TRUE)
+//	void copy_inds_to_device(const int blFlag = true)
 //	{
 //		Inds->copy_to_device(*que, blFlag);
 //	}
 //
-//	void copy_to_host_all(const int blFlag = TRUE)
+//	void copy_to_host_all(const int blFlag = true)
 //	{
 //		copy_to_host(blFlag);
 //		copy_inds_to_host(blFlag);
 //	}
 //
-//	void copy_to_device_all(const int blFlag = TRUE)
+//	void copy_to_device_all(const int blFlag = true)
 //	{
 //		copy_to_device(blFlag);
 //		copy_inds_to_device(blFlag);
@@ -861,15 +855,15 @@ public:
 //			return NULL;
 //	}
 //
-//	BOOL testInd(const int i, const int j, const int dir = C)
+//	bool testInd(const int i, const int j, const int dir = C)
 //	{
 //		if (Inds->getInd(i, j, dir) == -1)
-//			return FALSE;
-//		return TRUE;
+//			return false;
+//		return true;
 //	}
 //
 //
-//	BOOL save_w_indicies(std::string Name, BOOL fromDevFlag = FALSE)
+//	bool save_w_indicies(std::string Name, bool fromDevFlag = false)
 //	{
 //		if (fromDevFlag)
 //		{
@@ -887,9 +881,9 @@ public:
 //		return Outarray.savetxt(Name);
 //	}
 //
-//	BOOL saveCSR(std::string outname, BOOL fromDevFlag = FALSE)
+//	bool saveCSR(std::string outname, bool fromDevFlag = false)
 //	{
-//		BOOL ret;
+//		bool ret;
 //		if (fromDevFlag)
 //		{
 //			ret &= Inds->saveIA(outname, que);
@@ -909,9 +903,9 @@ public:
 //	}
 //
 //
-//	BOOL saveCSR_row_col_val(std::string outname, BOOL fromDevFlag = FALSE)
+//	bool saveCSR_row_col_val(std::string outname, bool fromDevFlag = false)
 //	{
-//		BOOL ret;
+//		bool ret;
 //		if (fromDevFlag)
 //		{
 //			ret &= Inds->saveJA(outname, *que);
@@ -961,7 +955,7 @@ public:
 //	virtual void ini(std::string name_, CSR_Inds *inds_, clsparseCreateResult *clSparseControl_, cl_command_queue *queue_, cl_context *context_) = 0;
 //
 //
-//	void setInitialValue(T inival, BOOL fullArrFlag = FALSE)
+//	void setInitialValue(T inival, bool fullArrFlag = false)
 //	{
 //		if (fullArrFlag)
 //		{
@@ -1057,35 +1051,35 @@ public:
 //
 //
 ////////// Save Methods /////////////////////
-//	BOOL saveAxbCSR()
+//	bool saveAxbCSR()
 //	{
-//		BOOL ret = savetxt();
+//		bool ret = savetxt();
 //		ret &= save_bvec();
 //		ret &= Amat.saveCSR(Name);
 //		return ret;
 //	}
 //
-//	BOOL saveAxb_w_indicies()
+//	bool saveAxb_w_indicies()
 //	{
-//		BOOL ret = savetxt();
+//		bool ret = savetxt();
 //		ret &= save_bvec();
-//		ret &= Amat.save_w_indicies(Name.append("_A"), FALSE);
+//		ret &= Amat.save_w_indicies(Name.append("_A"), false);
 //		return ret;
 //	}
 //
-//	BOOL saveAxbCSR_from_device()
+//	bool saveAxbCSR_from_device()
 //	{
-//		BOOL ret = savetxt_from_device();
+//		bool ret = savetxt_from_device();
 //		ret &= save_bvec_from_device();
-//		ret &= Amat.saveCSR(Name, TRUE);
+//		ret &= Amat.saveCSR(Name, true);
 //		return ret;
 //	}
 //
-//	BOOL saveAxb_w_indicies_from_device()
+//	bool saveAxb_w_indicies_from_device()
 //	{
-//		BOOL ret = savetxt_from_device();
+//		bool ret = savetxt_from_device();
 //		ret &= save_bvec_from_device();
-//		ret &= Amat.save_w_indicies(Name.append("_A"), TRUE);
+//		ret &= Amat.save_w_indicies(Name.append("_A"), true);
 //		return ret;
 //	}
 //
@@ -1099,15 +1093,15 @@ public:
 //		return Amat.Inds->IndArray.get_buf_add();
 //	}
 //
-//	virtual BOOL savetxt() = 0;
+//	virtual bool savetxt() = 0;
 //
-//	virtual BOOL savetxt_from_device() = 0;
+//	virtual bool savetxt_from_device() = 0;
 //
-//	virtual BOOL save_bvec() = 0;
+//	virtual bool save_bvec() = 0;
 //
-//	virtual BOOL save_bvec_from_device() = 0;
+//	virtual bool save_bvec_from_device() = 0;
 //
-//	virtual BOOL save_bvec_as_vector_from_device() = 0;
+//	virtual bool save_bvec_as_vector_from_device() = 0;
 //
 //	virtual cl_mem* get_add_b() = 0;
 //
@@ -1216,7 +1210,7 @@ public:
 //
 //
 //	//////// Save Methods /////////////////////
-//	BOOL savetxt()
+//	bool savetxt()
 //	{
 //		if (alter == 0)
 //			return Xcpu.savetxt_as_2D(Name, Xsize, XsizeFull, Ysize);
@@ -1224,7 +1218,7 @@ public:
 //			return Bcpu.savetxt_as_2D(Name, Xsize, XsizeFull, Ysize);
 //	}
 //
-//	BOOL savetxt_from_device()
+//	bool savetxt_from_device()
 //	{
 //		if (alter == 0)
 //			return Xcpu.save_txt_from_device_as_2D(Name, *que, Xsize, XsizeFull, Ysize);
@@ -1232,7 +1226,7 @@ public:
 //			return Bcpu.save_txt_from_device_as_2D(Name, *que, Xsize, XsizeFull, Ysize);
 //	}
 //
-//	BOOL save_bvec()
+//	bool save_bvec()
 //	{
 //		std::string outname = Name;
 //		outname.append("_bvec");
@@ -1242,7 +1236,7 @@ public:
 //			return Xcpu.savetxt_as_2D(outname, Xsize, XsizeFull, Ysize);
 //	}
 //
-//	BOOL save_bvec_from_device()
+//	bool save_bvec_from_device()
 //	{
 //		std::string outname = Name;
 //		outname.append("_bvec");
@@ -1252,7 +1246,7 @@ public:
 //			return Xcpu.save_txt_from_device_as_2D(outname, *que, Xsize, XsizeFull, Ysize);
 //	}
 //
-//	BOOL save_bvec_as_vector_from_device()
+//	bool save_bvec_as_vector_from_device()
 //	{
 //		std::string outname = Name;
 //		outname.append("_bvec");
@@ -1354,31 +1348,31 @@ public:
 //		return Xcpu(i + XsizeFull*j);
 //	}
 //	
-//	BOOL savetxt()
+//	bool savetxt()
 //	{
 //		return Xcpu.savetxt_as_2D(Xsize, XsizeFull, Ysize, Name);
 //	}
 //
-//	BOOL savetxt_from_device()
+//	bool savetxt_from_device()
 //	{
 //		return Xcpu.save_txt_from_device_as_2D(Xsize, XsizeFull, Ysize, Name, que);
 //	}
 //
-//	BOOL save_bvec()
+//	bool save_bvec()
 //	{
 //		std::string outname = Name;
 //		outname.append("_bvec");
 //		return Bcpu.savetxt_as_2D(Xsize, XsizeFull, Ysize, outname);
 //	}
 //
-//	BOOL save_bvec_from_device()
+//	bool save_bvec_from_device()
 //	{
 //		std::string outname = Name;
 //		outname.append("_bvec");
 //		return Bcpu.save_txt_from_device_as_2D(Xsize, XsizeFull, Ysize, outname, que);
 //	}
 //
-//	BOOL save_bvec_as_vector_from_device()
+//	bool save_bvec_as_vector_from_device()
 //	{
 //		std::string outname = Name;
 //		outname.append("_bvec");

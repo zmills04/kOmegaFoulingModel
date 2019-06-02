@@ -152,7 +152,7 @@ public:
 			defineStr.append(programSrc);
 			programSrc = defineStr;
 		}
-		std::ofstream outfile(type + ".cl");
+		std::ofstream outfile("x64" SLASH "clSource" SLASH + type + ".cl");
 		outfile << programSrc;
 		outfile.close();
 		clEnv::instance()->buildProgram(program, programSrc, pType, type);

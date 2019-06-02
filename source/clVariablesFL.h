@@ -85,8 +85,8 @@ public:
 	//saves variables necessary for debugging
 	void savedebug();
 	void freeHostMem();
-	BOOL test_bounds();
-	BOOL Restart_Run();
+	bool test_bounds();
+	bool Restart_Run();
 	double Gaussian_Kernel(double input);
 	void saveRestartFiles();
 	void UpdateRestart();

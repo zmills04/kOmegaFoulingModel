@@ -6,68 +6,6 @@
 #include "clProblem.h"
 #include "BiCGStabGenerator.h"
 
-//std::string clProblem::LoadKernel()
-//{
-//	double Mu = MU_NUMBER;// (1. / 3.)*(vlb.tau - 0.5);
-//	char char_temp[100];
-//	std::string defines;
-
-
-//	std::ifstream in_heading("source\\Heading.cl");
-//	std::string result_heading((std::istreambuf_iterator<char>(in_heading)), std::istreambuf_iterator<char>());
-//	defines.append(result_heading);
-//	defines.append("\n");
-//
-//	std::ifstream in_struct("source\\Structures.cl");
-//	std::string result_struct((std::istreambuf_iterator<char>(in_struct)), std::istreambuf_iterator<char>());
-//	defines.append(result_struct);
-//	defines.append("\n");
-//
-//	std::ifstream in_out("source\\Output_kernels.cl");
-//	std::string result_out((std::istreambuf_iterator<char>(in_out)), std::istreambuf_iterator<char>());
-//	defines.append(result_out);
-//
-//#ifdef USE_FLOATS
-//	std::ifstream in_lb("source\\LB_Float_kernels.cl");
-//	std::string result_lb((std::istreambuf_iterator<char>(in_lb)), std::istreambuf_iterator<char>());
-//	defines.append(result_lb);
-//	defines.append("\n");
-//#else
-//	std::ifstream in_lb("source\\LB_kernels.cl");
-//	std::string result_lb((std::istreambuf_iterator<char>(in_lb)), std::istreambuf_iterator<char>());
-//	defines.append(result_lb);
-//	defines.append("\n");
-//#endif
-//
-//	std::ifstream in_t("source\\T_kernels.cl");
-//	std::string result_t((std::istreambuf_iterator<char>(in_t)), std::istreambuf_iterator<char>());
-//	defines.append(result_t);
-//
-//
-//
-//
-//
-//#ifdef TR_SOLVER
-//	std::ifstream in_tr("source\\TR_kernels.cl");
-//	std::string result_tr((std::istreambuf_iterator<char>(in_tr)), std::istreambuf_iterator<char>());
-//	defines.append(result_tr);
-//
-//	std::ifstream in_sk("source\\Sort_kernels.cl");
-//	std::string result_sk((std::istreambuf_iterator<char>(in_sk)), std::istreambuf_iterator<char>());
-//	defines.append(result_sk);
-//
-//	std::ifstream in_fl("source\\FL_kernels.cl");
-//	std::string result_fl((std::istreambuf_iterator<char>(in_fl)), std::istreambuf_iterator<char>());
-//	defines.append(result_fl);
-//#endif
-//
-//	std::ofstream outfile("temp_file.cl");
-//	outfile << defines;
-//	outfile.close();
-//
-//
-//	return defines;
-//}
 
 void clProblem::RenameFile(std::string SourceName)
 {
@@ -469,7 +407,7 @@ void clProblem::ini()
 	outDir = OUTPUT_DIR;
 	MakeDir(outDir);
 	setSourceDefines();
-	if (restartRunFlag == FALSE)
+	if (restartRunFlag == false)
 	{
 		cleanfiles();
 	}
@@ -480,7 +418,7 @@ void clProblem::step()
 {
 	if (Next_Clump_Time < TimeN && vtr.trSolverFlag)
 	{
-		vtr.Clump_Particles();
+		vtr.clumpParticles();
 		Next_Clump_Time += Time_Btw_Clump;
 	}
 
@@ -576,6 +514,8 @@ void clProblem::finish()
 
 
 // TODO: remove unncessary define and consolidate remaining defines
+// TODO: make sure that all domain size definitions are used correctly
+//			especially FULLSIZEY (seems like it should be nY, not channel height)
 void clProblem::setSourceDefines()
 {
 	/////////////  Domain Sizes///////////////////////////////////////////
@@ -616,9 +556,9 @@ void clProblem::setSourceDefines()
 	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "WORKGROUPSIZE_TR_DISTS", WORKGROUPSIZE_TR_DISTS);
 	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "WORKGROUPSIZE_TR_WALL_REFLECT", WORKGROUPSIZE_TR_WALL_REFLECT);
 
-#ifdef USE_OPENGL
-	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "USE_OPENGL");
-#endif
+	if(useOpenGL)
+		SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "USE_OPENGL");
+
 #ifdef OPENCL_VERSION_1_2
 	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "OPENCL_VERSION_1_2");
 #endif
@@ -755,7 +695,7 @@ void clProblem::saveSystemParams()
 	p.setParameter("nextSaveSSTime", nextSaveSSTime);
 	p.setParameter("nextDumpStepTime", nextDumpStepTime);
 	p.setParameter("nextSaveIOTime", nextSaveIOTime);
-
+	p.setParameter("Use OpenGL", useOpenGL);
 
 }
 
@@ -814,6 +754,7 @@ void clProblem::loadParams()
 	nX = p.getParameter<int>("nX");
 	nY = p.getParameter<int>("nY");
 	XsizeFull = int(ceil((double)nX / (double)BLOCKSIZE)) * BLOCKSIZE;
+
 	nn = { { nX, nY } };
 	Pipe_radius = p.getParameter<double>("Pipe Radius");
 	Channel_Height = 2 * (int)Pipe_radius;
@@ -821,9 +762,12 @@ void clProblem::loadParams()
 	unsigned int domainsize_ = (unsigned int)(XsizeFull*nY);
 	while (FullSize < domainsize_)
 		FullSize *= 2;
-
+	distSize = domainsize_;
 	DELTA_L = ((2.*Pipe_radius) / PIPE_DIAMETER_REAL);
-	clEnv::instance()->iniOpenCL(DeviceID);
+
+	useOpenGL = p.getParameter<bool>("Use OpenGL", OPENGL_DISPLAY);
+
+	clEnv::instance()->iniOpenCL(DeviceID, useOpenGL);
 	sourceGenerator::SourceInstance();
 	BiCGStabGenerator::BiCGStabInstance()->ini(nX, XsizeFull, nY);
 	ReduceGenerator::ReduceInstance()->ini(nX, nY);
@@ -942,13 +886,6 @@ void clProblem::loadRunParameters(std::string runparams_)
 	//YAML::Node doc2;
 	//parser.GetNextDocument(doc2);
 
-
-
-
-
-
-
-
 	// Note: from what I can determine, the YAML-cpp library is limited to
 	// keys with less than 16 characters. Also, the release version is having
 	// issues that I could not resolve and decided that since its negligible
@@ -1020,6 +957,7 @@ int clProblem::nX = 0;
 int clProblem::nY = 0;
 int clProblem::XsizeFull = 0;
 unsigned int clProblem::FullSize = 0;
+unsigned int clProblem::distSize = 0;
 cl_int2 clProblem::nn = { { 0, 0 } };
 
 bool clProblem::restartRunFlag = 0;
@@ -1077,6 +1015,6 @@ bool clProblem::nuNumStepDef = false;
 bool clProblem::ssNumStepDef = false;
 bool clProblem::ioNumStepDef = false;
 bool clProblem::dumpNumStepDef = false;
-
+bool clProblem::useOpenGL = false;
 
 

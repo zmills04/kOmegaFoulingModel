@@ -26,7 +26,7 @@ public:
 	MSG msg;
 	HGLRC         gGlCtx;
 	HDC           gHdc;
-	BOOL quit = FALSE;
+	bool quit = false;
 
 	int down_pixel_x = 0;
 	int down_clicked = 0;

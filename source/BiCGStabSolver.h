@@ -166,6 +166,8 @@ public:
 	}
 
 	void setMaxIters(int iters_) { maxIters = iters_; }
+	void setAbsTol(int tol_) { absTol = tol_; }
+	void setRelTol(int tol_) { relTol = tol_; }
 
 	void iniAXPBYKernels();
 
@@ -219,7 +221,7 @@ public:
 
 	// Functions for transfering between host and device and outputting data
 
-	void setInitialValue(double inival, BOOL fullArrFlag = FALSE);
+	void setInitialValue(double inival, bool fullArrFlag = false);
 
 	void setInitialValueRows(double inival, std::vector<int> &rowi);
 	void setInitialValueCols(double inival, std::vector<int> &coli);
@@ -237,12 +239,12 @@ public:
 
 
 	//////// Save Methods /////////////////////
-	BOOL saveAxbCSR();
+	bool saveAxbCSR();
 
-	BOOL saveAxb_w_indicies();
+	bool saveAxb_w_indicies();
 
-	BOOL saveAxbCSR_from_device();
-	BOOL saveAxb_w_indicies_from_device();
+	bool saveAxbCSR_from_device();
+	bool saveAxb_w_indicies_from_device();
 
 	cl_mem* get_add_A();
 	cl_mem* get_add_IndArr();
@@ -250,30 +252,30 @@ public:
 	Array1Dd* getBVec() { return &bVec; }
 	Array2Dd* getMacroArray() { return xVec; }
 
-	BOOL savetxt(std::string outname = "");
+	bool savetxt(std::string outname = "");
 
-	BOOL savetxt_from_device(std::string outname = "");
-	BOOL save_bvec(std::string outname = "");
+	bool savetxt_from_device(std::string outname = "");
+	bool save_bvec(std::string outname = "");
 
-	BOOL save_bvec_from_device(std::string outname = "");
+	bool save_bvec_from_device(std::string outname = "");
 
-	BOOL saveCheckPoint(std::string outname = "");
+	bool saveCheckPoint(std::string outname = "");
 
 	cl_mem* get_add_b() { return bVec.get_buf_add(); }
 
 	cl_mem* get_add_Macro() { return xVec->get_buf_add(); }
 
-	void copy_to_device(const int blFlag = TRUE);
+	void copy_to_device(const int blFlag = true);
 
-	void copy_to_host(const int blFlag = TRUE);
+	void copy_to_host(const int blFlag = true);
 
-	void copy_inds_to_host(const int blFlag = TRUE);
+	void copy_inds_to_host(const int blFlag = true);
 
-	void copy_inds_to_device(const int blFlag = TRUE);
+	void copy_inds_to_device(const int blFlag = true);
 
-	void copy_to_host_all(const int blFlag = TRUE);
+	void copy_to_host_all(const int blFlag = true);
 
-	void copy_to_device_all(const int blFlag = TRUE);
+	void copy_to_device_all(const int blFlag = true);
 
 	int rows() { return Inds->rows; }
 	int cols() { return Inds->cols; }
@@ -281,14 +283,14 @@ public:
 
 	double A(const int i, const int j, int dir = C);
 
-	BOOL testInd(const int i, const int j, const int dir = C);
+	bool testInd(const int i, const int j, const int dir = C);
 
-	BOOL save_w_indicies(std::string Name, BOOL fromDevFlag = FALSE);
-	BOOL saveCSR(std::string outname, BOOL fromDevFlag = FALSE);
-	BOOL saveCSR_row_col_val(std::string outname, BOOL fromDevFlag = FALSE);
+	bool save_w_indicies(std::string Name, bool fromDevFlag = false);
+	bool saveCSR(std::string outname, bool fromDevFlag = false);
+	bool saveCSR_row_col_val(std::string outname, bool fromDevFlag = false);
 
-	BOOL saveAxb_w_indicies_from_device_as_bin();
-	BOOL save_w_indicies_as_bin(std::string Name, BOOL fromDevFlag);
+	bool saveAxb_w_indicies_from_device_as_bin();
+	bool save_w_indicies_as_bin(std::string Name, bool fromDevFlag);
 	void saveTempArray(cl_mem *mem_, std::string savename_)
 	{
 		Array1Dd tempArr(fullSize, savename_);
@@ -396,7 +398,7 @@ public:
 
 	clsparseCsrMatrix* getMat() { return &clsCSR; }
 
-	BOOL saveMat() { return clA.save_bin_from_device(); }
+	bool saveMat() { return clA.save_bin_from_device(); }
 
 	cldenseVector* getVec(ArrayTag at_)
 	{
@@ -434,7 +436,7 @@ public:
 		return nullptr;
 	}
 
-	BOOL saveVec(ArrayTag at_)
+	bool saveVec(ArrayTag at_)
 	{
 		switch (at_)
 		{
@@ -467,7 +469,7 @@ public:
 			return clB.save_bin_from_device("clR");
 		}
 		}
-		return FALSE;
+		return false;
 	}
 
 	clsparseControl getControl()

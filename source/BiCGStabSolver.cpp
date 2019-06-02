@@ -513,7 +513,7 @@ void BiCGStabSolver::solve()
 	}
 }
 
-void BiCGStabSolver::setInitialValue(double inival, BOOL fullArrFlag)
+void BiCGStabSolver::setInitialValue(double inival, bool fullArrFlag)
 {
 	if (fullArrFlag)
 	{
@@ -587,43 +587,43 @@ std::string BiCGStabSolver::getName()
 
 
 //////// Save Methods /////////////////////
-BOOL BiCGStabSolver::saveAxbCSR()
+bool BiCGStabSolver::saveAxbCSR()
 {
-	BOOL ret = savetxt();
+	bool ret = savetxt();
 	ret &= save_bvec();
 	ret &= saveCSR(Name);
 	return ret;
 }
 
-BOOL BiCGStabSolver::saveAxb_w_indicies()
+bool BiCGStabSolver::saveAxb_w_indicies()
 {
-	BOOL ret = savetxt();
+	bool ret = savetxt();
 	ret &= save_bvec();
-	ret &= save_w_indicies(Name.append("_A"), FALSE);
+	ret &= save_w_indicies(Name.append("_A"), false);
 	return ret;
 }
 
-BOOL BiCGStabSolver::saveAxbCSR_from_device()
+bool BiCGStabSolver::saveAxbCSR_from_device()
 {
-	BOOL ret = savetxt_from_device();
+	bool ret = savetxt_from_device();
 	ret &= save_bvec_from_device();
-	ret &= saveCSR(Name, TRUE);
+	ret &= saveCSR(Name, true);
 	return ret;
 }
 
-BOOL BiCGStabSolver::saveAxb_w_indicies_from_device()
+bool BiCGStabSolver::saveAxb_w_indicies_from_device()
 {
-	BOOL ret = savetxt_from_device();
+	bool ret = savetxt_from_device();
 	ret &= save_bvec_from_device();
-	ret &= save_w_indicies(Name.append("_A"), TRUE);
+	ret &= save_w_indicies(Name.append("_A"), true);
 	return ret;
 }
 
-BOOL BiCGStabSolver::saveAxb_w_indicies_from_device_as_bin()
+bool BiCGStabSolver::saveAxb_w_indicies_from_device_as_bin()
 {
-	BOOL ret = xVec->save_bin_from_device(Name);
+	bool ret = xVec->save_bin_from_device(Name);
 	ret &= bVec.save_bin_from_device();
-	ret &= save_w_indicies_as_bin(Name + "_A", TRUE);
+	ret &= save_w_indicies_as_bin(Name + "_A", true);
 	return ret;
 }
 
@@ -637,35 +637,37 @@ cl_mem* BiCGStabSolver::get_add_IndArr()
 	return Inds->IndArray.get_buf_add();
 }
 
-BOOL BiCGStabSolver::savetxt(std::string outname)
+bool BiCGStabSolver::savetxt(std::string outname)
 {
 	if (outname.length() == 0)
 		outname = Name;
 	return xVec->savetxt(outname);
 }
 
-BOOL BiCGStabSolver::savetxt_from_device(std::string outname)
+bool BiCGStabSolver::savetxt_from_device(std::string outname)
 {
 	if (outname.length() == 0)
 		outname = Name;
 	return xVec->save_txt_from_device(outname);
 }
 
-BOOL BiCGStabSolver::save_bvec(std::string outname)
+bool BiCGStabSolver::save_bvec(std::string outname)
 {
 	if (outname.length() == 0)
 		outname = Name + "_bvec";
 	return bVec.savetxt_as_2D(Xsize, XsizeFull, Ysize, outname);
 }
 
-BOOL BiCGStabSolver::save_bvec_from_device(std::string outname)
+bool BiCGStabSolver::save_bvec_from_device(std::string outname)
 {
 	if (outname.length() == 0)
 		outname = Name + "_bvec";
 	return bVec.save_txt_from_device_as_2D(Xsize, XsizeFull, Ysize, outname);
 }
 
-BOOL BiCGStabSolver::saveCheckPoint(std::string outname)
+// Amat (both values and indicies), bVec and other info can be 
+// recreated, so no need to waste space and time saving it.
+bool BiCGStabSolver::saveCheckPoint(std::string outname)
 {
 	return xVec->save_bin_from_device(outname);
 }
@@ -711,15 +713,15 @@ double BiCGStabSolver::A(const int i, const int j, int dir)
 		return 0;
 }
 
-BOOL BiCGStabSolver::testInd(const int i, const int j, const int dir)
+bool BiCGStabSolver::testInd(const int i, const int j, const int dir)
 {
 	if (Inds->getInd(i, j, dir) == -1)
-		return FALSE;
-	return TRUE;
+		return false;
+	return true;
 }
 
 
-BOOL BiCGStabSolver::save_w_indicies(std::string Name, BOOL fromDevFlag)
+bool BiCGStabSolver::save_w_indicies(std::string Name, bool fromDevFlag)
 {
 	if (fromDevFlag)
 	{
@@ -737,7 +739,7 @@ BOOL BiCGStabSolver::save_w_indicies(std::string Name, BOOL fromDevFlag)
 	return Outarray.savetxt(Name);
 }
 
-BOOL BiCGStabSolver::save_w_indicies_as_bin(std::string Name, BOOL fromDevFlag)
+bool BiCGStabSolver::save_w_indicies_as_bin(std::string Name, bool fromDevFlag)
 {
 	if (fromDevFlag)
 	{
@@ -758,9 +760,9 @@ BOOL BiCGStabSolver::save_w_indicies_as_bin(std::string Name, BOOL fromDevFlag)
 
 
 
-BOOL BiCGStabSolver::saveCSR(std::string outname, BOOL fromDevFlag )
+bool BiCGStabSolver::saveCSR(std::string outname, bool fromDevFlag )
 {
-	BOOL ret;
+	bool ret;
 	if (fromDevFlag)
 	{
 		ret &= Inds->saveIA(outname);
@@ -778,9 +780,9 @@ BOOL BiCGStabSolver::saveCSR(std::string outname, BOOL fromDevFlag )
 	return ret;
 }
 
-BOOL BiCGStabSolver::saveCSR_row_col_val(std::string outname, BOOL fromDevFlag)
+bool BiCGStabSolver::saveCSR_row_col_val(std::string outname, bool fromDevFlag)
 {
-	BOOL ret;
+	bool ret;
 	if (fromDevFlag)
 	{
 		ret &= Inds->saveJA(outname);

@@ -330,13 +330,8 @@ __kernel void Update_T_Coeffs_Implicit_Turbulent(__global double *__restrict__ T
 	bvec[gid] = Tsrc;
 }
 
-
-
-
-
-/*
-
-__kernel void Test_BiCGStab(__global double *__restrict__ Temp,
+// Since only used one, this kernel will work for both turb and non turb (which is what turbFlag is for)
+__kernel void steady_State_T_Coeffs(__global double *__restrict__ Temp,
 	__global double *__restrict__ ivx,
 	__global double *__restrict__ ivy,
 	__global double *__restrict__ Amat,
@@ -344,7 +339,7 @@ __kernel void Test_BiCGStab(__global double *__restrict__ Temp,
 	__global double *__restrict__ dXcur,
 	__global int *__restrict__ IndArr,
 	__global double *__restrict__ iAlphat,
-	double alpha, double DTFD)
+	double alpha, int turbFlag)
 {
 	int i = get_global_id(0);
 	int j = get_global_id(1);
@@ -359,14 +354,33 @@ __kernel void Test_BiCGStab(__global double *__restrict__ Temp,
 	int Eind = IndArr[gid + DIST_SIZE], Wind = IndArr[gid + DIST_SIZE * 2];
 	int Nind = IndArr[gid + DIST_SIZE * 3], Sind = IndArr[gid + DIST_SIZE * 4];
 
-	alpha *= DTFD;
 
-	double Tc = 1. + 4 * alpha;
-	double Te = -alpha;
-	double Tw = -alpha;
-	double Tn = -alpha;
-	double Ts = -alpha;
-	double Tsrc = Temp[gid];
+	double dX_e = dXcur[gid], dX_w = dXcur[gid + DIST_SIZE], dX_c = dXcur[gid + DIST_SIZE * 2];
+	double dY_n = dXcur[gid + DIST_SIZE * 3], dY_s = dXcur[gid + DIST_SIZE * 4], dY_c = dXcur[gid + DIST_SIZE * 5];
+	double dX2_e = dXcur[gid + DIST_SIZE * 6], dX2_w = dXcur[gid + DIST_SIZE * 7], dX2_c = dXcur[gid + DIST_SIZE * 8];
+	double dY2_n = dXcur[gid + DIST_SIZE * 9], dY2_s = dXcur[gid + DIST_SIZE * 10], dY2_c = dXcur[gid + DIST_SIZE * 11];
+
+	double Ux = ivx[gid], Uy = ivy[gid], alphat = iAlphat[gid];
+	int gidw = (i > 0) ? gid - 1 : (CHANNEL_LENGTH - 1 + j*CHANNEL_LENGTH_FULL);
+	int gide = (i < CHANNEL_LENGTH - 1) ? gid + 1 : (j*CHANNEL_LENGTH_FULL);
+
+	double dAdy = 0., dAdx = 0.;
+
+	if (turbFlag)
+	{
+		dAdx = dX_e*iAlphat[gide] + dX_w*iAlphat[gidw] + dX_c*alphat;
+		dAdy = dY_n*iAlphat[gid + CHANNEL_LENGTH_FULL] +
+			dY_s*iAlphat[gide - CHANNEL_LENGTH_FULL] + dY_c*alphat;
+	}
+	double Jx = (Ux - dAdx);
+	double Jy = (Uy - dAdy);
+
+	double Tc = (Jx*dX_c + Jy*dY_c - alphat * (dX2_c + dY2_c));
+	double Te = (Jx*dX_e - alphat*dX2_e);
+	double Tw = (Jx*dX_w - alphat*dX2_w);
+	double Tn = (Jy*dY_n - alphat*dY2_n);
+	double Ts = (Jy*dY_s - alphat*dY2_s);
+	double Tsrc = 0.;
 
 	if (Sind >= 0)
 		Amat[Sind] = Ts;
@@ -380,14 +394,68 @@ __kernel void Test_BiCGStab(__global double *__restrict__ Temp,
 
 	if (Eind >= 0)
 		Amat[Eind] = Te;
+	else if (i == CHANNEL_LENGTH - 1)
+		Amat[Cind] += Te;
 
 	if (Nind >= 0)
 		Amat[Nind] = Tn;
 
 	bvec[gid] = Tsrc;
+}
 
+//Calculates Nusselt along the boundaries
+__kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_NU, 1, 1)))
+void calcNu(__global bLinks* BL,
+	__global int* BLind,
+	__global double* Nu,
+	__global nodeV* NV,
+	__global double2* J,
+	__global double* T,
+	int SaveLoc,
+	int NUMBLINKS)
+{
+	int ix = get_global_id(0);
 
+	if (ix >= NUMBLINKS)
+		return;
 
+	int shiftval = SaveLoc * NUMBLINKS * 3;
 
-}*/
+	int ii = BLind[ix];
+
+	bLinks BLtemp = BL[ii];
+	double2 BLpos = BLtemp.vP0 + BLtemp.vTvec * BLtemp.blLen / 2.;
+
+	int2 Posi = convert_int2(BLpos);
+	int loc = Posi.x * FULLSIZEY_TR + Posi.y;
+
+	nodeV NVtemp = NV[loc];
+	double4 TT = (NVtemp.Temps - TMIN) / TDIFF;
+
+	double2 dX1 = BLpos - trunc(BLpos);
+	double2 dX0 = 1. - dX1;
+
+	double T0y = TT.x * dX0.y + TT.z * dX1.y;
+	double T1y = TT.y * dX0.y + TT.w * dX1.y;
+
+	double T0x = TT.x * dX0.x + TT.y * dX1.x;
+	double T1x = TT.z * dX0.x + TT.w * dX1.x;
+
+	double2 dTdx = (double2)(T1y - T0y, T1x - T0x);  ///-dTdx
+
+	double dTdn = dot(dTdx, BLtemp.vNvec);
+
+	double Um = 0.;
+	double Tm = 0.;
+	for (int j = 0; j < FULLSIZEY; j++)
+	{
+		double Unorm = length(J[Posi.x * FULLSIZEY_UT + j]);
+		Um += Unorm;
+		Tm += Unorm * T[Posi.x * FULLSIZEY_UT + j];
+	}
+	Tm = Tm / Um;
+	Nu[shiftval + ix * 3] = BLpos.x;
+	Nu[shiftval + ix * 3 + 1] = BLpos.y;
+	Nu[shiftval + ix * 3 + 2] = fabs(NU_MULTIPLIER * dTdn / Tm);
+}
 

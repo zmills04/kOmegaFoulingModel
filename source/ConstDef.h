@@ -30,7 +30,6 @@
 
 #define LOG_ERROR_IN_FILE
 
-//#define USE_OPENGL
 //#define DISABLE_TURBULENT_VISC		//Only turns off turbulent visc. in lattice boltzmann solver.
 
 
@@ -41,6 +40,7 @@
 #define PRINT_BUILD_INFO
 //#define PROFILING
 
+#define RESIZE_MULTIPLIER		1
 
 
 ////////AIR PROPERTIES (IN REAL UNITS)///////////////
@@ -227,12 +227,14 @@
 /////////////////////////////////////////////////////////////
 #define USE_PARTICLE_SOLVER		false
 #define TR_SAVE_MACROS_ON_START	false
+#define SAVE_WALL_SHEAR			true
 #define X_RELEASE_POS			(490)
 #define X_STOP_POS				(10500)
 #define REDUCE_DEP_STOP1		(990)
 #define REDUCE_DEP_STOP2		(1490)
 #define AMT_REDUCE_DEP			0.1
 #define START_THERMO_VEL		(500)
+#define AVG_PAR_PER_RELEASE		(50)
 
 #define X_MIN_VAL			(X_RELEASE_POS - 1.)
 
@@ -287,6 +289,7 @@
 #define OUTPUT_MAX_LINES_IO 100
 #define REDUCE_RESULTS_SIZE	128
 
+#define SAVE_SHEAR_LOC		"bothWalls"  //can be "bothWalls", "topWall" or "bottomWall"
 
 #ifdef RENAME_DUMP_FILES
 #define FLAG_DUMP	true
@@ -294,13 +297,6 @@
 #define FLAG_DUMP	false
 #endif //RENAME_DUMP_FILES
 
-
-
-#ifdef TFD_SOLVER
-#define OUTPUT_SIZE				(OUTPUT_MAX_LINES*5)
-#else
-#define OUTPUT_SIZE				(OUTPUT_MAX_LINES*2)
-#endif
 
 
 #define OUTPUT_DIR				"results"
@@ -312,9 +308,10 @@
 #define YAML_PARAM_FILE			"RunParam.yaml"
 
 /////////////////////////////////////////////////////////////
-//////               OPENGL PARAMETERS                 //////
+//   OPENGL PARAMETERS  (vars located in particleDisplay)  //
 /////////////////////////////////////////////////////////////
-//#define OPENGL_GRIDLINES      //Renders gridlines on window if defined
+#define OPENGL_DISPLAY			false	 //turn openGL on or off
+#define OPENGL_GRIDLINES		false    //Renders gridlines on window if defined
 #define NUM_PAR_GL_DIV		1	//Reduces the number of particles plotted by increasing
 #define POINT_SIZES			2.	//initial size of particles
 #define LINE_SIZES			2.	//initial thickness of lines
@@ -367,16 +364,11 @@
 #define LB_BOUNDARY_LINK_7		0x40
 #define LB_BOUNDARY_LINK_8		0x80
 #define LB_BOUNDARY_LINK_9		0x100
+#define SHEAR_NODE_EXISTS		0x20000000
 
 #define PI_NUMBER				3.1415926535897931
 #define INDEX					12
 
-
-#ifndef TR_SOLVER
-#ifdef USE_OPENGL
-#undef USE_OPENGL
-#endif
-#endif
 
 #define POINT_VBO				1
 #define LINE_VBO				0
@@ -452,6 +444,18 @@
 #define BOUNDARY_NODE 0x40000000
 #define GHOST_NODE 0x4
 
+
+// vls.M flag values 
+#define M_SOLID_NODE	0b0001
+#define M_FLUID_NODE	0b0010
+#define M0_SOLID_NODE	0b0100
+#define M0_FLUID_NODE	0b1000
+#define M_FOUL_NODE		0b1001
+
+
+
+
+
 #define OPTION_SAVE_MACRO_FIELDS			0x2
 #define OPTION_LOCAL_UPDATE					0x8
 #define OPTION_TIME_SAMPLE					0x20
@@ -473,7 +477,11 @@
 #endif
 #endif
 
-
+#define TRP_TOP_LOC_IND		0
+#define TRP_BOT_LOC_IND		1
+#define TRP_UMAX_VAL_IND	2
+#define TRP_BVAL_IND		3
+#define TRP_OFFSET_Y_IND	4
 
 
 
@@ -493,6 +501,7 @@
 #define ERROR_INITIALIZING_VTR								-113
 #define ERROR_INITIALIZING_VFL								-114
 #define ERROR_CREATING_BICGSTAB_SOLVER						-115
+#define ERROR_IN_OPENGL_ARRAY								-116
 
 #ifdef _DEBUG
 
@@ -515,7 +524,8 @@
 #define CL_HPP_CL_1_2_DEFAULT_BUILD
 #endif
 
-
+#define getGlobalSizeMacro(actSize, wgSize)	\
+	((int)ceil((double)actSize / (double)wgSize)* (int)wgSize)
 
 #endif // !defined(__CONSTDEF_H__INCLUDED_)
 

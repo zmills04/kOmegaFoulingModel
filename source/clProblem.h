@@ -37,7 +37,6 @@ public:
 	
 	clProblem() : Timeout("time")
 	{
-
 		loadParamsPtr = std::bind(&clProblem::loadParams, this);
 	};
 	~clProblem()
@@ -51,14 +50,14 @@ public:
 //////////////////////////////////////////////////////////////////////////////////////
 	const static double Pi, R, Kb;
 	const static double eps;
-	static double DELTA_L, DELTA_T, DELTA_M, DELTA_F, DELTA_P;
+	static double DELTA_L, DELTA_T, DELTA_M, DELTA_F, DELTA_P; //delta_p is dX^2*dM/dT^2 (units of energy) Not sure why P is used to identify this.
 	 
 		
 	static double Pipe_radius;
 	static int Channel_Height, nX, nY, XsizeFull;
-	static unsigned int FullSize;
+	static unsigned int FullSize, distSize;
 	static cl_int2 nn;
-
+	static bool useOpenGL;
 	static int DeviceID;
 	static unsigned int Time, TimeN;
 	static double dTlb, dTtfd, dTtr, dTtr_wall;
@@ -147,6 +146,23 @@ public:
 		return retval_;
 	}
 
+	template <typename T>
+	bool getParameter(std::string pname_, T& pval_, T defval)
+	{
+		bool retval_;
+		if (const YAML::Node *pName = yamlIn.FindValue(pname_))
+		{
+			*pName >> pval_;
+			retval_ = true;
+		}
+		else
+		{
+			pval_ = defval;
+			retval_ = false;
+		}
+		return retval_;
+	}
+
 	// returns 0 if neither parameters provided in file, 1 if pname1_ is found,
 	// 2 if pname2_ is found, and throws error if both are found.
 	template <typename T>
@@ -180,7 +196,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////
-
 
 	std::string outDir, curDumpSaveDir;
 	Array1Dd Timeout;

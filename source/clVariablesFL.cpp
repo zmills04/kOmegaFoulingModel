@@ -141,11 +141,11 @@ void clVariablesFL::testRestartRun()
 
 		allocateArrays();
 
-		ERROR_CHECKING(BLdep_tot.load("load" SLASH "BLdep_tot") == FALSE,
+		ERROR_CHECKING(BLdep_tot.load("load" SLASH "BLdep_tot") == false,
 			"BLdep_tot must be provided in load file to restart from checkpoint",
 			ERROR_INITIALIZING_VFL);
 
-		ERROR_CHECKING(FI.load("load" SLASH "fli") == FALSE,
+		ERROR_CHECKING(FI.load("load" SLASH "fli") == false,
 			"fli must be provided in load file to restart from checkpoint",
 			ERROR_INITIALIZING_VFL);
 	}
@@ -240,6 +240,15 @@ void clVariablesFL::createKernels()
 	update_TR_kernel[4].create_kernel(GetSourceProgram, TRQUEUE_REF, "find_wall_nodes");
 	/*update_TR_kernel[4].set_size(gsizex_TR4, WORKGROUPSIZE_UPDATEWALL);*/
 	update_TR_kernel[4].set_size(1,1);
+
+
+	if (p.useOpenGL)
+	{
+		update_GL_kernel.create_kernel(GetSourceProgram, IOQUEUE_REF, "update_GL_wall");
+		update_GL_kernel.set_size((double)vls.nN / 2., WORKGROUPSIZE_UPDATE_GL);
+	}
+
+
 }
 
 double clVariablesFL::Gaussian_Kernel(double input)
@@ -693,9 +702,9 @@ void clVariablesFL::update()
 }
 
 
-BOOL clVariablesFL::test_bounds()
+bool clVariablesFL::test_bounds()
 {
-	//BOOL test = FALSE;
+	//bool test = false;
 	//test = vlb.Act.Test_Bounds_Buffer(IOQUEUE, 0, p.nY); 
 	//test = vlb.Stor.Test_Bounds_Buffer(IOQUEUE, -1, p.Channel_Height);
 	////test = vlb.Prop_loc.Test_Bounds_Buffer(IOQUEUE, 0, p.nX*p.Channel_Height*8);
@@ -1052,6 +1061,16 @@ void clVariablesFL::setKernelArgs()
 	//update_TR_kernel[4].set_argument(ind++, sizeof(cl_mem), vtr.Winds.get_buf_add());
 	//update_TR_kernel[4].set_argument(ind++, sizeof(cl_mem), vtr.Active_indicies.get_buf_add());
 	//update_TR_kernel[4].set_argument(ind++, sizeof(cl_uint), (void *)&vtr.nActiveNodes);
+
+	//if (p.useOpenGL)
+	//{
+	//	ind = 0;
+	//	int num_nodes = vls.nN / 2;
+	//	vfl.update_GL_kernel.set_argument(ind++, sizeof(cl_mem), vls.C.get_buf_add());
+	//	vfl.update_GL_kernel.set_argument(ind++, sizeof(cl_mem), vls.LSb_vbo.get_buf_add());
+	//	vfl.update_GL_kernel.set_argument(ind++, sizeof(cl_mem), vls.LSt_vbo.get_buf_add());
+	//	vfl.update_GL_kernel.set_argument(ind++, sizeof(int), (void*)& num_nodes);
+	//}
 }
 
 void clVariablesFL::Release_Objects()

@@ -1,23 +1,25 @@
-// clVariables.h: interface for the clVariables class.
+// Class containing data/methods for kOmega turbulence model.
+// clVariablesLB will contain an instance of this class rather than
+// there being a separate global instance in lbls.cpp.
 //
-// (c) Alexander Alexeev, 2006 
+// (c) Zachary Grant Mills 2019 
 //////////////////////////////////////////////////////////////////////
 
-#if !defined(AFX_CLVARIABLESLB_H__INCLUDED_)
-#define AFX_CLVARIABLESLB_H__INCLUDED_
+#if !defined(AFX_KOMEGA_H__INCLUDED_)
+#define AFX_KOMEGA_H__INCLUDED_
 
 #pragma once
 
 #include "SparseMatrix.h"
 #include "Reducer.h"
 #include "BiCGStabSolver.h"
-#include "kOmega.h"
 
 
 
-class clVariablesLB
+class kOmega
 {
 public:
+
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                                               ///////////////
@@ -25,40 +27,48 @@ public:
 //////////////                                               ///////////////
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
-	
-	// Func Pointer for calling loadParams
-	std::function<void(void)> loadParamsPtr;
 
-	// kOmega data/functions/kernels
-	kOmega kOmegaClass;
-	
-	clVariablesLB() : FA("FA"), FB("FB"), NodeType("nodeType"),
-		Ro_array("lbro"), Ux_array("lbux"), Uy_array("lbuy"),
-		Inlet_Vel("inletVels")
-	{
-		loadParamsPtr = std::bind(&clVariablesLB::loadParams, this);
+	kOmega() : dXCoeffs("dXCoeffs"), WallD("wallD"),
+		Diff_Omega("diffOmega"), Diff_K("diffK"), Fval_array("Fvals"),
+		Nut_array("lbnut"), dKdO_array("dKdO"), Sxy_array("lbsxy"),
+		Kappa_array("lbkappa"), Omega_array("lbomega")
+	{}
+
+	~kOmega() {}
+
+
+	// Used for indexing dx arrays
+	enum dxCoeffInd {
+		dxind_e, dxind_w, dxind_c, dyind_n, dyind_s,
+		dyind_c, dx2ind_e, dx2ind_w, dx2ind_c, dy2ind_n, dy2ind_s, dy2ind_c
 	};
-	virtual ~clVariablesLB()
-	{ 
-	};
+
+	// Used to specify the type of debugging being used for kOmega functions
+	enum { lbDbgSave, koDbgSave1, koDbgSave2, koDbgSave, DbgSave };
+
 
 
 ////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////	
 //////////////                                               ///////////////
-//////////////           KERNELS/REDUCTIONS/SOLVERS          ///////////////
+//////////////            KERNELS/SOLVERS/REDUCERS           ///////////////
 //////////////                                               ///////////////
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 
-	DualKernel collisionKernel;	// Kernel performs collision and propogation
-	DualKernel ibbKernel;	// Kernel applies IBB BC's
-	DualKernel lbOutflow;			// Applies Outflow BC, if inflow/outflow is used
-	Kernel calcRoJKernel;			// calculates rho, Ux, Uy from Distribution
-									// used when restarting run
 
-	Reducer<double> sumUx, sumUy, sumRo;
-	
+	Kernel kOmegaUpdateDiffCoeffs;	// Step 1 updating coefficients for kOmega Eqns
+	Kernel kOmegaUpdateCoeffs;		// Step 2 updating coefficients for kOmega Eqns
+
+	// Reduction kernels
+	Reducer<double, ReduceGenerator::Min> minKappa, minOmega;
+	Reducer<double> sumKappa, sumOmega;
+
+	// Solvers for Kappa and Omega
+	BiCGStabSolver Kappa;
+	BiCGStabSolver Omega;
+
+
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                                               ///////////////
@@ -66,43 +76,54 @@ public:
 //////////////                                               ///////////////
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
-	
+
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                   Data Arrays                 ///////////////
 ////////////////////////////////////////////////////////////////////////////
-	
-	Array3Dd FA, FB; // LB distributions
-	
-	Array2Dd Ro_array;	// Density array
-	Array2Dd Ux_array, Uy_array; // Velocity array
 
+	// Arrays that contain actual kappa and omega values, which
+	// directly addressed during initialization/reading bin files
+	// pointers to these arrays are passed to Solvers, which
+	// allows for arrays to be accessed from those classes
+	Array2Dd Kappa_array, Omega_array; 
 	
+	Array2Dd Nut_array; // turbulent viscosity 			
+
+
+
 ////////////////////////////////////////////////////////////////////////////	
-//////////////                   Method Arrays               ///////////////
+//////////////                 Method Arrays                 ///////////////
 ////////////////////////////////////////////////////////////////////////////
-	
-	Array2Di NodeType; // indicator for node type (solid, fluid, fouling layer)
-					   // and whether or not a distribution will bounce back from
-					   // a given direction
 
-	// IBB stuff for lbm not currently implemented
-	Array1Dv2i IBB_loc;		// locations used in IBB step
-	Array1Dv2d IBB_coeff;	// Coefficients used in IBB step
+	// CSR indicies for kappa and omega, which are passed to 
+	// solvers
+	CSR_Inds_Periodic KappaInds, OmegaInds;
 	
-	Array1Dd Inlet_Vel;	// Used by inlet velocity BC (not implemented)
-	
+	// Arrays for kOmega solver coefficients,
+	// which are used to calculate the soln matrix
+	Array3Dd dXCoeffs; // distances between nodes
+	Array2Dd WallD;	// wall distance of each node
+	Array2Dd Diff_Omega, Diff_K; // Diffusion terms
+	Array2Dd Fval_array; // F term 
+	Array3Dd dKdO_array; // derivatives of kappa and omega
+	Array3Dd Sxy_array; // shear terms
+
+	// Used for debugging kOmega
+#ifdef DEBUG_TURBARR
+	Array3Dd lbDbgArr, koDbgArr1, koDbgArr2;
+#endif
 
 ////////////////////////////////////////////////////////////////////////////	
-//////////////                   Output Arrays               ///////////////
-////////////////////////////////////////////////////////////////////////////	
-	Array2Dd lbOut; // stores time data (i.e. umean, total density, etc)
-
-
-
-////////////////////////////////////////////////////////////////////////////	
-//////////////                   Display Arrays              ///////////////
+//////////////                 Output Arrays                 ///////////////
 ////////////////////////////////////////////////////////////////////////////
+
+
+
+////////////////////////////////////////////////////////////////////////////	
+//////////////                Display Arrays                 ///////////////
+////////////////////////////////////////////////////////////////////////////
+
 
 
 
@@ -113,6 +134,7 @@ public:
 //////////////                                               ///////////////
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
+
 
 
 
@@ -128,71 +150,44 @@ public:
 ////////////////////////////////////////////////////////////////////////////	
 //////////////             Run Parameter Variables           ///////////////
 ////////////////////////////////////////////////////////////////////////////	
-
-	// Flow properties (Ux_inlet is for inlet/outlet BC, Fval for periodic)
-	double Re, Ux_inlet, Fval;
-	bool reDefined; // false if parameter file contained Fval, else true
-
-	// Fluid properties
-	double tau, MuVal, RhoVal;
-	bool tauDefined; // false if parameter file contained MuVal, else true
-
-	// Read Fluid Properties (for calculating deltaT, deltaM, etc)
-	double nuAir, rhoAir;
-
 	// Switches for initialization and to turn on turb. model solver
-	bool iniPoiseuille, runLBFDFirst;
-	bool saveMacroStart;
+	bool perturbVelField;
+	bool kOmegaSolverFlag, iniTurbVelocity;
 
 	// Flags used to indicate if simulation is being restarted from
 	// a checkpoint
-	bool fLoadedFlag, restartRunFlag;
+	bool kOmegaLoadedFlag;
 
-	// Times for pre-particle release LBM/kOmega/Temp solvers
-	unsigned int tlbmIniDumpStep, tlbmNumIniSteps_LB, tlbmNumIniSteps_TLBM;
+	// Parameters for perturbing initial velocity distribution
+	double perturbDUPlus, perturbEpsilon;
+	double perturbBeta, perturbAlpha, perturbSigma;
 
-	// Variables used in the iterative flowrate solver (not implemented)
-	// Note: not all of these are read from/written to parameter file
-	// at the moment (need to implement this if using flow solver)
-	unsigned int numIntervalsPerAvg, timeBetweenIntervals;
-	unsigned int pauseBtwAdj, Next_Update_Time;
-	double flowrateMaxPercentDiff, Fval_prev, Fval_orig, Fval_Diff;
-	double Um_keep, Um_prev;
+	// Parameters used by kOmega Solver
+	double roughnessFactor, UtauVal, ReTurbVal;
+
+
+	// Solver parameters for Kappa and Omega eqns
+	double kappaMaxRelTol, kappaMaxAbsTol, omegaMaxRelTol, omegaMaxAbsTol;
+	int kappaMaxIters, omegaMaxIters;
+
+
+
+
+	// Characteristic Values used to initialize Kappa/Omega
+	double TurbIntensity, TurbLScale_inv;
+
+	// Wall function values
+	double kappaWallVal, omegaWallVal, nutWallVal, yPlusWallVal;
+
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                Method Variables               ///////////////
 ////////////////////////////////////////////////////////////////////////////	
 	
-	int alter;			// used to alternate between two collision kernels
-	int Save_loc;		// Tracks location to save data in lbOut array
-	int IBB_array_len;	// length of IBB array
-
-	
-	// Number of distributions
-	int nL = 9;
-
-	// Reverse direction for bounce back
-	const static int rev[9];
-
-	// Lattice Velocities
-	const static int Cx[9];
-	const static int Cy[9];
-	const static cl_int2 Cxy[9];
-	const static cl_double2 Cxy_double[9];
-
-	// Distribution weights
-	const static double Weigh[9];
-	
-	// Cs^2 (speed of sound squared = 1/3)
-	const static double Cs2;
-
-	// Boundary flags
-	const static int boundsArr[9];
-	const static int boundsArrT1[9];
-	const static int boundsArrT2[9];
 
 
-	
+
+
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                                               ///////////////
@@ -237,6 +232,7 @@ public:
 	// Saves time output data (i.e. avg velocity, shear, Nu, etc)
 	void saveTimeData();
 
+
 	// Sets arguments to kernels.Pointer to this function is passed to 
 	// sourceGenerator along with createKernels so that after kernels 
 	// are created, all arguments are set.
@@ -258,6 +254,10 @@ public:
 	// size, or a save step is reached
 	void updateTimeData();
 
+
+
+
+
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                                               ///////////////
@@ -270,62 +270,37 @@ public:
 //////////////            Initialization Functions           ///////////////
 ////////////////////////////////////////////////////////////////////////////
 
-	// Calculates Feq values for a given velocity and density
-	void calcFeqVals(double* Feq_vals, double rho_val, cl_double2 u_val);
+	// calculates coefficients for differentiation of K and Omega  
+	void calcDxTerms();
 
-	// Solves LB/kOmega/Temp equations to get initial distributions
-	// before releasing particles
-	void getInitialFlow();
-	void getIntialFlowAndTemp();
+	// Calculates turbulent viscosity array from values in kappa and omega
+	void calcNutArray();
 
-	//initializes F distributions to Weight values
-	void iniDists();
-
-	//initializes F distributions to parabolic flow
-	void iniDists(double Umaxval);
-
-	//creates IBB arrays from arrays in clVariablesLS
-	//void iniIBB();
-
-	//Initializes velocities at inlet nodes
-	void iniInletVels();
-
-	// Initializes and nodeType Array
-	void iniNodeType();
-
+	// Initializes wall distances array
+	void iniWallD();
 
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////              Updating Functions               ///////////////
 ////////////////////////////////////////////////////////////////////////////
 
-	//Updates IBB arrays
-	void updateIBBArrays();
 
 ////////////////////////////////////////////////////////////////////////////	
-//////////////              Solving Functions                ///////////////
+//////////////               Solving Functions               ///////////////
 ////////////////////////////////////////////////////////////////////////////
 
-	// Calculates current mean velocity of fluid
-	double calcUmean();
-
-	//Enqueues LB kernels
 	void Solve();
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                Output Functions               ///////////////
 ////////////////////////////////////////////////////////////////////////////
-	
-	// Saves each FA/FB distribution as an individual text file for
-	// debugging purposes
-	void saveDistributions();
-
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                Display Functions              ///////////////
-////////////////////////////////////////////////////////////////////////////	
-
-
+////////////////////////////////////////////////////////////////////////////
 };
 
-#endif // !defined(AFX_CLVARIABLESLB_H__INCLUDED_)
+
+
+
+#endif //AFX_KOMEGA_H__INCLUDED_

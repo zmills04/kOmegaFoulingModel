@@ -1,4 +1,4 @@
-#define GET_GLOBAL_IDX(gx,gy)	(gx + gy*CHANNEL_LENGTH_FULL)
+
 
 
 inline void compute_0th_moment(const FTYPE *Fi, FTYPE *out)
@@ -557,19 +557,31 @@ __kernel void LB_collision_SRT_Fluid_w_kOmega(__global double *__restrict__ rho_
 
 #undef DBGARR
 
-////Interpolated bounce back kernel
-//__kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_IBB, 1, 1)))
-//void LB_IBB(__global int2 *ibb_loc,
-//__global double2 *ibb_coeff,
-//__global double *FB,
-//int max_el)
-//{
-//	int i = get_global_id(0);
-//
-//	if (i >= max_el)
-//		return;
-//
-//	double Fold = FB[ibb_loc[i].x];
-//	double Fnew = ibb_coeff[i].x * Fold + ibb_coeff[i].y * FB[ibb_loc[i].y];
-//	FB[ibb_loc[i].x] = Fnew;
-//}
+// Interpolated bounce back kernel
+__kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_IBB, 1, 1)))
+void lbIBB(__global int *__restrict__ ibbArr,
+	__global double *__restrict__ dXCurr,
+	__global double *__restrict__ FB,
+	int max_el)
+{
+	int i = get_global_id(0);
+
+	if (i >= max_el)
+		return;
+
+	int loc = FB[ibbArr];
+	
+	int dir = (gid / DIST_SIZE);
+	int revDir = loc + ibbRev[dir-1];
+	double twoQ = 2.*dXCurr[loc - dir*DIST_SIZE];
+
+	if (dxVal <= 0.5)
+	{
+		FB[revDir] = twoQ * FB[revDir] + (1. - twoQ) * FB[loc];
+	}
+	else
+	{
+		revNeigh = loc + ibbNeigh[dir - 1];
+		FB[revDir] = 1./twoQ * (FB[revDir] + (twoQ - 1.) * FB[revNeigh])
+	}
+}

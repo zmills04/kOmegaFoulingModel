@@ -9,8 +9,8 @@
 #define MAX(A, B)		(((A) > (B)) ? (A) : (B))
 #define MIN(A, B)		(((A) < (B)) ? (A) : (B))
 #define EPSILON			1.11e-16
-#define TRUE			1
-#define FALSE			0
+#define true			1
+#define false			0
 #define EQUALS2D(A, B)	((A.x == B.x) && (A.y == B.y))
 #define NEQUALS2D(A, B)	((A.x != B.x) || (A.y != B.y))
 #define CEPS			1.0e-5
@@ -19,7 +19,7 @@
 #define CX_DEF_HI	(double4)(1.,-1.,1.,-1.)
 #define CY_DEF_HI	(double4)(1.,-1.,-1.,1.)
 #define CXX_DEF_HI	(double4)(1.,1.,1.,1.)
-#define CXY_DEF	(double4)(1.,1.,-1.,-1.)
+#define CXY_DEF		(double4)(1.,1.,-1.,-1.)
 
 #define CX_DEF_HIF	(float4)(1.f,-1.f,1.f,-1.f)
 #define CY_DEF_HIF	(float4)(1.f,-1.f,-1.f,1.f)
@@ -96,6 +96,50 @@ void AtomicAdd(__global double *val, double delta)
 }
 #endif
 
+////////////////////////////////////////////////
+////// Random number generator Functions  //////
+////////////////////////////////////////////////
+
+//! Return a 32-bit integer in the range [0..2^32)
+
+uint2 MWC64X_NextUint(uint2 s, double* resd)
+{
+	uint res = s.x ^ s.y;
+	uint X = s.x, C = s.y;
+
+	uint Xn = MWC64X_A * X + C;
+	uint carry = (uint)(Xn < C);				// The (Xn<C) will be zero or one for scalar
+	uint Cn = mad_hi(MWC64X_A, X, carry);
+
+	s.x = Xn;
+	s.y = Cn;
+	*resd = convert_double(res) / RAND_MAX;
+	return s;
+}
+
+uint2 MWC64X_NextUint2(uint2 s, double2* resd)
+{
+	uint res = s.x ^ s.y;
+
+	(*resd).x = convert_double(res) / RAND_MAX;
+	uint X = s.x, C = s.y;
+
+	uint Xn = MWC64X_A * X + C;
+	uint carry = (uint)(Xn < C);				// The (Xn<C) will be zero or one for scalar
+	uint Cn = mad_hi(MWC64X_A, X, carry);
+
+	res = Xn ^ Cn;
+	(*resd).y = convert_double(res) / RAND_MAX;
+	Xn = MWC64X_A * X + C;
+	carry = (uint)(Xn < C);				// The (Xn<C) will be zero or one for scalar
+	Cn = mad_hi(MWC64X_A, X, carry);
+
+	s.x = Xn;
+	s.y = Cn;
+	return s;
+}
+
+
 #define C_DIR 0
 #define E_DIR 1
 #define W_DIR 2
@@ -168,6 +212,23 @@ void AtomicAdd(__global double *val, double delta)
 #define SE_NEIGH (-CHANNEL_LENGTH_FULL+1)
 #define SW_NEIGH (-CHANNEL_LENGTH_FULL-1)
 
+// adding ibbRev[dir-1] to ibb index give index of the 
+// reverse disribution 
+__constant int ibbRev[8] = { DIST_SIZE, -DIST_SIZE, DIST_SIZE, -DIST_SIZE, DIST_SIZE, -DIST_SIZE, DIST_SIZE, -DIST_SIZE };
+
+// Adding ibbNeigh to ibb index gives index of neighbor in reverse
+// direction (for use with q >= 0.5). This may need to be set in 
+// vlb.setSourceDefines as it requires calculations and im not sure if
+// opencl can handle it.
+__constant int ibbNeigh[8] = {	DIST_SIZE - 1, 
+								-DIST_SIZE + 1,
+								DIST_SIZE - CHANNEL_LENGTH_FULL, 
+								-DIST_SIZE + CHANNEL_LENGTH_FULL,
+								DIST_SIZE - (CHANNEL_LENGTH_FULL + 1),
+								-DIST_SIZE + (CHANNEL_LENGTH_FULL + 1),
+								DIST_SIZE - CHANNEL_LENGTH_FULL + 1, 
+								-DIST_SIZE + CHANNEL_LENGTH_FULL - 1 }
+
 
 #define EVAL1(...) __VA_ARGS__
 
@@ -221,4 +282,58 @@ void AtomicAdd(__global double *val, double delta)
 #define KO_VON_KARMAN		(0.41)
 #define KO_GAMMA1			(5./9.)
 #define KO_GAMMA2			(0.44)
+
+
+#define GET_GLOBAL_IDX(gx,gy)	(gx + gy*CHANNEL_LENGTH_FULL)
+#define GET_FULL_GLOBAL_IDX(gx,gy,gdir)	(gx + gy*CHANNEL_LENGTH_FULL + gdir*DIST_SIZE)
+void decodeFullGlobalIdx(const int gid, int* xval, int* yval, int* qval)
+{
+	*qval = gid / DIST_SIZE;
+	int xyval = gid % DIST_SIZE;
+	*xval = xyval % CHANNEL_LENGTH_FULL;
+	*yval = xyval / CHANNEL_LENGTH_FULL;
+}
+
+void decodeGlobalIdx(const int gid, int* xval, int* yval)
+{
+	*xval = gid % CHANNEL_LENGTH_FULL;
+	*yval = gid / CHANNEL_LENGTH_FULL;
+}
+
+double2 getLocFromGlobalIdx(const int gid)
+{
+	int2 ret = { { (gid % CHANNEL_LENGTH_FULL), (gid / CHANNEL_LENGTH_FULL) } };
+	return convert_double2(ret);
+}
+
+uint getRevDist(const int gid)
+{
+	// gid/DIST_SIZE = dist number
+	// gid % DIST_SIZE = i + j*CHANNEL_LENGTH_FULL
+
+
+	return gid % DIST_SIZE + RevDir[(gid / DIST_SIZE) + 1] *
+		DIST_SIZE;
+}
+
+// BL_TOP_STOP and BL_BOT_STOP is index last element, so test for outside bounds
+// is > BL_*_STOP not >= BL_*_STOP
+
+// Convert index for vtr.BL.* arrays to vls.BL index
+int convertTRBL2LSBL(int trbl_)
+{
+	return (trbl_ < NUM_BL_BOT) ? trbl_ + BL_BOT_START : trbl_ + BL_TOP_START;
+}
+
+// Convert index for vls.BL to index for vtr.BL.* arrays.
+bool convertLSBL2TRBL(int lsbl_, int *trbl_)
+{
+	if (lsbl_ < BL_BOT_START || lsbl_ > BL_TOP_STOP || (lsbl_ > BL_BOT_STOP && lsbl_ < BL_BOT_STOP))
+	{
+		*trbl_ = -1;
+		return false;
+	}
+	return (trbl_ < BL_BOT_STOP) ? trbl_ - BL_BOT_START : trbl_ - BL_TOP_START + NUM_BL_BOT;
+}
+
 

@@ -1,24 +1,21 @@
-// clVariables.h: interface for the clVariables class.
+// particleProperties.h: Class storing particle property information
+// and function used to initialize properties, write to file, etc.
 //
-// (c) Alexander Alexeev, 2006 
+// (c) Zachary Mills, 2019 
 //////////////////////////////////////////////////////////////////////
 
-#if !defined(AFX_CLVARIABLESFD_H__INCLUDED_)
-#define AFX_CLVARIABLESFD_H__INCLUDED_
-
-#if _MSC_VER > 1000
-#pragma once
-#endif // _MSC_VER > 1000
+#if !defined(AFX_SHEARSTRESS_H__INCLUDED_)
+#define AFX_SHEARSTRESS_H__INCLUDED_
 
 #include "StdAfx.h"
-#include "clProblem.h"
-#include "BiCGStabSolver.h"
-#include "SparseMatrix.h"
-#include "Reducer.h"
 
-class clVariablesFD
+
+#pragma once
+
+class shearStress
 {
 public:
+	
 
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////	
@@ -27,16 +24,16 @@ public:
 //////////////                                               ///////////////
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
+	shearStress() : sInds("ssSind"), blInds("ssblInds"),
+		ssWeights("ssWeights"), shearInds("ssShearInds"),
+		shearCoeffs("ssShearCoeffs"), blIndsLoc("ssblIndsLoc"),
+		Tau("ssTau"), ssOutput("ssOutput")
+	{}
 
-	// Func Pointer for calling loadParams
-	std::function<void(void)> loadParamsPtr;
+	~shearStress()
+	{}
 
-	clVariablesFD() : tempArray("temp"), Alphat("alphat"), 
-		alphaArray("alpha"), Nu("Nu")
-	{
-		loadParamsPtr = std::bind(&clVariablesFD::loadParams, this);
-	};
-	virtual ~clVariablesFD(){ };
+	enum saveShearLocs { bothWalls, topWall, botWall };
 
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
@@ -45,20 +42,26 @@ public:
 //////////////                                               ///////////////
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
-	   
 
-	Kernel calcNu;			// Calculates Nusselt along wall
-	Kernel updateNuVars;		// Updates variables used in calculation of Nu 
-	Kernel TempUpdateCoeffs;	// Updates Temperature coefficients from SS
-								// to transient
-	Kernel SetSSCoeffs;			// Sets SS coefficients for thermal solver
-	
-	Reducer<double> sumTemp;	
+	// Shear calculation kernels
+	DualKernel nodeShearKernel;// Calculates shear at wall boundary nodes
+	Kernel wallShearKernel;	// interpolates to wall boundary locations
 
-	// Sparse Methods/Classes
-	CSR_Inds TempInds;
-	BiCGStabSolver Temp;
-	
+	// Shear removal of deposited particles
+	// variable at option index is cl_int2 {{ offset (index of first BL 
+	// deposited particle), max_el (total number of BL deposited particles) }}
+	Kernel trShearRemovalKernel;
+
+	// Updates Shear Stress coefficients (called in vfl)
+	// two step process
+	Kernel updateSSKernel[2]; // option index for [1] is number of wall
+							  // boundary nodes
+
+
+	// Prepares shear values to be written to file
+	Kernel saveShearKernel;
+
+
 
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////	
@@ -68,41 +71,51 @@ public:
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 
+
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                   Data Arrays                 ///////////////
 ////////////////////////////////////////////////////////////////////////////
 
-	Array2Dd Alphat;		// turbulent_alpha (updated with turbulent
-							// diffusion coefficients)
-
-	Array2Dd tempArray;		// Temp array, the pointer of which is passed
-							// to the thermal BiCGStab solver
-
-	Array3Dd alphaArray;	// Alpha values for each direction at each node
-							// Updated each time step (handles 
-
-	//dX arrays, which were previously implemented in this function moved
-	//to clVariablesLS, since they will also be used for turb parameters
+	//Shear stresses calculated at boundary nodes
+	Array1Dd Tau;
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                   Method Arrays               ///////////////
 ////////////////////////////////////////////////////////////////////////////
 
+	// Index of first node used in averaging to get shear at wall
+	Array1Dv4i sInds;
+
+	// Index of BL array each index in SS arrays corresponds to	
+	Array1Di blInds;
+
+	// Weights for averaging shear when interpolating from SS at nodes to SS at wall
+	Array1Dv4d ssWeights;
+
+	// Used to update SS coefficients
+	Array1Dv2i blIndsLoc;
+
+	// locations of nodes where shear is calculated 
+	// (absolute location i.e. i+FullSizeX*j)
+	// Array1Di shearInds; // use vls.ssArr;
+
+	// Coefficients used in calc. of shear at nodes
+	Array1Dv8d shearCoeffs;
+
+
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                   Output Arrays               ///////////////
 ////////////////////////////////////////////////////////////////////////////	
-	Array2Dd Nu;
 
-	//buffers containing Nu(x) along both walls on host and device
-#ifdef USE_ORIG_NU
-	Array1Dv2d LBdist_bot, LBdist_top;
-	Array1Dv2i BLinds, LBnodey;
-	Array1Dd LBdist_temp;
-#endif
+	//Array to store Shear Stresses for output
+	Array2Dd ssOutput;
+
+
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                   Display Arrays              ///////////////
 ////////////////////////////////////////////////////////////////////////////
+
 
 
 ////////////////////////////////////////////////////////////////////////////
@@ -113,9 +126,9 @@ public:
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 
-	
-	
-	
+
+
+
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                                               ///////////////
@@ -127,39 +140,33 @@ public:
 ////////////////////////////////////////////////////////////////////////////	
 //////////////             Run Parameter Variables           ///////////////
 ////////////////////////////////////////////////////////////////////////////	
-	bool restartRunFlag;	//Flag indicating if all conditions are met
-							//for thermal solver for restarting run
-	bool thermalSolverFlag;	//Flag indicating if temp being solved
-	bool tempLoadedFlag;	//Flag indicating if T array loaded from file
-	bool calcNuFlag;		//Flag indicating if Nu will be calculated
-	bool saveMacroStart;	//Flag indicating if T should be saved after
-							//initialization
-	bool calcSSTempFlag;	//Flag indicating if steady state temp should be
-							//solved during intialization.
-	double PrTurbNum, PrNum;//Turbulent Pr and Pr
-	double Alpha_fluid;		//Thermal diffusivity of fluid in LB units
-	double Alpha_foul;		//Thermal diff of fouling layer in LB units
-	double T_Actual_Max;	//Actual temperature at inlet
-	double T_Actual_Min;	//Actual wall temp
-	double T_Actual_Diff;	//Tinlet - Twall
-	double ROE0;			//Dimensionless temp to initialize domain to
-	double ROE_INX;			//Dimensionless temp at inlet
-	int tempMaxIters;		//Max iterations for BiCGStab solver for temp
-	double tempMaxRelTol, tempMaxAbsTol;	//Tolerance for BiCGStab solver
-	double kSoot, kAir;		//Thermal conductivity of soot and air
-							//in SI units 
-	double rhoSoot, cpSoot; //Density and Cp of soot in SI units
+	int bNodeTopStart;
+	int Shear_array_len;
+	bool calcSSFlag;
+	int shearSize;
+	int numbl_bounds;
+	int maxOutLinesSS;
+	
+	saveShearLocs ssLocSave;
+	// Total number of nodes at which shear stress is calculated (fluctuates
+	// as surface fouls). Based on size of vls.ssArr
+	int shearNodeSize;		// actual size of arrays
+	int shearNodeDynSize;	// full size of arrays (sizes based on vls.ssArr)
+
+	// Wall BLs shear calculations start and stop and total number of BLs to
+	// calculate (for top and bottom)
+	int shearBLStartBot, shearBLStartTop;
+	int shearBLStopBot, shearBLStopTop;
+	int shearBLSizeTop, shearBLSizeBot, shearBLSizeTotal;
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                Method Variables               ///////////////
 ////////////////////////////////////////////////////////////////////////////	
-	
-	//Pre-calculated values used to simplify calculation of Alpha array
-	double Alpha_den_air, Alpha_den_soot, Alpha_num_soot, Alpha_num_air;
 
-	int Save_loc_Nu;	//offset for current Nu values to save in Nu_buffer
-	int numNuNodes;	//Number of nodes where Nu is calculated
-	
+	int Save_loc_SS; // current location to save shear values
+
+
+
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                                               ///////////////
@@ -226,7 +233,7 @@ public:
 	// size, or a save step is reached
 	void updateTimeData();
 
-
+	   	 
 	////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////                                               ///////////////
@@ -238,131 +245,35 @@ public:
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////            Initialization Functions           ///////////////
 	////////////////////////////////////////////////////////////////////////////
-
-	//Initializes alpha array by filling it with air thermal diffusivity
-	void iniAlpha();
-
-	void iniNuKernel();
-
-	void createNuArrays();
-
-	void reIniNuKernel();
-
+	void iniShearCoeffs();
+	void iniShearSizes();
 
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////              Updating Functions               ///////////////
 	////////////////////////////////////////////////////////////////////////////
-
-	//Fills Alpha Array with Values based on interface thickness
-	void updateAlphaArray();
+	void updateShearArrays();
+	void updateParRemArgs();
 
 
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////               Solving Functions               ///////////////
 	////////////////////////////////////////////////////////////////////////////
 
-	// Calculates average temp in Domain
-	double calcAverageT();
-
-	// Solves for SS temperature to initialize run
-	void solveSSThermal();
-
-	// Enqueues kernels to solve T for current time step
-	void Solve();
-
-
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////                Output Functions               ///////////////
 	////////////////////////////////////////////////////////////////////////////
-	
-	//Enqueues kernel to update Nu along boundary
-	void UpdateNu();
-
+	void updateSS();
+	void resetSSOut();
+	void saveSS();
 
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////                Display Functions              ///////////////
 	////////////////////////////////////////////////////////////////////////////
 
 
-	
-
-
-
-
-
-
-	
-
-
-
-
-
-	
-
-
-
-
-
-
-
-	////Creates coefficients used for updating A and B matricies
-	//void Create_Coeffs();
-
-	//void Find_Neighbors();
-
-	////Initializes dX and alpha arrays
-	//void ini_bounds();
-
-	//void Update_Transient_Coeffs();
-
-
-	////Used in calculation of dX and Alph arrays, called by bcFindNodes_C0 and bcFindNodes
-	//void bcFindDirection(int dir, int bl, cl_double2 vC0, cl_double2 vC1,
-	//	cl_double2 vCn, cl_int2 vCmin, cl_int2 vCmax, int fflag);
-
-	////used in finding boundary nodes
-	//bool bcFindIntersectionNormal(cl_double2 &vC, double &dist, cl_double2 vL0,
-	//	cl_double2 vP0, cl_double2 vP1, cl_double2 &vN);
-
-	////Used to fill dX and alpha arrays
-	//void bcFindNodes(int bl);  //finds boundary nodes based on vls.C
-
-	//void bcFindNodes_C0(int bl); //boundary nodes based on vls.C0
-
-	////Sets bounday nodes for wall (dX)
-	//void bcSetBoundaryNode(cl_int2 ii0, cl_int2 ii1, int dir, double dist,
-	//	int bl, cl_double2 vCc, cl_double2 vC0, cl_double2 vC1, cl_double2 vC2, int xyz);
-
-	////sets boundary nodes for interface (dX_cur)
-	//void bcSetInterfaceNode(cl_int2 ii0, cl_int2 ii1, int dir, double dist,
-	//	int bl, cl_double2 vCc, cl_double2 vC0, cl_double2 vC1, cl_double2 vC2, int xyz);
-
-	
-	
-	
-	
-	
-	
-	
-	
-	////Node spacing arrays (1 between nodes, <= 1 near wall/interface) 
-	//Array3Dd dX_full;	//dX arrays in full domain
-	//Array3Dd dX_cur_full;	//dX_cur in full domain
-	//Array2Dd dX;	//dX(i,j) is initial distance from node i to E (j=0), W (j=1),
-	//				// N (j=2), and S (j=3) neighbors/wall
-	//Array2Dd dX_cur;//Current distance from wall to neighbor/wall/interface
-
-	
-	//Array1Dv4i Neighs;
-
-
-
-
-
-
-	
 
 };
 
 
-#endif // !defined(AFX_CLVARIABLESFD_H__INCLUDED_)
+
+#endif

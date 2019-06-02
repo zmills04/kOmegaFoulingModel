@@ -400,7 +400,7 @@ void clDisplay::check_message()
 		// handle or dispatch messages
 		if (msg.message == WM_QUIT)
 		{
-			quit = TRUE;
+			quit = true;
 		}
 		else
 		{
@@ -420,7 +420,7 @@ void clDisplay::set_window(int framesPerSec)
 int clDisplay::enableGLAndGetGLContext(cl_platform_id platform)
 {
 	//cl_int status;
-	//BOOL ret = FALSE;
+	//bool ret = false;
 	//int  pfmt;
 	//PIXELFORMATDESCRIPTOR pfd;
 	//ZeroMemory(&pfd, sizeof(pfd));
