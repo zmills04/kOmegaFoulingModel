@@ -1,5 +1,7 @@
-// particleProperties.h: Class storing particle property information
-// and function used to initialize properties, write to file, etc.
+// shearStress.h: Class containing variables and methods used to 
+// to calculate the shear stress in the channel, and remove 
+// deposited particles based on the magnitude of the local shear.
+// This will be a subclass in clVariablesTR.
 //
 // (c) Zachary Mills, 2019 
 //////////////////////////////////////////////////////////////////////
@@ -11,6 +13,11 @@
 
 
 #pragma once
+
+
+
+// TODO: ordering of vtr.BL is [vls.BL(0) -> vls.BL(vls.nBL/2), vls.BL(nBL-1) -> vls.BL(vls.nBL/2+1)]
+//		make sure that methods used here and in trKernelsShear reflect that.
 
 class shearStress
 {
@@ -25,9 +32,8 @@ public:
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 	shearStress() : sInds("ssSind"), blInds("ssblInds"),
-		ssWeights("ssWeights"), shearInds("ssShearInds"),
-		shearCoeffs("ssShearCoeffs"), blIndsLoc("ssblIndsLoc"),
-		Tau("ssTau"), ssOutput("ssOutput")
+		ssWeights("ssWeights"),	shearCoeffs("ssShearCoeffs"), 
+		blIndsLoc("ssblIndsLoc"), Tau("ssTau"), ssOutput("ShearStress")
 	{}
 
 	~shearStress()
@@ -56,7 +62,6 @@ public:
 	// two step process
 	Kernel updateSSKernel[2]; // option index for [1] is number of wall
 							  // boundary nodes
-
 
 	// Prepares shear values to be written to file
 	Kernel saveShearKernel;
@@ -108,8 +113,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////	
 
 	//Array to store Shear Stresses for output
-	Array2Dd ssOutput;
-
+	TimeData<double> ssOutput;
 
 
 ////////////////////////////////////////////////////////////////////////////	
@@ -140,14 +144,10 @@ public:
 ////////////////////////////////////////////////////////////////////////////	
 //////////////             Run Parameter Variables           ///////////////
 ////////////////////////////////////////////////////////////////////////////	
-	int bNodeTopStart;
-	int Shear_array_len;
-	bool calcSSFlag;
-	int shearSize;
-	int numbl_bounds;
 	int maxOutLinesSS;
-	
-	saveShearLocs ssLocSave;
+	bool calcSSFlag;		// flag specifying if shear should be saved
+	saveShearLocs ssLocSave; // specifies regions to save (top wall, bot wall or both)
+
 	// Total number of nodes at which shear stress is calculated (fluctuates
 	// as surface fouls). Based on size of vls.ssArr
 	int shearNodeSize;		// actual size of arrays
@@ -162,9 +162,9 @@ public:
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                Method Variables               ///////////////
 ////////////////////////////////////////////////////////////////////////////	
-
-	int Save_loc_SS; // current location to save shear values
-
+	
+	// number of shear values saved in ssOutput each save step
+	int ssOutputSize;	
 
 
 ////////////////////////////////////////////////////////////////////////////
@@ -245,26 +245,41 @@ public:
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////            Initialization Functions           ///////////////
 	////////////////////////////////////////////////////////////////////////////
+	
+	// Initializes shear coefficients used to calculate shear at boundary nodes
+	// and, following this, at boundary links
 	void iniShearCoeffs();
-	void iniShearSizes();
+
 
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////              Updating Functions               ///////////////
 	////////////////////////////////////////////////////////////////////////////
+	
+	// Updates arrays used in the calculation of shear stress at boundary nodes
+	// and, following this, at boundary links
 	void updateShearArrays();
+
+	// This function is called after sort, and it will update the kernel
+	// arguments used in trShearRemovalKernel until the next sort.
 	void updateParRemArgs();
 
 
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////               Solving Functions               ///////////////
 	////////////////////////////////////////////////////////////////////////////
+	
+	// Calls kernels to calculate shear at boundary links
+	void calculateShear(cl_command_queue *que_ = nullptr,
+		cl_event* waitevt = nullptr, int numwait = 0, cl_event *evt_ = nullptr);
+
+	// Tests particles to see if shear is sufficient for removal
+	void shearRemoval(cl_command_queue *que_ = nullptr,
+		cl_event* waitevt = nullptr, int numwait = 0, cl_event *evt_ = nullptr);
+
 
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////                Output Functions               ///////////////
 	////////////////////////////////////////////////////////////////////////////
-	void updateSS();
-	void resetSSOut();
-	void saveSS();
 
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////                Display Functions              ///////////////

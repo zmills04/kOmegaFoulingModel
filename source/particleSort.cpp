@@ -1,3 +1,19 @@
+// particleSort.cpp: Implementation of methods used to sort particles,
+// and re-release deposited particles.
+//
+// (c) Zachary Mills, 2019 
+//////////////////////////////////////////////////////////////////////
+
+
+
+// TODO: Figure out best way to control re-release of tracers
+//		i.e. use of release timer vs. placing them somewhere in domain
+//		with 0 for the number of particles they represent and letting
+//		the particle timer control re-release. The biggest issue with
+//		using the release timer is trying to determine how to calculate
+//		how many particles a tracer represents when all tracers ready to
+//		be released will not be done so at that time.
+
 #include "particleSort.h"
 #include "clVariablesTR.h"
 
@@ -17,16 +33,23 @@ void particleSort::allocateBuffers()
 		sizeof(int) * vtr.nN, NULL, &status);
 	ERROR_CHECKING_OCL(status, "Error creating sortLocs1 "\
 		"in particlesSort class");
-	sortLocs1 = clCreateBuffer(CLCONTEXT, CL_MEM_READ_WRITE,
+	
+	sortLocs2 = clCreateBuffer(CLCONTEXT, CL_MEM_READ_WRITE,
 		sizeof(int) * vtr.nN, NULL, &status);
 	ERROR_CHECKING_OCL(status, "Error creating sortLocs2 "\
 		"in particlesSort class");
+
+	clMemIniFlag = true;
 }
 
+// functor used to sort ParLocVec in clumpParticles function
 bool myfunction(cl_int2 i, cl_int2 j) { return (i.x < j.x); }
 
 void particleSort::clumpParticles()
 {
+	if (!clumpFlag)
+		return;
+
 	sortParticlesForClumping();
 	/////////////Fill vector with values corresponing to particle locations/////////
 
@@ -143,8 +166,6 @@ void particleSort::clumpParticles()
 			break;
 	}
 
-
-
 	// Adding removed particles as deposited, but with Release
 	// timer (using timer array) set to release approx
 	// avgParPerRelease particles per release step.
@@ -178,32 +199,26 @@ void particleSort::clumpParticles()
 
 void particleSort::createKernels()
 {
-	trReReleaseKernel.create_kernel(GetSourceProgram, TRQUEUE_REF, "TR_release_par");
+	trReReleaseKernel.create_kernel(GetSourceProgram, TRQUEUE_REF, 
+		"TR_release_par");
 	trReReleaseKernel.set_size(2 * WORKGROUPSIZE_RERELEASE, WORKGROUPSIZE_RERELEASE);
 	//Global size is set before enqueing kernel (calling set size w/ dummy arg to ensure dim is set)
 
-	sortKernel[0].create_kernel(GetSourceProgram, TRQUEUE_REF, "Sort_merge_local");
-	sortKernel[0].set_size(vtr.nN, WORKGROUPSIZE_SORT);
+	localMergeKernel.create_kernel(GetSourceProgram, TRQUEUE_REF,
+		"Sort_merge_local");
+	localMergeKernel.set_size(vtr.nN, WORKGROUPSIZE_SORT);
 
-	sortKernel[1].create_kernel(GetSourceProgram, TRQUEUE_REF, "Sort_merge_global");
-	sortKernel[1].set_size(vtr.nN, WORKGROUPSIZE_SORT);
+	globalMergeKernel.create_kernel(GetSourceProgram, TRQUEUE_REF,
+		"Sort_merge_global", "Sort_merge_global");
+	globalMergeKernel.set_size(vtr.nN, WORKGROUPSIZE_SORT);
 
-	sortKernel[2].create_kernel(GetSourceProgram, TRQUEUE_REF, "Sort_merge_global");
-	sortKernel[2].set_size(vtr.nN, WORKGROUPSIZE_SORT);
-
-	sortKernel[3].create_kernel(GetSourceProgram, TRQUEUE_REF, "Sort_update_loc");
-	sortKernel[3].set_size(vtr.nN, WORKGROUPSIZE_PLOC);
+	updateLocationKernel.create_kernel(GetSourceProgram, TRQUEUE_REF,
+		"Sort_update_loc");
+	updateLocationKernel.set_size(vtr.nN, WORKGROUPSIZE_PLOC);
 
 	getUmaxKernel.create_kernel(GetSourceProgram, TRQUEUE_REF, "find_umax");
 
-	// Getting work size. For OpenCL version 1.2 the implementation
-	// is basically the same as the final reduce step for generic reduce
-	// kernels. For OpenCL 2.0, implementation uses built-in max reduce
-	// function. Current implementation only allows for 1 work group,
-	// so size of channel height must be <= max WG size for opencl 2.0 or
-	// twice the max WG size for opencl 1.2 (throws error if not).
-	// (currently, max WG size hardcoded as 256).
-
+	// Getting work size for getUmaxKernel
 	int globalLocalSize = 2;
 	while (globalLocalSize < p.Channel_Height)
 		globalLocalSize *= 2;
@@ -216,93 +231,22 @@ void particleSort::createKernels()
 		"before channel height > 256 can be used", ERROR_INITIALIZING_VTR);
 	getUmaxKernel.set_size(globalLocalSize, globalLocalSize);
 	   	 
-	clumpParticleKernels.create_kernel(GetSourceProgram, TRQUEUE_REF, "Test_Bounds_Clumped_Particles");
+	clumpParticleKernels.create_kernel(GetSourceProgram, TRQUEUE_REF,
+		"Test_Bounds_Clumped_Particles");
 	clumpParticleKernels.set_size(2 * WORKGROUPSIZE_TR, WORKGROUPSIZE_TR);
 }
 
-void particleSort::setKernelArgs()
+void particleSort::freeHostArrays()
 {
-	int	ind = 0;
-	Par::arrName arrList_[] = { Par::posArr, Par::depFlagArr, Par::locArr };
-	vtr.P.setBuffers(clumpParticleKernels, ind, arrList_, 3);
-	clumpParticleKernels.set_argument(ind++, trP.fVals.get_buf_add());
-	clumpParticleKernels.set_argument(ind++, vls.C.get_buf_add());
-	// Remaining arguments set before call
-
-	ind = 0;
-	getUmaxKernel.set_argument(ind++, vlb.Ux_array.get_buf_add());
-	trP.setBuffers(getUmaxKernel, ind);
-#ifdef OPENCL_VERSION_1_2
-	getUmaxKernel.set_local_memory(ind, getUmaxKernel.getLocalSize() * sizeof(double));
-#endif
-
-	Par::arrName arrList2_[] = { Par::posArr, Par::numRepArr, Par::typeArr,
-		Par::depFlagArr, Par::timerArr, Par::locArr };
-	ind = 0;
-	vtr.P.setBuffers(trReReleaseKernel, ind, arrList2_, 6);
-	trReReleaseKernel.set_argument(ind++, vtr.RandList.get_buf_add());
-	trP.setBuffers(trReReleaseKernel, ind);
-	trReReleaseKernel.set_argument(ind++, vlb.Ux_array.get_buf_add());
-	trReReleaseKernel.set_argument(ind++, vtr.parP.D_dist.get_buf_add());
-	// These are set before the kernel is called
-	//trReReleaseKernel.set_argument(10, maxel);
-	//trReReleaseKernel.set_argument(11, Concentration Number);
-
-
-	ind = 0;
-	sortKernel[0].set_argument(ind++, vtr.P.loc.get_buf_add());
-	sortKernel[0].set_argument(ind++, &sortLocs1);
-	sortKernel[0].set_local_memory(ind++, WORKGROUPSIZE_SORT * sizeof(int));
-	sortKernel[0].set_local_memory(ind++, WORKGROUPSIZE_SORT * sizeof(int));
-	sortKernel[0].set_local_memory(ind++, WORKGROUPSIZE_SORT * sizeof(int));
-	sortKernel[0].set_local_memory(ind++, WORKGROUPSIZE_SORT * sizeof(int));
-
-	ind = 0;
-	sortKernel[1].set_argument(ind++, vtr.P.loc.get_buf_add());
-	sortKernel[1].set_argument(ind++, &sortLocs1);
-	sortKernel[1].set_argument(ind++, Ptemp.loc.get_buf_add());
-	sortKernel[1].set_argument(ind++, &sortLocs2);
-	sortKernel[1].setOptionInd(ind); // option is srcLogicalBlockSize
-
-	ind = 0;
-	sortKernel[2].set_argument(ind++, Ptemp.loc.get_buf_add());
-	sortKernel[2].set_argument(ind++, &sortLocs2);
-	sortKernel[2].set_argument(ind++, vtr.P.loc.get_buf_add());
-	sortKernel[2].set_argument(ind++, &sortLocs1);
-	sortKernel[2].setOptionInd(ind); // option is srcLogicalBlockSize
-
-
-	// All P arrays will be copied to Ptemp buffers while sort kernels
-	// running (on a different queue), so that there is some overlap in
-	// operation, then the elements of Ptemp are sorted into their correct
-	// location of the P arrays.
-	Par::arrName arrList3_[] = { Par::posArr, Par::numRepArr, Par::typeArr,
-		Par::depFlagArr, Par::depTimerArr, Par::timerArr };
-	ind = 0;
-	Ptemp.setBuffers(sortKernel[3], ind, arrList3_, 6);
-	vtr.P.setBuffers(sortKernel[3], ind, arrList3_, 6);
-	if (oddMergesFlag)
-	{ // if odd number, then Ptemp has correct loc array info, so need
-	  // to copy loc array info over from Ptemp in kernel
-		sortKernel[3].set_argument(ind++, Ptemp.loc.get_buf_add());
-		sortKernel[3].set_argument(ind++, vtr.P.loc.get_buf_add());
-		sortKernel[3].set_argument(ind++, &sortLocs2);
-	}
-	else
-	{
-		sortKernel[3].set_argument(ind++, vtr.P.loc.get_buf_add());
-		sortKernel[3].set_argument(ind++, &sortLocs1);
-	}
-	sortKernel[3].set_argument(ind, Ploc.get_buf_add());
+	// no arrays need/can be freed
 }
-
 
 void particleSort::ini()
 {
+	allocateBuffers();
+
 	iniTrp();
 
-	// TODO: figure out what this is doing and make sure
-	// it still works after re-organization
 	Ploc_inds = { { -1, -1, -1, 0 } };
 	
 	if (vtr.restartRunFlag == false)
@@ -327,6 +271,14 @@ void particleSort::ini()
 
 	size_t vecPow2 = (vtr.nN & (vtr.nN - 1));
 	numMerges += vecPow2 ? 1 : 0;
+
+	// Add kernels to kernel source string for compilation
+	sourceGenerator::SourceInstance()->addFile2Kernel("trKernelsSort.cl");
+
+#if _DEBUG
+	LOGMESSAGE("Initialized Particle Sort Class");
+#endif
+	   	  
 }
 
 
@@ -378,9 +330,7 @@ void particleSort::iniTrp()
 			break;
 		}
 	}
-
-	
-	
+		
 	int y0 = 0;
 	int x0 = (int)vtr.X_release - 1;
 	while (vls.M(x0, y0) == LB_SOLID)
@@ -405,7 +355,8 @@ void particleSort::iniTrp()
 	trP[TRP_TOP_LOC_IND] = floor(Xtop_val) - trP[TRP_OFFSET_Y_IND];
 }
 
-
+// Legacy code. Not sure how this differs from a regular sort
+// called throughout the simulation.
 void particleSort::initialSort()
 {
 	this->operator()();
@@ -419,17 +370,23 @@ void particleSort::initialSort()
 	sortTimer = numStepsBtwSort;
 }
 
+
 void particleSort::loadParams()
 {
 	avgParPerRelease = p.getParameter("Avg Par Per Release", AVG_PAR_PER_RELEASE);
 	numStepsBtwSort = p.getParameter("Num Steps Btw Sort", NUM_STEPS_BTW_SORT);
 	inletConcDtDivDx = vtr.parP.inletConcPerDx * (double)numStepsBtwSort;
 	sortTimer = p.getParameter("Sort Timer", NUM_STEPS_BTW_SORT);
+	clumpFlag = p.getParameter("Clump Particles", CLUMP_PARTICLES);
 }
 
 
 void particleSort::operator()(cl_event *TR_prev_evt, int numevt)
 {
+	const DualKernel::kernelID kerA = DualKernel::kernelID::kernelA;
+	const DualKernel::kernelID kerB = DualKernel::kernelID::kernelB;
+
+
 	cl_event ioEvt;
 	int n1 = -1;
 	Ploc.FillBuffer((void*)& Ploc_inds, sizeof(cl_int4), 1,
@@ -440,22 +397,23 @@ void particleSort::operator()(cl_event *TR_prev_evt, int numevt)
 	Ptemp.copyToParOnDevice(vtr.P, false, vtr.nN, IOQUEUE_REF, 0,
 		nullptr, &ioEvt);
 	   	
-	sortKernel[0].call_kernel();
+	localMergeKernel.call_kernel();
 	
 	for (size_t pass = 1; pass <= numMerges; ++pass)
 	{
-		unsigned int srcLogicalBlockSize = static_cast< unsigned int>(localRange << (pass - 1));
+		unsigned int srcLogicalBlockSize = 
+			_cast< unsigned int>(localRange << (pass - 1));
 		if (pass & 0x1)
 		{
-			sortKernel[1].setOptionCallKernel(&srcLogicalBlockSize);
+			globalMergeKernel.setOptionCallKernel(kerA, &srcLogicalBlockSize);
 		}
 		else
 		{
-			sortKernel[2].setOptionCallKernel(&srcLogicalBlockSize);
+			globalMergeKernel.setOptionCallKernel(kerB, &srcLogicalBlockSize);
 		}
 	}
 
-	sortKernel[3].call_kernel(IOQUEUE_REF, 1, &ioEvt);
+	updateLocationKernel.call_kernel(IOQUEUE_REF, 1, &ioEvt);
 	clReleaseEvent(ioEvt);
 
 	Ploc.read_from_buffer_size(2, TRQUEUE_REF, CL_FALSE);
@@ -464,13 +422,21 @@ void particleSort::operator()(cl_event *TR_prev_evt, int numevt)
 
 void particleSort::reReleasePar()
 {
+	// update Umax
 	getUmaxKernel.call_kernel();
+
+	// Get total number of particles to re-release
 	cl_uint maxval = Ploc(0).y;
 	double Umean = vlb.calcUmean();
 	cl_uint par_in = MAX((cl_uint)(inletConcDtDivDx*Umean) / maxval, 1);
-	trReReleaseKernel.set_argument(4, &maxval);
-	trReReleaseKernel.set_argument(5, &par_in);
+	trReReleaseKernel.set_argument(9, &maxval);
+	trReReleaseKernel.set_argument(10, &par_in);
 	trReReleaseKernel.set_global_call_kernel(maxval);
+}
+
+void particleSort::save2file()
+{
+	// nothing useful data to save from this class
 }
 
 void particleSort::saveDebug()
@@ -484,6 +450,7 @@ void particleSort::saveParams()
 	p.setParameter("Avg Par Per Rel", avgParPerRelease);
 	p.setParameter("Num Steps Btw Sort", numStepsBtwSort);
 	p.setParameter("Sort Timer", sortTimer);
+	p.setParameter("Clump Particles", clumpFlag);
 }
 
 void particleSort::saveRestartFiles()
@@ -491,6 +458,85 @@ void particleSort::saveRestartFiles()
 	Ploc.save_bin_from_device("Ploc");
 }
 
+void particleSort::saveTimeData()
+{
+	// not timeData to save
+}
+
+void particleSort::setKernelArgs()
+{
+	// clumpParticleKernels Arguments
+	int	ind = 0;
+	Par::arrName arrList_[] = { Par::posArr, Par::depFlagArr, Par::locArr };
+	vtr.P.setBuffers(clumpParticleKernels, ind, arrList_, 3);
+	clumpParticleKernels.set_argument(ind++, trP.fVals.get_buf_add());
+	clumpParticleKernels.set_argument(ind++, vls.C.get_buf_add());
+	// Remaining arguments set before call
+
+
+	// getUmaxKernel Arguments
+	ind = 0;
+	getUmaxKernel.set_argument(ind++, vlb.Ux_array.get_buf_add());
+	trP.setBuffers(getUmaxKernel, ind);
+#ifdef OPENCL_VERSION_1_2
+	getUmaxKernel.set_local_memory(ind, getUmaxKernel.getLocalSize() * sizeof(double));
+#endif
+
+	// clumpParticleKernels Arguments
+	Par::arrName arrList2_[] = { Par::posArr, Par::numRepArr, Par::typeArr,
+		Par::depFlagArr, Par::timerArr, Par::locArr };
+	ind = 0;
+	vtr.P.setBuffers(trReReleaseKernel, ind, arrList2_, 6);
+	trReReleaseKernel.set_argument(ind++, vtr.RandList.get_buf_add());
+	trP.setBuffers(trReReleaseKernel, ind);
+	trReReleaseKernel.set_argument(ind++, vlb.Ux_array.get_buf_add());
+	// These are set before the kernel is called
+	//trReReleaseKernel.set_argument(9, maxel);
+	//trReReleaseKernel.set_argument(10, Concentration Number);
+
+
+	ind = 0;
+	localMergeKernel.set_argument(ind++, vtr.P.loc.get_buf_add());
+	localMergeKernel.set_argument(ind++, &sortLocs1);
+	localMergeKernel.set_local_memory(ind++, WORKGROUPSIZE_SORT * sizeof(int));
+	localMergeKernel.set_local_memory(ind++, WORKGROUPSIZE_SORT * sizeof(int));
+	localMergeKernel.set_local_memory(ind++, WORKGROUPSIZE_SORT * sizeof(int));
+	localMergeKernel.set_local_memory(ind++, WORKGROUPSIZE_SORT * sizeof(int));
+
+	ind = 0;
+	globalMergeKernel.set_separate_arguments(ind++,
+		vtr.P.loc.get_buf_add(), Ptemp.loc.get_buf_add());
+	globalMergeKernel.set_separate_arguments(ind++,
+		&sortLocs1, &sortLocs2);
+	globalMergeKernel.set_separate_arguments(ind++,
+		Ptemp.loc.get_buf_add(), vtr.P.loc.get_buf_add());
+	globalMergeKernel.set_separate_arguments(ind++,
+		&sortLocs2, &sortLocs1);
+	globalMergeKernel.setOptionInd(ind); // option is srcLogicalBlockSize
+
+	// All P arrays will be copied to Ptemp buffers while sort kernels
+	// running (on a different queue), so that there is some overlap in
+	// operation, then the elements of Ptemp are sorted into their correct
+	// location of the P arrays.
+	Par::arrName arrList3_[] = { Par::posArr, Par::numRepArr, Par::typeArr,
+		Par::depFlagArr, Par::depTimerArr, Par::timerArr };
+	ind = 0;
+	Ptemp.setBuffers(updateLocationKernel, ind, arrList3_, 6);
+	vtr.P.setBuffers(updateLocationKernel, ind, arrList3_, 6);
+	if (oddMergesFlag)
+	{ // if odd number, then Ptemp has correct loc array info, so need
+	  // to copy loc array info over from Ptemp in kernel
+		updateLocationKernel.set_argument(ind++, Ptemp.loc.get_buf_add());
+		updateLocationKernel.set_argument(ind++, vtr.P.loc.get_buf_add());
+		updateLocationKernel.set_argument(ind++, &sortLocs2);
+	}
+	else
+	{
+		updateLocationKernel.set_argument(ind++, vtr.P.loc.get_buf_add());
+		updateLocationKernel.set_argument(ind++, &sortLocs1);
+	}
+	updateLocationKernel.set_argument(ind, Ploc.get_buf_add());
+}
 
 #define setSrcDefinePrefix		SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr()
 void particleSort::setSourceDefines()
@@ -540,8 +586,6 @@ void particleSort::setSourceDefines()
 #undef setSrcDefinePrefix
 
 
-
-
 void particleSort::sortParticlesForClumping()
 {
 	this->operator()();
@@ -549,16 +593,18 @@ void particleSort::sortParticlesForClumping()
 }
 
 
-
 bool particleSort::testRestartRun()
 {
+	allocateArrays();
 	bool ret = Ploc.load("load" SLASH "Ploc");
 	ret &= p.getParameter("Sort Timer", sortTimer, NUM_STEPS_BTW_SORT);
 	return ret;
 }
 
-
-
+void particleSort::updateTimeData()
+{
+	// no timeData in this class
+}
 
 void particleSort::updateTrp()
 {

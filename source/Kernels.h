@@ -273,7 +273,20 @@ public:
 		CHECK_KERNEL_ERROR(optionInd == -1, "Must set optionInd before using setOptionCallKernel", ERROR_SETTING_KERNEL_ARG);
 		set_argument<T>(optionInd, val_);
 	}
-	
+
+	// TODO: see if this is necessary for 2.0 kernels since
+	//		the actual (not rounded) size can be set to the exact
+	//		number of kernel instances to execute.
+
+	// This is for kernels with option indicies corresponding to
+	// number of kernels to call
+	void setOptionGlobalCallKernel(int val_, cl_command_queue* que = NULL)
+	{
+		setOption(&val_);
+		set_global_call_kernel(val_, que);
+
+	}
+
 	void set_local_memory(int ind, size_t size_)
 	{
 		int status = clSetKernelArg(ker, ind, size_, NULL);
@@ -334,6 +347,13 @@ public:
 	int getAlter()
 	{
 		return alter;
+	}
+
+	kernelID getAlterID()
+	{
+		if (alter == 0)
+			return kernelA;
+		return kernelB;
 	}
 
 	int setAlter(int alter_)
@@ -641,7 +661,7 @@ public:
 		alter ^= 1;
 	}
 
-	void call_kernel(kernelID kID_, int gsizex, cl_command_queue *que = NULL, 
+	void call_kernel(kernelID kID_, cl_command_queue *que = NULL, 
 		int num_list = 0, cl_event *wait = NULL, cl_event *evt = NULL)
 	{
 		if (kID_ == kernelA)

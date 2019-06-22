@@ -1069,7 +1069,7 @@ inline std::istream& operator>>(std::istream& is, const cl_float16& el)
 #define STATUS_CHECK_SETUP(codeval, msg)	if(codeval) { Gen_Error_Msg(codeval, msg); }
 
 
-#define Subtract2(A, B) { {A.x - B.x, A.y - B.y}} 
+#define Subtract2(A, B) { {A.x - B.x, A.y - B.y} } 
 #define Add2(A, B)		{ {A.x + B.x, A.y + B.y}}
 #define GETLEN(A)		(sqrt(A.x*A.x + A.y*A.y))
 #define Divide2(A, B)	{{A.x/B, A.y/B}}

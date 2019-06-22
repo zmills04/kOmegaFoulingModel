@@ -24,10 +24,6 @@ void TR_shear_removal(__global double2* __restrict__ lsc,
 	__global short* __restrict__ P_Dep_Flag,
 	__global ushort* __restrict__ P_Dep_timer,
 	__global int* __restrict__ P_loc,
-	__global double *__restrict__ PParam_tau_crit,
-	__global double* __restrict__ PParam_D_coeff,
-	__global double* __restrict__ PParam_L_coeff,
-	__global double* __restrict__ PParam_Mp,
 	__global uint* BLdep,
 	cl_int2 offsetAndMax) // offsetAndMax = {{ offset, maxel }}
 {
@@ -62,15 +58,15 @@ void TR_shear_removal(__global double2* __restrict__ lsc,
 	
 	// If insufficient shear, particle remains with decremented
 	// dep_timer being written back to memory.
-	if (fabs(shear_surf) <= PParam_tau_crit[blSurf])
+	if (fabs(shear_surf) <= paramTauCrit[blSurf])
 	{
 		P_Dep_timer[i] = depTimer;
 		return;
 	}
 
 	// At sufficient shear, particle is re-entrained in flow
-	double Fdrag = PParam_D_coeff[blSurf];
-	double Flift = PParam_L_coeff[blSurf] * sqrt(shear_surf);
+	double Fdrag = paramDcoeff[sizeInd];
+	double Flift = paramLcoeff[sizeInd] * sqrt(shear_surf);
 
 	// Currently normal vector.
 	double2 vLvec = BL_vNvec[blInd];
@@ -78,7 +74,7 @@ void TR_shear_removal(__global double2* __restrict__ lsc,
 	// tangent vector = shear_direction*[vN.y, -vN.x]
 	double2 vDvec = Fdrag * double2(vLvec.y, -vLvec.x);
 	
-	// is actually uint2, so index is blSurf*2
+	// is actually ushort2, so index is blSurf*2
 	ushort lscInd = BL_P01ind[blInd * 2];
 
 	double blLen = BL_blLen[blInd];
@@ -92,7 +88,7 @@ void TR_shear_removal(__global double2* __restrict__ lsc,
 	double2 vRvec = vLvec + vDvec;
 
 	// displacement vector = F / mass * (dt*dt/2)
-	double2 dC_rem = vRvec * shear_surf / PParam_Mp[blSurf] * DTTR_WALL * DTTR_WALL / 2.;
+	double2 dC_rem = vRvec * shear_surf / paramMp[sizeInd] * DTTR_WALL * DTTR_WALL / 2.;
 	
 	double dC_mag = length(dC_rem);
 
@@ -211,9 +207,10 @@ void TR_shear_1(__global double* __restrict__ Ro_array,
 }
 
 
-//// This has not been updated for new implementations
+// This kernel has changes implemented, but the c++ code has not been updated
+// to utilize the changes
 
-//#ifdef USE_OPENGL
+#ifdef USE_OPENGL
 // Calculates shear at each BL from average of values at surrounding nodes
 __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_TR_SHEAR, 1, 1)))
 void TR_shear_2(__global double4* __restrict__ Weights,

@@ -355,13 +355,13 @@ void Sort_update_loc(global double2* __restrict__ source_pos,
 /////////////////                                    /////////////////
 //////////////////////////////////////////////////////////////////////
 
-int Get_Par_Type(double randval, __global double* __restrict__ parP_D_dist)
+int Get_Par_Type(double randval)
 {
 	int j = 0;
 
 	while (j < NUM_PAR_SIZES - 1)
 	{
-		if (randval >= parP_D_dist[j] && randval < parP_D_dist[j+1])
+		if (randval >= paramDdist[j] && randval < paramDdist[j+1])
 			return j;
 		j++;
 	}
@@ -412,7 +412,6 @@ void TR_release_par(global double2* __restrict__ source_pos,
 	__global uint2* RandArray,
 	__global double* __restrict__ trP,
 	__global double* U_array,
-	__global double* __restrict__ parP_D_dist,
 	uint maxel,
 	uint Conc_number)
 {
@@ -450,7 +449,7 @@ void TR_release_par(global double2* __restrict__ source_pos,
 	RandEl = MWC64X_NextUint(RandEl, &randval_single);
 	RandArray[i] = RandEl;
 
-	source_type[i] = Get_Par_Type(randval_single, parP_D_dist);
+	source_type[i] = Get_Par_Type(randval_single);
 	source_timer[i] = PAR_TIMER_START;
 	source_pos[i].y = Xt + trP[TRP_OFFSET_Y_IND];
 	source_pos[i].x = TRP_X_RELEASE;

@@ -1,3 +1,4 @@
 *.txt
 results/
 x64/
+.vs/

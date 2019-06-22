@@ -286,6 +286,9 @@ __constant int ibbNeigh[8] = {	DIST_SIZE - 1,
 
 #define GET_GLOBAL_IDX(gx,gy)	(gx + gy*CHANNEL_LENGTH_FULL)
 #define GET_FULL_GLOBAL_IDX(gx,gy,gdir)	(gx + gy*CHANNEL_LENGTH_FULL + gdir*DIST_SIZE)
+
+#define GET_TR_GLOBAL_IDX(gx,gy)	(gx + gy*FULLSIZEX_TR_PADDED)
+
 void decodeFullGlobalIdx(const int gid, int* xval, int* yval, int* qval)
 {
 	*qval = gid / DIST_SIZE;

@@ -445,10 +445,17 @@
     <ClCompile Include="source\clVariablesTR.cpp" />
     <ClCompile Include="source\HelperFuncs.cpp" />
     <ClCompile Include="source\Kernels.cpp" />
+    <ClCompile Include="source\kOmega.cpp" />
     <ClCompile Include="source\LBLS.cpp" />
+    <ClCompile Include="source\logger.cpp" />
     <ClCompile Include="source\oclEnvironment.cpp" />
+    <ClCompile Include="source\particleDisplay.cpp" />
+    <ClCompile Include="source\particleProperties.cpp" />
+    <ClCompile Include="source\particleSort.cpp" />
+    <ClCompile Include="source\particleStructs.cpp" />
     <ClCompile Include="source\ReduceGenerator.cpp" />
     <ClCompile Include="source\Reducer.cpp" />
+    <ClCompile Include="source\shearStress.cpp" />
     <ClCompile Include="source\SourceGenerator.cpp" />
     <ClCompile Include="source\SparseMatrix.cpp" />
   </ItemGroup>
@@ -466,10 +473,17 @@
     <ClInclude Include="source\ConstDef.h" />
     <ClInclude Include="source\HelperFuncs.h" />
     <ClInclude Include="source\Kernels.h" />
+    <ClInclude Include="source\kOmega.h" />
+    <ClInclude Include="source\logger.h" />
     <ClInclude Include="source\oclEnvironment.h" />
+    <ClInclude Include="source\particleDisplay.h" />
+    <ClInclude Include="source\particleProperties.h" />
+    <ClInclude Include="source\particleSort.h" />
+    <ClInclude Include="source\particleStructs.h" />
     <ClInclude Include="source\ReduceGenerator.h" />
     <ClInclude Include="source\Reducer.h" />
     <ClInclude Include="source\ReduceTests.h" />
+    <ClInclude Include="source\shearStress.h" />
     <ClInclude Include="source\SourceGenerator.h" />
     <ClInclude Include="source\SparseMatrix.h" />
     <ClInclude Include="source\StdAfx.h" />
@@ -486,6 +500,9 @@
     <None Include="source\Kernels\Structures.cl" />
     <None Include="source\Kernels\trKernels.cl" />
     <None Include="source\Kernels\tfdKernels.cl" />
+    <None Include="source\Kernels\trKernelsDisplay.cl" />
+    <None Include="source\Kernels\trKernelsShear.cl" />
+    <None Include="source\Kernels\trKernelsSort.cl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

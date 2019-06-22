@@ -29,11 +29,9 @@ public:
 	std::function<void(void)> loadParamsPtr;
 
 	clVariablesLS() : BL("lsbl"), Masses("lsmasses"), C0("lsc0"), C("lsc"),
-		M("lbm"), ibbArr("ibbArr", WORKGROUPSIZE_IBB, 1, WORKGROUPSIZE_IBB*2),
-		ssArr("ssArr", WORKGROUPSIZE_TR_SHEAR, 1, WORKGROUPSIZE_TR_SHEAR * 2),
-		dXArr("dXArr"), dXArr0("dXArr0"), bFlag("bFlag"), LSt_vbo("LSt_vbo"),
-		LSb_vbo("LSb_vbo"), LSt0_vbo("LSt0_vbo"), LSb0_vbo("LSb0_vbo"),
-		LinesV("LinesV"), LinesH("LinesH")
+		M("lbm"), ibbArr(WORKGROUPSIZE_IBB*2,"ibbArr", WORKGROUPSIZE_IBB, 1),
+		ssArr(WORKGROUPSIZE_TR_SHEAR * 2, "ssArr", WORKGROUPSIZE_TR_SHEAR, 1),
+		dXArr("dXArr"), dXArr0("dXArr0"), bFlag("bFlag")
 
 	{
 		loadParamsPtr = std::bind(&clVariablesLS::loadParams, this);
@@ -139,9 +137,7 @@ public:
 //////////////                   Display Arrays              ///////////////
 ////////////////////////////////////////////////////////////////////////////
 
-	Array1DGL LSt_vbo, LSb_vbo;   //Current Position of the Walls
-	Array1DGL LSt0_vbo, LSb0_vbo; //Original Position of the Walls	
-	Array1DGL LinesV, LinesH;	  //Gridlines (Uncomment OPENGL_GRIDLINES to use)
+
 
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////	
@@ -369,9 +365,6 @@ public:
 	//////////////                Display Functions              ///////////////
 	////////////////////////////////////////////////////////////////////////////
 
-	//Initializes openGL variables
-	void iniGL();
-	   	  
 };
 
 #endif // !defined(AFX_CLVARIABLESLS_H__INCLUDED_)

@@ -228,6 +228,9 @@
 #define USE_PARTICLE_SOLVER		false
 #define TR_SAVE_MACROS_ON_START	false
 #define SAVE_WALL_SHEAR			true
+#define CLUMP_PARTICLES			true
+#define SAVE_IO_DISTS			true
+
 #define X_RELEASE_POS			(490)
 #define X_STOP_POS				(10500)
 #define REDUCE_DEP_STOP1		(990)
@@ -238,7 +241,7 @@
 
 #define X_MIN_VAL			(X_RELEASE_POS - 1.)
 
-
+#define BL_SEARCH_RAD			2
 #define INDEX_RADIUS_SEARCH		30	//Radius of indicies to search when finding Shear Neighbors
 #define MASS_FLUX_INLET			10
 #define CUTOFF_RADIUS			5.
@@ -484,6 +487,20 @@
 #define TRP_OFFSET_Y_IND	4
 
 
+// Defines for NodI.wallFlag 
+#define WF_EMPTY			0x0000
+#define WF_SOLID			0x0001
+#define WF_FLUID			0x0002
+#define WF_BOT_WALL			0x0004
+#define WF_TOP_WALL			0x0008
+#define WF_00_SOLID			0x0010
+#define WF_10_SOLID			0x0020
+#define WF_01_SOLID			0x0040
+#define WF_11_SOLID			0x0080
+
+#define WF_TEST_ALL_SOLID	0x00F0
+
+
 
 #define ERROR_OCL_INITIALIZATION							-100
 #define ERROR_BUFFER_ALLOCATION								-101
@@ -502,6 +519,8 @@
 #define ERROR_INITIALIZING_VFL								-114
 #define ERROR_CREATING_BICGSTAB_SOLVER						-115
 #define ERROR_IN_OPENGL_ARRAY								-116
+#define ERROR_IN_TIMEDATA_ARRAY 							-117
+#define ERROR_IN_LOGGER										-118
 
 #ifdef _DEBUG
 

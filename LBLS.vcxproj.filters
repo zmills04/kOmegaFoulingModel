@@ -53,6 +53,27 @@
     <ClCompile Include="source\HelperFuncs.cpp">
       <Filter>Core</Filter>
     </ClCompile>
+    <ClCompile Include="source\particleDisplay.cpp">
+      <Filter>Particles</Filter>
+    </ClCompile>
+    <ClCompile Include="source\particleProperties.cpp">
+      <Filter>Particles</Filter>
+    </ClCompile>
+    <ClCompile Include="source\particleSort.cpp">
+      <Filter>Particles</Filter>
+    </ClCompile>
+    <ClCompile Include="source\particleStructs.cpp">
+      <Filter>Particles</Filter>
+    </ClCompile>
+    <ClCompile Include="source\shearStress.cpp">
+      <Filter>Particles</Filter>
+    </ClCompile>
+    <ClCompile Include="source\logger.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="source\kOmega.cpp">
+      <Filter>Fluid\LBM</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Fluid">
@@ -144,6 +165,27 @@
     <ClInclude Include="source\HelperFuncs.h">
       <Filter>Core</Filter>
     </ClInclude>
+    <ClInclude Include="source\particleDisplay.h">
+      <Filter>Particles</Filter>
+    </ClInclude>
+    <ClInclude Include="source\particleProperties.h">
+      <Filter>Particles</Filter>
+    </ClInclude>
+    <ClInclude Include="source\particleSort.h">
+      <Filter>Particles</Filter>
+    </ClInclude>
+    <ClInclude Include="source\particleStructs.h">
+      <Filter>Particles</Filter>
+    </ClInclude>
+    <ClInclude Include="source\logger.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="source\shearStress.h">
+      <Filter>Particles</Filter>
+    </ClInclude>
+    <ClInclude Include="source\kOmega.h">
+      <Filter>Fluid\LBM</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="source\Kernels\Heading.cl">
@@ -177,6 +219,15 @@
       <Filter>OpenCL\Kernels</Filter>
     </None>
     <None Include="source\Kernels\csrmvGeneralKernels.cl">
+      <Filter>OpenCL\Kernels</Filter>
+    </None>
+    <None Include="source\Kernels\trKernelsShear.cl">
+      <Filter>OpenCL\Kernels</Filter>
+    </None>
+    <None Include="source\Kernels\trKernelsSort.cl">
+      <Filter>OpenCL\Kernels</Filter>
+    </None>
+    <None Include="source\Kernels\trKernelsDisplay.cl">
       <Filter>OpenCL\Kernels</Filter>
     </None>
   </ItemGroup>

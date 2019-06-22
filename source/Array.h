@@ -14,6 +14,7 @@
 #include "StdAfx.h"
 #include "oclEnvironment.h"
 #include "Kernels.h"
+#include "logger.h"
 
 
 #ifdef _DEBUG
@@ -421,6 +422,7 @@ public:
 		if (Name.length() == 0)
 			Name = "Default";
 	}
+
 	virtual ~ArrayBase()
 	{
 		FreeHost();
@@ -1645,7 +1647,7 @@ public:
 	}
 
 
-	bool append2file_from_device(int toind_ = -1, std::string FileName = "",
+	virtual bool append2file_from_device(int toind_ = -1, std::string FileName = "",
 		cl_command_queue *queue = NULL)
 	{
 		int delflag = 0;
@@ -1664,7 +1666,7 @@ public:
 
 	// Kind of hacky, but passing -2 will overwrite existing file
 	// with an empty one.
-	bool append2file(int toind_ = -1, std::string FileName = "")
+	virtual bool append2file(int toind_ = -1, std::string FileName = "")
 	{
 		if (toind_ == -1)
 			toind_ = SizeX;
@@ -1844,13 +1846,27 @@ protected:
 	int resizeMult;
 
 public:
-	DynamicArray1D(std::string name_ = "default", const int wgsize_ = 128,
-		const int resizem_ = RESIZE_MULTIPLIER, int inisize = 0) : 
+	DynamicArray1D(int inisize, std::string name_ = "default", const int wgsize_ = 128,
+		const int resizem_ = RESIZE_MULTIPLIER) : 
 		Array1D<T>(name_), wgSize(wgsize_), curEl(0), resizeMult(resizem_)
 	{
 		if (inisize == 0)
 			inisize = wgSize;
 
+		getGlobalSizeMacro(inisize, wgSize);
+
+		Array1D<T>::zeros(inisize);
+	}
+
+	DynamicArray1D(std::string name_ = "default", const int wgsize_ = 128,
+		const int resizem_ = RESIZE_MULTIPLIER) :
+		Array1D<T>(name_), wgSize(wgsize_), curEl(0), resizeMult(resizem_)
+	{
+	}
+
+	void allocateDynamic(const int inisize)
+	{
+		getGlobalSizeMacro(inisize, wgSize);
 		Array1D<T>::zeros(inisize);
 	}
 
@@ -1882,9 +1898,11 @@ public:
 		curEl = 0;
 	}
 
-	void copy_dynamic_to_buffer()
+	void copy_dynamic_to_buffer(cl_command_queue* queue = NULL,
+		cl_bool block_flag = CL_TRUE, int num_wait = 0, cl_event* wait = NULL,
+		cl_event* evt = NULL)
 	{
-		ArrayBase<T>::copy_to_buffer_size(curEl)
+		ArrayBase<T>::copy_to_buffer_size(curEl, queue, block_flag, num_wait, wait, evt);
 	}
 
 	// memory reallocation on device, does not save existing data
@@ -2259,7 +2277,6 @@ public:
 		FullSize = n1*n2;
 	};
 
-
 	virtual bool save2file(std::string FileName = "")
 	{
 		int i,j;
@@ -2397,7 +2414,178 @@ typedef  Array2D <signed char> Array2Dc;
 typedef  Array2D <float> Array2Df;
 typedef  Array2D <unsigned int> Array2Du;
 
+// This is used for saving time data sets (e.g. shear stress,
+// averaged values, Nu, etc), so it is specifically written
+// for these arrays.
+template <class T> class TimeData : public Array2D<T>
+{
+private:
+	bool fileCreated;
+	int* timeArr;
+	int curInd;
 
+	// If data is processed before being written, 
+	// saveDataFunc needs to be set to point to a
+	// processing and output function. This function
+	// needs to take the file stream and index as 
+	// arguments, and calculate and write processed
+	// values to the file.
+	void (*saveDataFunc)(TimeData<T>*, std::fstream&, int);
+
+	void iniFile()
+	{
+		std::string FileName = Name + ".txt";
+		if (fileopen(stream, FileName, FileOut) == false)
+		{
+			CHECK_ARRAY_ERROR(true, "Error initializing file for "
+				"saving TimeData Array", ERROR_IN_TIMEDATA_ARRAY);
+		}
+
+		fileCreated = true;
+	}
+
+	// This should not be called, so it is set to private.
+	TimeData()
+	{
+		// just in case this is somehow able to be called, it will
+		// exit with an error message at the beginning of execution.
+		CHECK_ARRAY_ERROR(true, "TimeData arrays must be constructed "
+			"with name string to allow for files to be initialized",
+			ERROR_IN_TIMEDATA_ARRAY);
+	}
+
+public:
+
+	TimeData(std::string name_)
+	{
+		ArrayBase<T>::ini(name_);
+		fileCreated = false;
+		iniFile();
+		saveDataFunc = &TimeData::genericSaveFunc;
+	}
+
+	virtual ~TimeData()
+	{
+		delete[] timeArr;
+		timeArr = nullptr;
+		
+		ArrayBase<T>::FreeHost();
+		ArrayBase<T>::FreeDevice();
+	}
+
+
+	static void genericSaveFunc(TimeData<T>* td_, std::fstream& stream_, int j_)
+	{
+		for (int i = 0; i < td_->SizeX; i++)
+		{
+			stream_ << td_->getEl(i, j_) << "\t";
+		}
+	}
+
+	void setFunction(void (*funPtr_)(TimeData<T>*, std::fstream&, int))
+	{
+		saveDataFunc = funPtr_;
+	}
+
+	void createTimeArray()
+	{
+		CHECK_ARRAY_ERROR(ArrayBase::SizeY == 0, "Array size must be set "
+			"before calling createTimeArray", ERROR_IN_TIMEDATA_ARRAY);
+		
+		timeArr = new int[ArrayBase::SizeY];
+		curInd = 0;
+	}
+
+	int getCurInd() { return curInd; }
+	int* getCurIndAdd() { return &curInd; }
+	// Should never be called, but including just in case
+	void resetCurInd() { curInd = 0; }
+
+
+	// make sure that the curInd is set as a kernel argument before 
+	// calling this function.
+	void setTimeAndIncrement(int time_, cl_command_queue* queue = NULL,
+		cl_bool block_flag = CL_TRUE, int num_wait = 0, cl_event* wait = NULL,
+		cl_event* evt = NULL)
+	{
+		// Write current time to timeArr
+		timeArr[curInd++] = time_;
+		
+		// Check if array is full and save if so
+		if (curInd == ArrayBase<T>::SizeY)
+		{
+			appendData_from_device(queue, block_flag, num_wait, wait, evt);
+		}
+	}
+
+	bool appendData_from_device(cl_command_queue* queue = NULL, 
+		cl_bool block_flag = CL_TRUE, int num_wait = 0, 
+		cl_event* wait = NULL, cl_event* evt = NULL)
+	{
+		int delflag = 0;
+		if (ArrayBase<T>::Host_Alloc_Flag == 0)
+		{
+			delflag = 1;
+		}
+
+		ArrayBase<T>::read_from_buffer_size(SizeX*curInd, queue, block_flag, num_wait, wait, evt);
+		bool ret = appendData();
+
+		if (delflag)
+			ArrayBase<T>::FreeHost();
+		return ret;
+	}
+
+	bool appendData()
+	{
+		int i, j;
+
+		CHECK_ARRAY_ERROR(!fileCreated, "Trying to append to unitialized "
+			"TimeData save file", ERROR_IN_TIMEDATA_ARRAY);
+
+		std::string FileName = Name + ".txt";
+		std::fstream stream;
+
+		// Handle file being unable to open
+		if (fileopen(stream, FileName, FileAppend) == false)
+		{
+			std::string logMess = "Unable to open output file for " + Name;
+
+			if (curInd < SizeY)
+			{
+				// If called at a save step when array has not been completely filled,
+				// the data will not need to be overwritten yet, so a message is logged,
+				// and the function returns false to indicate that any counters should
+				// not be reset.
+				logMess += ". Data will only be lost if simulation "\
+					"crashes before next save attempt.";
+			}
+			else
+			{
+				// If called when the array is full, curInd is decremented so that
+				// on next call to setTimeAndIncrement another attempt to open the file
+				// will occur. This will result in the last timestep of saved data being
+				// overwritten, but is better than throwing out all data currently in the
+				// array.
+				logMess += ". Some Data has been lost.";
+				curInd--;
+			}
+			LOGMESSAGE(logMess);
+			return false;
+		}
+
+		for (j = 0; j < curInd; j++)
+		{
+			stream << timeArr[j] << "\t";
+			(*fun_ptr)(this, stream, j);
+			stream << "\n";
+		}
+
+		curInd = 0;
+		stream.close();
+		return true;
+	}
+};
 
 
 // Keeping just in case I do need to specialize anything
@@ -2795,15 +2983,15 @@ public:
 	GLuint GLpos, GLcol;
 	cl_float3 ColorVec;
 	cl_mem ColorBuf;
-	bool ColorVBO_flag;
-	bool Point_flag;
+	int ColorVBO_flag;
+	int Point_flag;
 	int Device_Col_Alloc_Flag;
 	float *ColArray;
 	int FullSize_col;
 	int Host_Color_Alloc_Flag;
 	Array1DGL(std::string name_ = "")
 	{
-		if (name_.length == 0)
+		if (name_.length() == 0)
 			name_ = "default";
 		Name = name_;
 		GLpos = -1;

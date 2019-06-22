@@ -1,22 +1,36 @@
+// particleProperties.cpp: Implementation of methods for 
+// particleProperties class declared in particleProperties.h.
+//
+// (c) Zachary Mills, 2019 
+//////////////////////////////////////////////////////////////////////
+
 #include "particleProperties.h"
 #include "clProblem.h"
 #include "clVariablesTR.h"
 
+void particleProperties::allocateArrays()
+{
+}
 
+
+void particleProperties::allocateBuffers()
+{
+}
+
+void particleProperties::createKernels()
+{
+}
 
 void particleProperties::createPropertyArrays()
 {
 	double ConstA = 1.2, ConstB = 0.4, ConstC = 1.1;
 	double ConstCs = 1.14, ConstCm = 1.17, ConstCt = 2.18;
+	
 
-	Kth_pars.zeros(Nd);
-	D_p.zeros(Nd);
-	Q_A_prime.zeros(Nd, 2);
-	Q_A.zeros(Nd, 2);
-	M_p.zeros(Nd);
+	double Distsum = 0.;
+	
 	F_po.zeros(Nd);
 	R_d.zeros(Nd, 2);
-	Tau_crit.zeros(Nd, 2);
 	V_par.zeros(Nd);
 	Tau_crit_max = 0.;
 
@@ -29,7 +43,7 @@ void particleProperties::createPropertyArrays()
 		double Kth1 = 2. * ConstCs * CCF / (1. + 3.*ConstCm * Knud);
 		double Kth2 = (k_ratio + ConstCt * Knud) / (1. + 2. * k_ratio + 2.*ConstCt*Knud);
 
-		Kth_pars(i) = Kth1*Kth2;
+		Kth(i) = Kth1*Kth2;
 
 		double a3 = 9.*PI_NUMBER*WofA*D_p_real(i)*D_p_real(i) / Estar / 4.;
 		double Rdi = pow(a3, (1. / 3.));
@@ -43,80 +57,92 @@ void particleProperties::createPropertyArrays()
 
 		double QAi = 2.*WofA*PI_NUMBER*R_d(i, 0)*R_d(i, 0);
 		QAi *= (p.DELTA_F / p.DELTA_L);
-		Q_A(i, 0) = QAi;
+		Q_A(i).x = QAi;
 
 		double QAi_s = 2.*WofA_s*PI_NUMBER*R_d(i, 1)*R_d(i, 1);
 		QAi *= (p.DELTA_F / p.DELTA_L);
-		Q_A(i, 1) = QAi_s;
+		Q_A(i).y = QAi_s;
 
 		double Q_A_pt = pow(WofA, 5.)*pow(D_p_real(i), 4.) / Estar / Estar / 16;
 		double QA_pi = 7.09 * pow(Q_A_pt, (1. / 3.));
 		QA_pi *= p.DELTA_P;
-		Q_A_prime(i, 0) = QA_pi;
+		Q_A_prime(i).x = QA_pi;
 
 		double Q_A_pt_s = pow(WofA_s, 5.)*pow(D_p_real(i), 4.) / Estar_s / Estar_s / 16;
 		double QA_pi_s = 7.09 * pow(Q_A_pt_s, (1. / 3.));
 		QA_pi_s *= p.DELTA_P;
-		Q_A_prime(i, 1) = QA_pi_s;
+		Q_A_prime(i).y = QA_pi_s;
 
 		double Mpi = PI_NUMBER*D_p_real(i)*D_p_real(i)*vfd.rhoSoot / 4.;
 		Mpi *= p.DELTA_M;
-		M_p(i) = Mpi;
+		Mp(i) = Mpi;
 
 		double F_poi = 625.*hamakerConst / 3. / D_p_real(i);
 		F_poi *= p.DELTA_F;
 		F_po(i) = F_poi;
 
 		double Dpi = D_p_real(i)*p.DELTA_L;
-		D_p(i) = Dpi;
+		Dp(i) = Dpi;
 
-		double Vpi = D_p(i) * D_p(i) * PI_NUMBER / 4. / (1. - depPorosity);
+		double Vpi = Dp(i) * Dp(i) * PI_NUMBER / 4. / (1. - depPorosity);
 		V_par(i) = Vpi;
 
-		double Tci = 4.*F_po(i)*R_d(i, 0) / (3. * PI_NUMBER * pow(D_p(i), 3.) * wallCorrection);
+		double Tci = 4.*F_po(i)*R_d(i, 0) / (3. * PI_NUMBER * pow(Dp(i), 3.) * wallCorrection);
 
-		Tau_crit(i, 0) = Tci;
-		if (Tau_crit(i, 0) > Tau_crit_max)
-			Tau_crit_max = Tau_crit(i, 0);
+		tau_crit(i).x = Tci;
+		if (tau_crit(i).x > Tau_crit_max)
+			Tau_crit_max = tau_crit(i).x;
 
-		double Tci_s = 4.*F_po(i)*R_d(i, 1) / (3. * PI_NUMBER * pow(D_p(i), 3.) * wallCorrection);
+		double Tci_s = 4.*F_po(i)*R_d(i, 1) / (3. * PI_NUMBER * pow(Dp(i), 3.) * wallCorrection);
 
 
-		Tau_crit(i, 1) = Tci_s;
-		if (Tau_crit(i, 1) > Tau_crit_max)
-			Tau_crit_max = Tau_crit(i, 1);
+		tau_crit(i).y = Tci_s;
+		if (tau_crit(i).y > Tau_crit_max)
+			Tau_crit_max = tau_crit(i).y;
+
+		D_dist(i) = Distsum;
+		Distsum += D_dist(i);
+		L_coeff(i) = liftCoeff * Dp(i) * Dp(i) * Dp(i) / vlb.MuVal / 8.;
+		D_coeff(i) = 6.0 * PI_NUMBER * Dp(i) * Dp(i) * wallCorrection / 4.;
 	}
 }
 
 
-void particleProperties::fillPropStructArray()
+// TODO: Figure out if any of these can be
+//		freed now that there is no duplicated
+//		temporary arrays
+void particleProperties::freeHostArrays()
 {
-	double Distsum = 0.;
-	this->setSizes(Nd, Nd, 1);
-	for (int i = 0; i < Nd; i++)
-	{
-		legacyPParam struct_;
-		struct_.Dp = D_p(i);
-		struct_.Q_A.x = Q_A(i, 0);
-		struct_.Q_A.y = Q_A(i, 1);
-		struct_.Q_A_prime.x = Q_A_prime(i, 0);
-		struct_.Q_A_prime.y = Q_A_prime(i, 1);
-		struct_.tau_crit.x = Tau_crit(i, 0);
-		struct_.tau_crit.y = Tau_crit(i, 1);
-		struct_.Mp = M_p(i);
-		struct_.Kth = Kth_pars(i);
-		struct_.D_dist = Distsum;
-		Distsum += D_dists(i);
-		struct_.L_coeff = liftCoeff * struct_.Dp * struct_.Dp * struct_.Dp / vlb.MuVal / 8.;
-		struct_.D_coeff = 6 * PI_NUMBER * struct_.Dp * struct_.Dp * wallCorrection / 4.;
-		this->setStruct(struct_, i);
-	}
+	// D_p_real and D_dists currently kept,
+	// because they are needed for each
+	// saveParameters step.
+	//Kth_pars.FreeHost();
+	//D_p.FreeHost();
+	//Q_A_prime.FreeHost();
+	//Q_A.FreeHost();
+	//M_p.FreeHost();
+	//F_po.FreeHost();
+	//R_d.FreeHost();
+	//Tau_crit.FreeHost();
+	//V_par.FreeHost();
 }
 
 void particleProperties::ini()
 {
+	// fills Pparam base class with data contained in
+	// this classes arrays
 	fillPropStructArray();
+
+	// Writes arrays to file in a folder called particles
 	saveParticleArrays();
+	
+	// Copy arrays to device
+	copyToDevice();
+
+#if _DEBUG
+	LOGMESSAGE("Initialized Particle Properties Class");
+#endif
+
 }
 
 void particleProperties::loadParams()
@@ -137,14 +163,14 @@ void particleProperties::loadParams()
 	numEachPar = p.getParameter("Num Each Par", NUM_EACH_PAR);
 	parVolMultiplier = numEachPar / (1. - depPorosity);
 
+	this->setSizes(Nd, Nd, 1);
+
 	D_p_real.zeros(Nd);
-	D_dists.zeros(Nd);
-	p.yamlIn["Dp Dists"] >> D_dists;
+	p.yamlIn["Dp Dists"] >> D_dist;
 	p.yamlIn["Par Diameters"] >> D_p_real;
 
 	double Num_per_m2 = sootNumConc / p.DELTA_L / p.DELTA_L;
 	inletConcPerDx = Num_per_m2 * 2. * p.Pipe_radius;
-
 
 	//number of particles released after each sort step 
 	//must be multiplied by Umean to get true value
@@ -155,6 +181,18 @@ void particleProperties::loadParams()
 	WofA_s = surfEnergySoot;
 
 	createPropertyArrays();
+}
+
+
+
+
+void particleProperties::save2file()
+{
+}
+
+
+void particleProperties::saveDebug()
+{
 }
 
 void particleProperties::saveParams()
@@ -179,7 +217,7 @@ void particleProperties::saveParams()
 	{
 		*p.yamlOut << YAML::BeginMap;
 		*p.yamlOut << YAML::Key << "Dp Dists";
-		*p.yamlOut << YAML::Value << D_dists;
+		*p.yamlOut << YAML::Value << D_dist;
 		*p.yamlOut << YAML::EndMap;
 
 		*p.yamlOut << YAML::BeginMap;
@@ -193,18 +231,29 @@ void particleProperties::saveParticleArrays()
 {
 	std::string NewDir = "particles";
 	p.MakeDir(NewDir);
-	D_p.savetxt("particles" SLASH "D_p");
+	Dp.savetxt("particles" SLASH "D_p");
 	D_p_real.savetxt("particles" SLASH "D_p_real");
 	Q_A_prime.savetxt("particles" SLASH "Q_A_prime");
 	Q_A.savetxt("particles" SLASH "Q_A");
-	M_p.savetxt("particles" SLASH "M_p");
+	Mp.savetxt("particles" SLASH "M_p");
 	F_po.savetxt("particles" SLASH "F_po");
-	Tau_crit.savetxt("particles" SLASH "Tau_crit");
+	tau_crit.savetxt("particles" SLASH "Tau_crit");
 	V_par.savetxt("particles" SLASH "Vol_p");
-	Kth_pars.savetxt("particles" SLASH "Kth");
-	D_dists.savetxt("particles" SLASH "D_dist");
+	Kth.savetxt("particles" SLASH "Kth");
+	D_dist.savetxt("particles" SLASH "D_dist");
 }
 
+void particleProperties::saveRestartFiles()
+{
+}
+
+void particleProperties::saveTimeData()
+{
+}
+
+void particleProperties::setKernelArgs()
+{
+}
 
 #define setSrcDefinePrefix		SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(),
 void particleProperties::setSourceDefines()
@@ -221,14 +270,102 @@ void particleProperties::setSourceDefines()
 		sprintf(parMultVal, "%20.16g", V_par[0] / vls.lsSpacing);
 		std::string parmult = "const double Par_multiplier[" + std::to_string(Nd) + "] = { " + parMultVal;
 
+		sprintf(parMultVal, "%20.16g", Dp[0]);
+		std::string dpString = "const double paramDp[" + std::to_string(Nd) + "] = { " + parMultVal;
+
+		sprintf(parMultVal, "%20.16g", Mp[0]);
+		std::string mpString = "const double paramMp[" + std::to_string(Nd) + "] = { " + parMultVal;
+
+		sprintf(parMultVal, "%20.16g", Kth[0]);
+		std::string kthString = "const double paramKth[" + std::to_string(Nd) + "] = { " + parMultVal;
+
+		sprintf(parMultVal, "%20.16g", L_coeff[0]);
+		std::string lcoeffString = "const double paramLcoeff[" + std::to_string(Nd) + "] = { " + parMultVal;
+
+		sprintf(parMultVal, "%20.16g", D_coeff[0]);
+		std::string dcoeffString = "const double paramDcoeff[" + std::to_string(Nd) + "] = { " + parMultVal;
+
+		sprintf(parMultVal, "%20.16g", D_dist[0]);
+		std::string ddistString = "const double paramDdist[" + std::to_string(Nd) + "] = { " + parMultVal;
+
+		sprintf(parMultVal, "%20.16g", Q_A_prime(0).x);
+		std::string qaprimeString = "const double paramQaPrime[" + std::to_string(Nd * 2) + "] = { " + parMultVal;
+		sprintf(parMultVal, ", %20.16g", Q_A_prime(0).y);
+		qaprimeString.append(parMultVal);
+
+		sprintf(parMultVal, "%20.16g", Q_A(0).x);
+		std::string qaString = "const double paramQa[" + std::to_string(Nd * 2) + "] = { " + parMultVal;
+		sprintf(parMultVal, ", %20.16g", Q_A(0).y);
+		qaString.append(parMultVal);
+
+		sprintf(parMultVal, "%20.16g", tau_crit(0).x);
+		std::string taucritString = "const double paramTauCrit[" + std::to_string(Nd * 2) + "] = { " + parMultVal;
+		sprintf(parMultVal, ", %20.16g", tau_crit(0).y);
+		taucritString.append(parMultVal);
+
+
+
+
 		for (int i = 1; i < Nd; i++)
 		{
-			sprintf(parMultVal, ", %20.16g, ", V_par[i] / vls.lsSpacing);
+			sprintf(parMultVal, ", %20.16g", V_par[i] / vls.lsSpacing);
 			parmult.append(parMultVal);
+
+			sprintf(parMultVal, ", %20.16g", Dp[i]);
+			dpString.append(parMultVal);
+
+			sprintf(parMultVal, ", %20.16g", Mp[i]);
+			mpString.append(parMultVal);
+
+			sprintf(parMultVal, ", %20.16g", Kth[i]);
+			kthString.append(parMultVal);
+
+			sprintf(parMultVal, ", %20.16g", L_coeff[i]);
+			lcoeffString.append(parMultVal);
+
+			sprintf(parMultVal, ", %20.16g", D_coeff[i]);
+			dcoeffString.append(parMultVal);
+
+			sprintf(parMultVal, ", %20.16g", D_dist[i]);
+			ddistString.append(parMultVal);
+
+			sprintf(parMultVal, ", %20.16g", Q_A(i).x);
+			qaString.append(parMultVal);
+			sprintf(parMultVal, ", %20.16g", Q_A(i).y);
+			qaString.append(parMultVal);
+
+			sprintf(parMultVal, ", %20.16g", Q_A_prime(i).x);
+			qaprimeString.append(parMultVal);
+			sprintf(parMultVal, ", %20.16g", Q_A_prime(i).y);
+			qaprimeString.append(parMultVal);
+
+			sprintf(parMultVal, ", %20.16g", tau_crit(i).x);
+			taucritString.append(parMultVal);
+			sprintf(parMultVal, ", %20.16g", tau_crit(i).y);
+			taucritString.append(parMultVal);
 		}
 
 		parmult.append("};");
+		dpString.append("};");
+		mpString.append("};");
+		kthString.append("};");
+		lcoeffString.append("};");
+		dcoeffString.append("};");
+		ddistString.append("};");
+		qaString.append("};");
+		qaprimeString.append("};");
+		taucritString.append("};");
+
 		SOURCEINSTANCE->addString2Defines(parmult);
+		SOURCEINSTANCE->addString2Defines(dpString);
+		SOURCEINSTANCE->addString2Defines(mpString);
+		SOURCEINSTANCE->addString2Defines(kthString);
+		SOURCEINSTANCE->addString2Defines(lcoeffString);
+		SOURCEINSTANCE->addString2Defines(dcoeffString);
+		SOURCEINSTANCE->addString2Defines(ddistString);
+		SOURCEINSTANCE->addString2Defines(qaString);
+		SOURCEINSTANCE->addString2Defines(qaprimeString);
+		SOURCEINSTANCE->addString2Defines(taucritString);
 	}
 }
 #undef setSrcDefinePrefix
@@ -238,4 +375,7 @@ bool particleProperties::testRestartRun()
 	return true;
 }
 
+void particleProperties::updateTimeData()
+{
+}
 

@@ -1,4 +1,4 @@
-// Structures holding various clVariablesTR data sets. Groups data for particle
+// particleStructs.h: Structures holding various clVariablesTR data sets. Groups data for particle
 // solver into structures each of which corresponds to a different part of solver.
 // Legacy implementation used arrays of structs to hold data, but this was non-performant
 // on GPUs due to it requiring large chunks of data to be read/written (especially bad for
@@ -86,6 +86,22 @@ typedef struct legacyPar
 	cl_ushort timer;		///time for use in re-releasing
 	cl_int loc;			//Node number particle is located within
 
+	legacyPar()
+	{
+	}
+
+	//copy constructor
+	legacyPar(const legacyPar& p_)
+	{
+		pos = p_.pos;		
+		Num_rep = p_.Num_rep;
+		type = p_.type;	
+		Dep_Flag = p_.Dep_Flag; 
+		Dep_timer = p_.Dep_timer;
+		timer = p_.timer;
+		loc = p_.loc;
+	}
+
 	legacyPar& addPar(legacyPar& p_)
 	{
 		this->Num_rep += p_.Num_rep;
@@ -95,7 +111,16 @@ typedef struct legacyPar
 		return *this;
 	}
 
-
+	legacyPar operator+(legacyPar& p_)
+	{
+		legacyPar psum(*this);
+		psum.Num_rep += p_.Num_rep;
+		psum.pos.x += p_.pos.x;
+		psum.pos.y += p_.pos.y;
+		psum.timer += p_.timer;
+		psum.timer = MIN(20000, psum.timer);
+		return psum;
+	}
 
 
 } legacyPar;
@@ -109,7 +134,7 @@ public:
 	Array1Di Dep_Flag; 	//-2 if waiting for re-release, -1 for not deposited, > 0 signifies the BL location it has deposited at.
 	Array1D<cl_ushort> Dep_timer;	//timer set to specified value once particle deposits and decrements at 0, particle is deposited
 	Array1D<cl_uint> timer;		///time for use in re-releasing
-	Array1Du loc;			// probably easier to just calculate on demand than waste space with this
+	Array1Di loc;			// probably easier to just calculate on demand than waste space with this
 
 	enum arrName { posArr, numRepArr, typeArr, depFlagArr, depTimerArr, timerArr, locArr };
 
@@ -253,8 +278,11 @@ public:
 
 typedef struct legacyNodeI
 {
-	int BLind;	//Inidices of three closest boundary links (-1 used to represent when less than three BL's near)
-	cl_ushort wallFlag;  //0 is no walls nearby, 1 if bottom wall nearby and 2 if top wall nearby
+	int BLind;	//Index of BL with center closest to center of trNode (i+0.5,j+0.5)
+	cl_short wallFlag;  // -1 represents a full wall node,
+						// 0 is for no walls nearby,
+						// 1 if bottom wall nearby and
+						// 2 if top wall nearby
 } legacyNodeI;
 
 
@@ -265,8 +293,12 @@ public:
 	//Starting index of three closest boundary nodes (BLind, BLind+1, BLind+2 are the nodes). Note: must test for bounds to ensure no OOB accesses
 	Array2Di BLind; 
 
-	//stores flag for if wall is nearby (0 no walls, 1 bottom wall nearby and 2 top wall nearby)
-	Array2D<cl_ushort> wallFlag;
+	//stores flag for if wall is nearby 
+	Array2D<cl_short> wallFlag;	// -1 represents a full wall node,
+						// 0 is for no walls nearby,
+						// 1 if bottom wall nearby and
+						// 2 if top wall nearby
+
 
 	NodeI(std::string name_ = "") {}
 
@@ -476,16 +508,18 @@ typedef struct legacyNodeC
 	cl_double4 CoeffU10;
 	cl_double4 CoeffU01;
 	cl_double4 CoeffU11;
-	cl_uint4 neigh;	//	
 } legacyNodeC;
 
+// TODO: remove neigh if unnecessary
 
 class NodeC : public trStructBase
 {
 public:
 	Array2Dv4d CoeffT00, CoeffT10, CoeffT01, CoeffT11;
 	Array2Dv4d CoeffU00, CoeffU10, CoeffU01, CoeffU11;
-	Array2Dv4u neigh;
+
+	void setTempBuffers(Kernel& ker, int& curind);
+	void setVelBuffers(Kernel& ker, int& curind);
 
 	NodeC(std::string name_ = "") {}
 
@@ -591,6 +625,8 @@ public:
 	Array1Dd Tau;		//Shear stress at location (negative for directed upstream, pos downstream)
 	Array1Dd blLen;		//length of BL
 	Array1Du Node_loc;	//points to location BL is located in (or majority of BL when across two)
+						// note: this is the vtr node it is closest to, so it is based on vtr.trDomainSize
+						//			not p.nX and p.nY
 	Array1Dv2us P01ind;	//basically a reduced version of vls.BL with only BLinks indicies
 	Array1Ds int_type;  //0 if wall, 1 if soot (changes after BLinks displaced certain FOUL_SIZE_SWITCH_SOOT2)
 	Array1Di colorInds; //tracks indicies of boundary layers for opengl display.

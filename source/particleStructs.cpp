@@ -1,3 +1,10 @@
+// particleStructs.cpp: Implementation of methods for classes declared
+// in particleStructs.h.
+//
+// (c) Zachary Grant Mills, 2019 
+//////////////////////////////////////////////////////////////////////
+
+
 #include "particleStructs.h"
 #include "clVariablesTR.h"
 //////////////////////////////////////////////////////
@@ -49,7 +56,7 @@ void Par::allocateArrays()
 	loc.zeros(fullSize);
 }
 
-void Par::allocateBuffers(int bufSize = -1)
+void Par::allocateBuffers(int bufSize)
 {
 	if (bufSize == -1)
 		bufSize = fullSize;
@@ -65,8 +72,8 @@ void Par::allocateBuffers(int bufSize = -1)
 	loc.allocate_buffer_size(bufFullSize);
 }
 
-void Par::copyToDevice(int writeSize = -1, cl_command_queue * que_ = nullptr,
-	cl_bool bFlag_ = CL_TRUE)
+void Par::copyToDevice(int writeSize, cl_command_queue * que_,
+	cl_bool bFlag_)
 {
 	if (writeSize == -1)
 		writeSize = fullSize;
@@ -79,8 +86,8 @@ void Par::copyToDevice(int writeSize = -1, cl_command_queue * que_ = nullptr,
 	loc.copy_to_buffer_size(writeSize, que_, bFlag_);
 }
 
-void Par::copyToHost(int readSize = -1, cl_command_queue * que_ = nullptr,
-	cl_bool bFlag_ = CL_TRUE)
+void Par::copyToHost(int readSize, cl_command_queue * que_,
+	cl_bool bFlag_)
 {
 	if (readSize == -1)
 		readSize = fullSize;
@@ -93,8 +100,8 @@ void Par::copyToHost(int readSize = -1, cl_command_queue * que_ = nullptr,
 	loc.read_from_buffer_size(readSize, que_, bFlag_);
 }
 
-void Par::writeParToBuffer(Par& Ptemp, int writeSize = -1, cl_command_queue* que_ = nullptr,
-	cl_bool bFlag_ = CL_TRUE)
+void Par::writeParToBuffer(Par& Ptemp, int writeSize, cl_command_queue* que_ = nullptr,
+	cl_bool bFlag_)
 {
 	pos.write_array_to_buffer(Ptemp.pos.get_array(), bFlag_, writeSize, que_);
 	Num_rep.write_array_to_buffer(Ptemp.Num_rep.get_array(), bFlag_, writeSize, que_);
@@ -314,11 +321,11 @@ bool Par::load()
 	for (int i = 0; i < fullSize; i++)
 	{
 		cl_int2 Posi = { { (int)floor(pos(i).x), (int)floor(pos(i).y) } };
-		loc(i) = Posi.x + vtr.TrDomainSize.x*Posi.y;
+		loc(i) = Posi.x + vtr.trDomainSize.x*Posi.y;
 	}
 }
 
-bool Par::save(bool saveAll = false, saveFlags saveFlag_ = saveFl)
+bool Par::save(bool saveAll, saveFlags saveFlag_)
 {
 	bool ret = true;
 	switch (saveFlag_)
@@ -376,8 +383,8 @@ bool Par::save(bool saveAll = false, saveFlags saveFlag_ = saveFl)
 	return ret;
 }
 
-bool Par::saveFromDevice(bool saveAll = false, saveFlags saveFlag_ = saveFl,
-	cl_command_queue * que_ = nullptr)
+bool Par::saveFromDevice(bool saveAll, saveFlags saveFlag_,
+	cl_command_queue * que_)
 {
 	bool ret = true;
 	switch (saveFlag_)
@@ -490,7 +497,7 @@ void PParam::allocateArrays()
 	D_coeff.zeros(fullSize);
 }
 
-void PParam::allocateBuffers(int bufSize = -1)
+void PParam::allocateBuffers(int bufSize)
 {
 	if (bufSize == -1)
 		bufSize = fullSize;
@@ -509,8 +516,8 @@ void PParam::allocateBuffers(int bufSize = -1)
 
 }
 
-void PParam::copyToDevice(int writeSize = -1, cl_command_queue * que_ = nullptr,
-	cl_bool bFlag_ = CL_TRUE)
+void PParam::copyToDevice(int writeSize, cl_command_queue * que_,
+	cl_bool bFlag_)
 {
 	if (writeSize == -1)
 		writeSize = fullSize;
@@ -526,8 +533,8 @@ void PParam::copyToDevice(int writeSize = -1, cl_command_queue * que_ = nullptr,
 	D_coeff.copy_to_buffer_size(writeSize, que_, bFlag_);
 }
 
-void PParam::copyToHost(int readSize = -1, cl_command_queue * que_ = nullptr,
-	cl_bool bFlag_ = CL_TRUE)
+void PParam::copyToHost(int readSize, cl_command_queue * que_,
+	cl_bool bFlag_)
 {
 	if (readSize == -1)
 		readSize = fullSize;
@@ -547,7 +554,7 @@ void PParam::ini()
 	//initialization functions specific to class
 }
 
-bool PParam::save(bool saveAll = false, saveFlags saveFlag_ = saveFl)
+bool PParam::save(bool saveAll, saveFlags saveFlag_)
 {
 	bool ret = true;
 
@@ -598,8 +605,8 @@ bool PParam::save(bool saveAll = false, saveFlags saveFlag_ = saveFl)
 	return ret;
 }
 
-bool PParam::saveFromDevice(bool saveAll = false, saveFlags saveFlag_ = saveFl,
-	cl_command_queue * que_ = nullptr)
+bool PParam::saveFromDevice(bool saveAll, saveFlags saveFlag_,
+	cl_command_queue * que_)
 {
 	std::cout << "Warning: Saving PParams stored on host even though saveFromDevice was called\n";
 
@@ -691,7 +698,7 @@ void NodeI::allocateArrays()
 	wallFlag.zeros(xSize, xSizeFull, ySize, ySize);
 }
 
-void NodeI::allocateBuffers(int bufSize = -1)
+void NodeI::allocateBuffers(int bufSize)
 {
 	if (bufSize == -1)
 		bufSize = fullSize;
@@ -702,8 +709,8 @@ void NodeI::allocateBuffers(int bufSize = -1)
 	wallFlag.allocate_buffer_size(bufFullSize);
 }
 
-void NodeI::copyToDevice(int writeSize = -1, cl_command_queue * que_ = nullptr,
-	cl_bool bFlag_ = CL_TRUE)
+void NodeI::copyToDevice(int writeSize, cl_command_queue * que_,
+	cl_bool bFlag_)
 {
 	if (writeSize == -1)
 		writeSize = fullSize;
@@ -711,8 +718,8 @@ void NodeI::copyToDevice(int writeSize = -1, cl_command_queue * que_ = nullptr,
 	wallFlag.copy_to_buffer_size(writeSize, que_, bFlag_);
 }
 
-void NodeI::copyToHost(int readSize = -1, cl_command_queue * que_ = nullptr,
-	cl_bool bFlag_ = CL_TRUE)
+void NodeI::copyToHost(int readSize, cl_command_queue * que_,
+	cl_bool bFlag_)
 {
 	if (readSize == -1)
 		readSize = fullSize;
@@ -725,7 +732,7 @@ void NodeI::ini()
 	//initialization functions specific to class
 }
 
-bool NodeI::save(bool saveAll = false, saveFlags saveFlag_ = saveFl)
+bool NodeI::save(bool saveAll, saveFlags saveFlag_)
 { //nothing needs to be saved when not debugging, so nothing saved unless saveAll = true
 	bool ret = true;
 	if (saveAll)
@@ -750,8 +757,8 @@ bool NodeI::save(bool saveAll = false, saveFlags saveFlag_ = saveFl)
 	return ret;
 }
 
-bool NodeI::saveFromDevice(bool saveAll = false, saveFlags saveFlag_ = saveFl,
-	cl_command_queue * que_ = nullptr)
+bool NodeI::saveFromDevice(bool saveAll, saveFlags saveFlag_,
+	cl_command_queue * que_)
 {
 	bool ret = true;
 	if (saveAll)
@@ -814,7 +821,7 @@ void Neighs::allocateArrays()
 	ii11.zeros(xSize, xSizeFull, ySize, ySize);
 }
 
-void Neighs::allocateBuffers(int bufSize = -1)
+void Neighs::allocateBuffers(int bufSize)
 {
 	if (bufSize == -1)
 		bufSize = fullSize;
@@ -828,8 +835,8 @@ void Neighs::allocateBuffers(int bufSize = -1)
 
 }
 
-void Neighs::copyToDevice(int writeSize = -1, cl_command_queue * que_ = nullptr,
-	cl_bool bFlag_ = CL_TRUE)
+void Neighs::copyToDevice(int writeSize, cl_command_queue * que_,
+	cl_bool bFlag_)
 {
 	if (writeSize == -1)
 		writeSize = fullSize;
@@ -839,8 +846,8 @@ void Neighs::copyToDevice(int writeSize = -1, cl_command_queue * que_ = nullptr,
 	ii11.copy_to_buffer_size(writeSize, que_, bFlag_);
 }
 
-void Neighs::copyToHost(int readSize = -1, cl_command_queue * que_ = nullptr,
-	cl_bool bFlag_ = CL_TRUE)
+void Neighs::copyToHost(int readSize, cl_command_queue * que_,
+	cl_bool bFlag_)
 {
 	if (readSize == -1)
 		readSize = fullSize;
@@ -855,7 +862,7 @@ void Neighs::ini()
 	//initialization functions specific to class
 }
 
-bool Neighs::save(bool saveAll = false, saveFlags saveFlag_ = saveFl)
+bool Neighs::save(bool saveAll, saveFlags saveFlag_)
 {// no save bin, only saves text  files when saveAll = true
 	bool ret = true;
 
@@ -883,8 +890,8 @@ bool Neighs::save(bool saveAll = false, saveFlags saveFlag_ = saveFl)
 	return ret;
 }
 
-bool Neighs::saveFromDevice(bool saveAll = false, saveFlags saveFlag_ = saveFl,
-	cl_command_queue * que_ = nullptr)
+bool Neighs::saveFromDevice(bool saveAll, saveFlags saveFlag_,
+	cl_command_queue * que_)
 {
 	bool ret = true;
 
@@ -934,7 +941,7 @@ void TrParam::allocateArrays()
 	fVals.zeros(fullSize);
 }
 
-void TrParam::allocateBuffers(int bufSize = -1)
+void TrParam::allocateBuffers(int bufSize)
 {
 	if (bufSize == -1)
 		bufSize = fullSize;
@@ -944,8 +951,8 @@ void TrParam::allocateBuffers(int bufSize = -1)
 }
 
 
-void TrParam::copyToDevice(int writeSize = -1, cl_command_queue * que_ = nullptr,
-	cl_bool bFlag_ = CL_TRUE)
+void TrParam::copyToDevice(int writeSize, cl_command_queue * que_,
+	cl_bool bFlag_)
 {
 	if (writeSize == -1)
 		writeSize = fullSize;
@@ -953,8 +960,8 @@ void TrParam::copyToDevice(int writeSize = -1, cl_command_queue * que_ = nullptr
 
 }
 
-void TrParam::copyToHost(int readSize = -1, cl_command_queue * que_ = nullptr,
-	cl_bool bFlag_ = CL_TRUE)
+void TrParam::copyToHost(int readSize, cl_command_queue * que_,
+	cl_bool bFlag_)
 {
 	if (readSize == -1)
 		readSize = fullSize;
@@ -967,7 +974,7 @@ void TrParam::ini()
 	//initialization functions specific to class
 }
 
-bool TrParam::save(bool saveAll = false, saveFlags saveFlag_ = saveFl)
+bool TrParam::save(bool saveAll, saveFlags saveFlag_)
 { // only save all saves data
 	bool ret = true;
 
@@ -993,8 +1000,8 @@ bool TrParam::save(bool saveAll = false, saveFlags saveFlag_ = saveFl)
 	return ret;
 }
 
-bool TrParam::saveFromDevice(bool saveAll = false, saveFlags saveFlag_ = saveFl,
-	cl_command_queue * que_ = nullptr)
+bool TrParam::saveFromDevice(bool saveAll, saveFlags saveFlag_,
+	cl_command_queue * que_)
 {
 	bool ret = true;
 
@@ -1037,7 +1044,6 @@ void NodeC::setStruct(legacyNodeC& struct_, const int i, const int j)
 	CoeffU01(i, j) = struct_.CoeffU01;
 	CoeffU10(i, j) = struct_.CoeffU10;
 	CoeffU11(i, j) = struct_.CoeffU11;
-	neigh(i, j) = struct_.neigh;
 }
 
 legacyNodeC NodeC::getStruct(const int i, const int j)
@@ -1051,7 +1057,6 @@ legacyNodeC NodeC::getStruct(const int i, const int j)
 	struct_.CoeffU01 = CoeffU01(i, j);
 	struct_.CoeffU10 = CoeffU10(i, j);
 	struct_.CoeffU11 = CoeffU11(i, j);
-	struct_.neigh = neigh(i, j);
 	return struct_;
 }
 
@@ -1089,13 +1094,9 @@ void NodeC::allocateArrays()
 	CoeffU11.setName("NodeC_cU11");
 	CoeffU11.allocate(xSize, xSizeFull, ySize, ySize);
 	CoeffU11.fill({ {0.,0.,0.,0.} });
-
-	neigh.setName("NodeC_neigh");
-	neigh.allocate(xSize, xSizeFull, ySize, ySize);
-	neigh.fill({ {0,0,0,0} });
 }
 
-void NodeC::allocateBuffers(int bufSize = -1)
+void NodeC::allocateBuffers(int bufSize)
 {
 	if (bufSize == -1)
 		bufSize = fullSize;
@@ -1110,10 +1111,9 @@ void NodeC::allocateBuffers(int bufSize = -1)
 	CoeffU01.allocate_buffer_size(bufFullSize);
 	CoeffU10.allocate_buffer_size(bufFullSize);
 	CoeffU11.allocate_buffer_size(bufFullSize);
-	neigh.allocate_buffer_size(bufFullSize);
 }
 
-void NodeC::copyToDevice(int writeSize = -1, cl_command_queue * que_ = nullptr, cl_bool bFlag_ = CL_TRUE)
+void NodeC::copyToDevice(int writeSize, cl_command_queue * que_, cl_bool bFlag_)
 {
 	if (writeSize == -1)
 		writeSize = fullSize;
@@ -1126,10 +1126,9 @@ void NodeC::copyToDevice(int writeSize = -1, cl_command_queue * que_ = nullptr, 
 	CoeffU01.copy_to_buffer_size(writeSize, que_, bFlag_);
 	CoeffU10.copy_to_buffer_size(writeSize, que_, bFlag_);
 	CoeffU11.copy_to_buffer_size(writeSize, que_, bFlag_);
-	neigh.copy_to_buffer_size(writeSize, que_, bFlag_);
 }
 
-void NodeC::copyToHost(int readSize = -1, cl_command_queue * que_ = nullptr, cl_bool bFlag_ = CL_TRUE)
+void NodeC::copyToHost(int readSize, cl_command_queue * que_, cl_bool bFlag_)
 {
 	if (readSize == -1)
 		readSize = fullSize;
@@ -1143,7 +1142,6 @@ void NodeC::copyToHost(int readSize = -1, cl_command_queue * que_ = nullptr, cl_
 	CoeffU01.read_from_buffer_size(readSize, que_, bFlag_);
 	CoeffU10.read_from_buffer_size(readSize, que_, bFlag_);
 	CoeffU11.read_from_buffer_size(readSize, que_, bFlag_);
-	neigh.read_from_buffer_size(readSize, que_, bFlag_);
 }
 
 void NodeC::ini()
@@ -1151,7 +1149,24 @@ void NodeC::ini()
 	//initialization functions specific to class
 }
 
-bool NodeC::save(bool saveAll = false, saveFlags saveFlag_ = saveFl)
+void NodeC::setTempBuffers(Kernel& ker, int& curind)
+{
+	ker.set_argument(curind++, CoeffT00.get_buf_add());
+	ker.set_argument(curind++, CoeffT10.get_buf_add());
+	ker.set_argument(curind++, CoeffT01.get_buf_add());
+	ker.set_argument(curind++, CoeffT11.get_buf_add());
+}
+
+void NodeC::setVelBuffers(Kernel& ker, int& curind)
+{
+	ker.set_argument(curind++, CoeffU00.get_buf_add());
+	ker.set_argument(curind++, CoeffU10.get_buf_add());
+	ker.set_argument(curind++, CoeffU01.get_buf_add());
+	ker.set_argument(curind++, CoeffU11.get_buf_add());
+}
+
+
+bool NodeC::save(bool saveAll, saveFlags saveFlag_)
 {// only need to save for debugging, so only save when saveAll is called
 	bool ret = true;
 	if (saveAll)
@@ -1171,7 +1186,6 @@ bool NodeC::save(bool saveAll = false, saveFlags saveFlag_ = saveFl)
 			ret &= CoeffU01.save2file();
 			ret &= CoeffU10.save2file();
 			ret &= CoeffU11.save2file();
-			ret &= neigh.save2file();
 			break;
 		}
 		case saveBinFl:
@@ -1183,8 +1197,8 @@ bool NodeC::save(bool saveAll = false, saveFlags saveFlag_ = saveFl)
 	return ret;
 }
 
-bool NodeC::saveFromDevice(bool saveAll = false, saveFlags saveFlag_ = saveFl,
-	cl_command_queue * que_ = nullptr)
+bool NodeC::saveFromDevice(bool saveAll, saveFlags saveFlag_,
+	cl_command_queue * que_)
 {
 	bool ret = true;
 
@@ -1205,7 +1219,6 @@ bool NodeC::saveFromDevice(bool saveAll = false, saveFlags saveFlag_ = saveFl,
 			ret &= CoeffU01.save_txt_from_device("", que_);
 			ret &= CoeffU10.save_txt_from_device("", que_);
 			ret &= CoeffU11.save_txt_from_device("", que_);
-			ret &= neigh.save_txt_from_device("", que_);
 			break;
 		}
 		case saveBinFl:
@@ -1264,7 +1277,7 @@ void NodeV::allocateArrays()
 	U11.fill({ {0.,0.} });
 }
 
-void NodeV::allocateBuffers(int bufSize = -1)
+void NodeV::allocateBuffers(int bufSize)
 {
 	if (bufSize == -1)
 		bufSize = fullSize;
@@ -1278,8 +1291,8 @@ void NodeV::allocateBuffers(int bufSize = -1)
 	U11.allocate_buffer_size(bufFullSize);
 }
 
-void NodeV::copyToDevice(int writeSize = -1, cl_command_queue * que_ = nullptr,
-	cl_bool bFlag_ = CL_TRUE)
+void NodeV::copyToDevice(int writeSize, cl_command_queue * que_,
+	cl_bool bFlag_)
 {
 	if (writeSize == -1)
 		writeSize = fullSize;
@@ -1290,8 +1303,8 @@ void NodeV::copyToDevice(int writeSize = -1, cl_command_queue * que_ = nullptr,
 	U11.copy_to_buffer_size(writeSize, que_, bFlag_);
 }
 
-void NodeV::copyToHost(int readSize = -1, cl_command_queue * que_ = nullptr, 
-	cl_bool bFlag_ = CL_TRUE)
+void NodeV::copyToHost(int readSize, cl_command_queue * que_, 
+	cl_bool bFlag_)
 {
 	if (readSize == -1)
 		readSize = fullSize;
@@ -1307,7 +1320,7 @@ void NodeV::ini()
 	//initialization functions specific to class
 }
 
-bool NodeV::save(bool saveAll = false, saveFlags saveFlag_ = saveFl)
+bool NodeV::save(bool saveAll, saveFlags saveFlag_)
 {
 	bool ret = true;
 	if (saveAll)
@@ -1335,8 +1348,8 @@ bool NodeV::save(bool saveAll = false, saveFlags saveFlag_ = saveFl)
 	return ret;
 }
 
-bool NodeV::saveFromDevice(bool saveAll = false, saveFlags saveFlag_ = saveFl,
-	cl_command_queue * que_ = nullptr)
+bool NodeV::saveFromDevice(bool saveAll, saveFlags saveFlag_,
+	cl_command_queue * que_)
 {
 	bool ret = true;
 	if (saveAll)
@@ -1424,7 +1437,7 @@ void BLinks::allocateArrays()
 	int_type.fill(0);
 }
 
-void BLinks::allocateBuffers(int bufSize = -1)
+void BLinks::allocateBuffers(int bufSize)
 {
 	if (bufSize == -1)
 		bufSize = fullSize;
@@ -1439,7 +1452,7 @@ void BLinks::allocateBuffers(int bufSize = -1)
 	int_type.allocate_buffer_size(bufFullSize);
 }
 
-void BLinks::copyToDevice(int writeSize = -1, cl_command_queue * que_ = nullptr, cl_bool bFlag_ = CL_TRUE)
+void BLinks::copyToDevice(int writeSize, cl_command_queue * que_, cl_bool bFlag_)
 {
 	if (writeSize == -1)
 		writeSize = fullSize;
@@ -1452,7 +1465,7 @@ void BLinks::copyToDevice(int writeSize = -1, cl_command_queue * que_ = nullptr,
 	int_type.copy_to_buffer_size(writeSize, que_, bFlag_);
 }
 
-void BLinks::copyToHost(int readSize = -1, cl_command_queue * que_ = nullptr, cl_bool bFlag_ = CL_TRUE)
+void BLinks::copyToHost(int readSize, cl_command_queue * que_, cl_bool bFlag_)
 {
 	if (readSize == -1)
 		readSize = fullSize;
@@ -1527,7 +1540,7 @@ void BLinks::setBuffers(Kernel& ker, int& curind, arrName arrList[], int numArrs
 	}
 }
 
-bool BLinks::save(bool saveAll = false, saveFlags saveFlag_ = saveFl)
+bool BLinks::save(bool saveAll, saveFlags saveFlag_)
 {
 	bool ret = true;
 
@@ -1559,8 +1572,8 @@ bool BLinks::save(bool saveAll = false, saveFlags saveFlag_ = saveFl)
 	return ret;
 }
 
-bool BLinks::saveFromDevice(bool saveAll = false, saveFlags saveFlag_ = saveFl,
-	cl_command_queue * que_ = nullptr)
+bool BLinks::saveFromDevice(bool saveAll, saveFlags saveFlag_,
+	cl_command_queue * que_)
 {
 	bool ret = true;
 	if (saveAll)

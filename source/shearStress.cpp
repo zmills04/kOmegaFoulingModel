@@ -1,5 +1,15 @@
+// shearStress.cpp: Implementation of methods defined in shearStress.h 
+// which are used to calculate the shear stress in the channel, and
+// remove deposited particles based on the magnitude of the local
+// shear.
+//
+// (c) Zachary Mills, 2019 
+//////////////////////////////////////////////////////////////////////
+
+
 #include "shearStress.h"
 #include "clVariablesTR.h"
+#include "logger.h"
 
 void shearStress::allocateArrays()
 {
@@ -21,12 +31,21 @@ void shearStress::allocateArrays()
 	shearCoeffs.allocate(shearNodeSize*2, shearNodeDynSize * 2);
 	Tau.allocate(shearNodeSize, shearNodeDynSize);
 
-	// Not necessary for restart, so no need to place this in 
+	// Not necessary for restart, so no need to place this in
+	// testRestartRun
 	if (Tau.load("load" SLASH "Tau") == false)
 		Tau.fill(0);
 
-	ssOutput.zeros(shearBLSizeBot, maxOutLinesSS);
+	if (calcSSFlag)
+	{
+		if (ssLocSave == bothWalls) { ssOutputSize = shearBLSizeTotal; }
+		else if (ssLocSave == topWall) { ssOutputSize = shearBLSizeTop; }
+		else { ssOutputSize = shearBLSizeBot; }
 	
+		ssOutput.zeros(ssOutputSize, maxOutLinesSS);
+		ssOutput.createTimeArray();
+	}
+
 	blIndsLoc.zeros(p.nX);
 }
 
@@ -42,10 +61,26 @@ void shearStress::allocateBuffers()
 
 	blInds.allocate_buffer_w_copy(CL_MEM_READ_ONLY);
 	
-	ssOutput.allocate_buffer_w_copy();
+	if(calcSSFlag)
+		ssOutput.allocate_buffer_w_copy();
 	
 	blIndsLoc.allocate_buffer_w_copy(CL_MEM_READ_WRITE);
 	blIndsLoc.FillBuffer({ { -1, -1 } });
+}
+
+void shearStress::calculateShear(cl_command_queue* que_ = nullptr,
+	cl_event* waitevt = nullptr, int numwait = 0, cl_event* evt_ = nullptr)
+{
+	// since these need to be called sequentually in the same queue, 
+	// the wait event will only be passed to nodeShearKernel, and 
+	// only wallShearKernel will be added to evt_.
+
+	// This is not necessarily called everytime collisionKernel is called,
+	// so we need to get the current value of alter in collisionKernel.
+	nodeShearKernel.call_kernel(vlb.collisionKernel.getAlterID(), que_,
+		numwait, waitevt);
+	
+	wallShearKernel.call_kernel(que_, 0, nullptr, evt_);
 }
 
 // TODO: set kernel sizes now that variables are created before initializing kernels
@@ -61,8 +96,11 @@ void shearStress::createKernels()
 	wallShearKernel.create_kernel(GetSourceProgram, LBQUEUE_REF, "TR_shear_2");
 	wallShearKernel.set_size(shearBLSizeTotal, WORKGROUPSIZE_TR_SHEAR);
 
-	saveShearKernel.create_kernel(GetSourceProgram, TRQUEUE_REF, "TR_shear_save_out");
-	saveShearKernel.set_size(shearBLSizeTotal, WORKGROUPSIZE_TR_SHEAR);
+	if (calcSSFlag)
+	{
+		saveShearKernel.create_kernel(GetSourceProgram, TRQUEUE_REF, "TR_shear_save_out");
+		saveShearKernel.set_size(ssOutputSize, WORKGROUPSIZE_TR_SHEAR);
+	}
 
 	updateSSKernel[0].create_kernel(GetSourceProgram, TRQUEUE_REF, "TR_Find_Shear_Coeffs1");
 	updateSSKernel[0].set_size(shearNodeSize, WORKGROUPSIZE_TR_SHEAR);
@@ -71,25 +109,27 @@ void shearStress::createKernels()
 	updateSSKernel[1].set_size(shearBLSizeTotal, WORKGROUPSIZE_TR_SHEAR);
 }
 
+// TODO: make sure that all these can be freed
 void shearStress::freeHostArrays()
 {
 	blIndsLoc.FreeHost();
+	Tau.FreeHost();
+	sInds.FreeHost();
+	ssWeights.FreeHost();
+	shearCoeffs.FreeHost();
+	blInds.FreeHost();
 }
 
 void shearStress::ini()
 {
-	Save_loc_SS = 0;
+	allocateBuffers();
 
-	// Sizes of arrays and kernels are function of number of BL's
-	// and therefore constant (will not need reallocation at update step)
-	numbl_bounds = (vtr.Bounds.MAX_BL_BOT - vtr.Bounds.MIN_BL_BOT) + (vtr.Bounds.MAX_BL_TOP - vtr.Bounds.MIN_BL_TOP) + 2;
-	shearSize = (int)ceil((double)numbl_bounds / WORKGROUPSIZE_TR_SHEAR) * WORKGROUPSIZE_TR_SHEAR;
-	
-	////////////////////////////////////////////////////////////////////////////////////////
+	// Add kernels to kernel source string for compilation
+	sourceGenerator::SourceInstance()->addFile2Kernel("trKernelsShear.cl");
 
-	// Sizes of arrays and kernels are not constant
-	// and may need reallocation at update step
-	Shear_array_len = vls.fullsize_Bnodes;
+#if _DEBUG
+	LOGMESSAGE("Initialized Shear Stress Class");
+#endif
 }
 
 
@@ -97,17 +137,16 @@ void shearStress::iniShearCoeffs()
 {
 	updateSSKernel[0].call_kernel();
 	updateSSKernel[1].call_kernel();
-	cl_int2 negOnes = {{ -1, -1 }};
-	Bindicies_loc.FillBuffer(negOnes,TRQUEUE_REF);
 }
 
 
 void shearStress::loadParams()
 {
-	bool saveDefault = vtr.trSolverFlag & SAVE_WALL_SHEAR;
-	calcSSFlag = p.getParameter("Save Shear Stress", saveDefault);
+	calcSSFlag = p.getParameter("Save Shear Stress", SAVE_WALL_SHEAR) &
+		vtr.trSolverFlag;
+
 	maxOutLinesSS = p.getParameter("Max Out Lines SS", OUTPUT_MAX_LINES_SS);
-	
+
 	std::string saveloc_ = p.getParameter<std::string>("Save Shear Loc", SAVE_SHEAR_LOC);
 	if (saveloc_.compare("bothWalls") == 0)
 		ssLocSave = bothWalls;
@@ -120,6 +159,13 @@ void shearStress::loadParams()
 		ERROR_CHECKING(true, "Save Shear Loc parameter must be either bothWalls, "\
 			"topWall or botWall\n", ERROR_INITIALIZING_VTR)
 	}
+
+}
+
+void shearStress::save2file()
+{
+	// nothing gets saved here since only output is 
+	// ssOutput, which is a time based data set (saved in saveTimeData)
 }
 
 void shearStress::saveDebug()
@@ -127,38 +173,38 @@ void shearStress::saveDebug()
 	sInds.save_txt_from_device();
 	blInds.save_txt_from_device();
 	ssWeights.save_txt_from_device();
-	shearInds.save_txt_from_device();
 	shearCoeffs.save_txt_from_device();
 }
 
 void shearStress::saveParams()
 {
 	p.setParameter("Save Shear Stress", calcSSFlag);
+
+	if (ssLocSave == bothWalls) { 
+		p.setParameter<std::string>("Save Shear Loc", "bothWalls"); 
+	}
+	else if (ssLocSave == topWall) {
+		p.setParameter<std::string>("Save Shear Loc", "topWall");
+	}
+	else {
+		p.setParameter<std::string>("Save Shear Loc", "botWall");
+	}
 	
-	// Not reading in SS arrays, so will start as 0 always
-	//p.setParameter("Save_loc_SS", Save_loc_SS);
 	p.setParameter("Max Out Lines SS", maxOutLinesSS);
 }
 
-
-void shearStress::saveSS()
-{ // For debugging, not used in production runs.
-	//Tau.save_from_device("Tau");
-	//vls.dir_array.savetxt("dir_array");
-	//vls.ii0_array.savetxt("ii0_array");
-	//vls.Bnodes.savetxt("Bnodes");
-	//BL.savetxt("BLtemp");
-	//Sind.save_from_device("Sind");
-	//Weights.save_from_device("Weights");
-	//BLindicies.save_from_device("Blindicies");
-	//Shear_coeffs.save_from_device("SScoeff");
-	//Shear_inds.save_txt_from_device("Sinds");
-	//vlb.J_array.save_txt_from_device("J_array");
-	//vlb.Ro_array.save_txt_from_device("Ro_array");
-	//vlb.FA.save_txt_from_device("FA");
-	//vlb.FB.save_txt_from_device("FB");
+void shearStress::saveRestartFiles()
+{
+	//nothing to needed for restart
 }
 
+void shearStress::saveTimeData()
+{
+	if (calcSSFlag)
+	{
+		ssOutput.setTimeAndIncrement(p.Time, TRQUEUE_REF);
+	}
+}
 
 void shearStress::setKernelArgs()
 {
@@ -183,7 +229,16 @@ void shearStress::setKernelArgs()
 	wallShearKernel.set_argument(ind++, sInds.get_buf_add());
 	wallShearKernel.set_argument(ind++, vtr.BL.Tau.get_buf_add());
 
-
+	// Add additional kernel arguments when using opengl (first 4 arguments
+	// are the same regardless of whether or not opengl is used)
+	if (p.useOpenGL)
+	{
+		wallShearKernel.set_argument(ind++, vtr.BL.int_type.get_buf_add());
+		wallShearKernel.set_argument(ind++, vtr.BL.colorInds.get_buf_add());
+		wallShearKernel.set_argument(ind++, vtr.glParticles.LSb_vbo.get_col_buf_add());
+		wallShearKernel.set_argument(ind++, vtr.glParticles.LSt_vbo.get_col_buf_add());
+		wallShearKernel.set_argument(ind++, vtr.glParticles.Tcrit_color.get_buf_add());
+	}
 
 	// Kernel to determine if shear is sufficient to remove particles, and removes them
 	// if it is.
@@ -193,15 +248,11 @@ void shearStress::setKernelArgs()
 	Par::arrName ParArrList[] = { Par::posArr, Par::numRepArr,
 		Par::typeArr, Par::depFlagArr, Par::depTimerArr, Par::locArr };
 
-	PParam::arrName PParamArrList[] = { PParam::tauCritArr, PParam::dCoeffArr,
-		PParam::lCoeffArr, PParam::mpArr };
-
 	ind = 0;
 	cl_int2 zer2 = { {0,0} };
 	trShearRemovalKernel.set_argument(ind++, vls.C.get_buf_add());
 	vtr.BL.setBuffers(trShearRemovalKernel, ind, BLArrList, 5);
 	vtr.P.setBuffers(trShearRemovalKernel, ind, ParArrList, 6);
-	vtr.parP.setBuffers(trShearRemovalKernel, ind, PParamArrList, 4);
 	trShearRemovalKernel.set_argument(ind++, vtr.BL_dep.get_buf_add());
 	trShearRemovalKernel.setOptionInd(ind);
 	trShearRemovalKernel.set_argument(ind++, &zer2);
@@ -223,13 +274,15 @@ void shearStress::setKernelArgs()
 	if (calcSSFlag)
 	{
 		ind = 0;
-		saveShearKernel.set_argument(ind++, BLindicies.get_buf_add());
-		saveShearKernel.set_argument(ind++, vtr.BL.get_buf_add());
-		saveShearKernel.set_argument(ind++, SS_output.get_buf_add());
-		saveShearKernel.set_argument(ind++, &vtr.numbl_bounds);
-		saveShearKernel.setOptionInd(4);
+		saveShearKernel.set_argument(ind++, vtr.BL.Tau.get_buf_add());
+		saveShearKernel.set_argument(ind++, ssOutput.get_buf_add());
+		saveShearKernel.setOptionInd(ind);
+		//save index is set before calling so no need to set here
+		//saveShearKernel.set_argument(ind++, &Save_loc_SS); 
 	}
 
+	// shear coefficients are initialized in a kernel, so those
+	// kernels are called now that arguments have been set
 	iniShearCoeffs();
 }
 
@@ -244,124 +297,84 @@ void shearStress::setSourceDefines()
 	setSrcDefinePrefix, "SHEAR_CUTOFF_RADIUS", vtr.cutoffRadius);
 	setSrcDefinePrefix, "INDEX_RADIUS_SEARCH", vtr.indRadiusSearch);
 	
-	switch (ssLocSave)
-	{
-	case bothWalls:
-	{
-		setSrcDefinePrefix, "SAVE_FULL_SHEAR");
-		break;
-	}
-	case topWall:
-	{
-		setSrcDefinePrefix, "SAVE_SHEAR_TOP");
-		break;
-	}
-	case botWall:
-	{
-		setSrcDefinePrefix, "SAVE_SHEAR_BOT");
-		break;
-	}
-	}
-
-
+	if(ssLocSave == bothWalls) { setSrcDefinePrefix, "SAVE_FULL_SHEAR"); }
+	else if (ssLocSave == topWall) { setSrcDefinePrefix, "SAVE_SHEAR_TOP"); }
+	else { setSrcDefinePrefix, "SAVE_SHEAR_BOT"); }
 
 }
 #undef setSrcDefinePrefix
+
+
+void shearStress::shearRemoval(cl_command_queue *que_,
+	cl_event* waitevt, int numwait, cl_event *evt_)
+{
+	if ((vtr.parSort.Ploc(1).y - vtr.parSort.Ploc(1).x) > 0)
+		trShearRemovalKernel.call_kernel(que_, numwait, waitevt, evt_);
+}
+
 bool shearStress::testRestartRun()
 {
+	allocateArrays();
 	return true;
 }
 
-void shearStress::updateSS()
-{
-	saveShearKernel.setOptionCallKernel(&Save_loc_SS);
-	clFlush(TRQUEUE);
-	Save_loc_SS++;
-}
-
-void shearStress::resetSSOut()
-{
-	Save_loc_SS = 0;
-}
-
-
 void shearStress::updateParRemArgs()
 {
-	cl_uint offset = vtr.parSort.Ploc(1).x;
-	cl_uint total_removal = vtr.parSort.Ploc(1).y - offset;
-
-
-	trShearRemovalKernel.set_argument(4, &offset);
-	trShearRemovalKernel.set_argument(5, &total_removal);
-	trShearRemovalKernel.reset_global_size(total_removal);
+	// {offset, number of particles temporarily deposited}
+	cl_int2 removalOptionVal = { { vtr.parSort.Ploc(1).x,
+		vtr.parSort.Ploc(1).y - vtr.parSort.Ploc(1).x} };
+	   
+	trShearRemovalKernel.setOption(&removalOptionVal);
+	trShearRemovalKernel.reset_global_size(removalOptionVal.y);
 }
 
 
 
 void shearStress::updateShearArrays()
 {
-	if (vls.fullsize_Bnodes_old != vls.fullsize_Bnodes)
+	if (shearNodeDynSize != vls.ssArr.curFullSize())
 	{
-		vls.fullsize_Bnodes = vls.lengthBnodes * 2;
-		
-		Shear_array_len = vls.fullsize_Bnodes;
-		Shear_inds.reallocate_device_only(Shear_array_len );
-		Shear_coeffs.reallocate_device_only(2 * vls.fullsize_Bnodes);
-		Tau.reallocate_device_only(Shear_array_len);
-		vls.Bnodes.reallocate(vls.fullsize_Bnodes);
+		shearNodeDynSize = vls.ssArr.curFullSize();
+		shearCoeffs.reallocate_device_only(2 * shearNodeDynSize);
+		Tau.reallocate_device_only(shearNodeDynSize);
 
 		clFinish(IOQUEUE);
 
-		shearKernels[1].set_argument(2, Shear_coeffs.get_buf_add());
-		shearKernels[1].set_argument(4, Tau.get_buf_add());
-		shearKernels[1].set_argument(5, Shear_inds.get_buf_add());
+		updateSSKernel[0].set_argument(0, vls.ssArr.get_buf_add());
 
-		shearKernels[0].set_argument(2, Shear_coeffs.get_buf_add());
-		shearKernels[0].set_argument(4, Tau.get_buf_add());
-		shearKernels[0].set_argument(5, Shear_inds.get_buf_add());
-
-		shearKernels[2].set_argument(2, Tau.get_buf_add());
+		updateSSKernel[0].set_argument(2, shearCoeffs.get_buf_add());
+		updateSSKernel[1].set_argument(4, vls.ssArr.get_buf_add());
 		
-		updateSSKernel[0].set_argument(0, vls.Bnodes.get_buf_add());
-		updateSSKernel[0].set_argument(4, Shear_coeffs.get_buf_add());
-		updateSSKernel[0].set_argument(5, Shear_inds.get_buf_add());
-
-		updateSSKernel[1].set_argument(4, vls.Bnodes.get_buf_add());
+		nodeShearKernel.set_argument(3, shearCoeffs.get_buf_add());
+		nodeShearKernel.set_argument(5, Tau.get_buf_add());
+		nodeShearKernel.set_argument(6, vls.ssArr.get_buf_add());
+		
+		wallShearKernel.set_argument(1, Tau.get_buf_add());
 	}
 
-	vls.Bnodes.copy_to_buffer(CL_FALSE, vls.nBnodes);
+	shearNodeSize = vls.ssArr.curSize();
+
+	updateSSKernel[0].setOption(&shearNodeSize);
+	nodeShearKernel.setOption(&shearNodeSize);
 	
-	/*int new_size = (int)ceil((double)vls.nBnodes / (double)WORKGROUPSIZE_TR_SHEAR)*WORKGROUPSIZE_TR_SHEAR;*/
-	
-	Bnode_top_start = vls.bot_ind_end + 1;
-	shearKernels[0].reset_global_size(vls.nBnodes);
-	shearKernels[1].reset_global_size(vls.nBnodes);
-	updateSSKernel[0].reset_global_size(vls.nBnodes);
-
-	updateSSKernel[0].set_argument(7, (void*)&vls.num_el);
-	updateSSKernel[0].set_argument(9, (void *)&vls.nBnodes);
-	updateSSKernel[0].set_argument(10, (void*)&Bnode_top_start);
-
-	cl_int2 bindicies_end = { { Bnode_top_start, vls.nBnodes } };
-	updateSSKernel[1].set_argument(10, (void*)&bindicies_end);
-
-	cl_event UpdateSSevt;
+	nodeShearKernel.reset_global_size(shearNodeSize);
+	updateSSKernel[0].reset_global_size(shearNodeSize);
 
 	updateSSKernel[0].call_kernel();
-	updateSSKernel[1].call_kernel(&UpdateSSevt);
-	
-	Bindicies_loc.FillBuffer(TRQUEUE, { { -1, -1 } }, 1, &UpdateSSevt);
-
-	clReleaseEvent(UpdateSSevt);
-
-	shearKernels[0].set_argument(6, (void*)&vls.nBnodes);
-	shearKernels[1].set_argument(6, (void*)&vls.nBnodes);
+	updateSSKernel[1].call_kernel();
 }
 
 
 
 
-
+void shearStress::updateTimeData()
+{
+	if (calcSSFlag)
+	{
+		saveShearKernel.setOptionCallKernel(ssOutput.getCurIndAdd());
+		ssOutput.setTimeAndIncrement(p.Time, TRQUEUE_REF);
+	}
+}
 
 
 

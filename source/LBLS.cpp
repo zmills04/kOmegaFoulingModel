@@ -3,6 +3,9 @@
 //
 
 
+// TODO: split the saving of parameters into static and dynamic variables,
+//		since there is no reason to keep writing the save variables out as
+//		it wastes cycles.
 // TODO: Make sure that all variables are same between host and device.
 //		i.e. make sure int is int, uint is uint, etc in kernels
 // TODO: remove old files from source folder that are no longer needed.
