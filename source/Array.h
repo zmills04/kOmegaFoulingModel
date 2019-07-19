@@ -173,11 +173,33 @@ template <typename T>
 class Array3D;
 
 
-template <class T> class ArrayBase 
+class staticBaseVar
+{
+public:
+	static cl_context* context;
+	static std::string curDumpSaveDir;
+
+
+
+	static void setArrayContext(cl_context *context_)
+	{
+		context = context_;// clEnv::instance()->getContext();
+	}
+
+
+	static void setCurDumpDir(std::string curDump_)
+	{
+		curDumpSaveDir = curDump_;
+	}
+};
+
+
+template <class T> 
+class ArrayBase : public staticBaseVar
 {
 public:
 	cl_command_queue *ioQue;
-	cl_context *context;
+
 	typedef T		TYPE;
 protected:
 	T *Array;
@@ -218,7 +240,7 @@ protected:
 		Buffer = nullptr;
 		clFlags = 0;
 		ioQue = clEnv::instance()->getIOqueue();
-		context = clEnv::instance()->getContext();
+//		context = clEnv::instance()->getContext();
 		Name = name_;
 	}
 
@@ -237,7 +259,7 @@ protected:
 		Buffer = nullptr;
 		clFlags = 0;
 		ioQue = clEnv::instance()->getIOqueue();
-		context = clEnv::instance()->getContext();
+//		context = clEnv::instance()->getContext();
 	}
 
 	ArrayBase(const ArrayBase &other)
@@ -255,7 +277,7 @@ protected:
 		Name = other.Name;
 		BufferFullSize = other.BufferFullSize;
 		ioQue = clEnv::instance()->getIOqueue();
-		context = clEnv::instance()->getContext();
+		//context = clEnv::instance()->getContext();
 		Array = nullptr;
 		Buffer = nullptr;
 		if (Host_Alloc_Flag)
@@ -393,7 +415,7 @@ protected:
 		if (copy_length = -1) { copy_length = FullSize; }
 		if (queue == NULL) { queue = ioQue; }
 
-		clEnqueueCopyBuffer(*queue, src_buf, dest_buf, 0, 0, copy_length * sizeof(T), num_wait, wait, blk_evt);
+		int status = clEnqueueCopyBuffer(*queue, src_buf, dest_buf, 0, 0, copy_length * sizeof(T), num_wait, wait, blk_evt);
 
 		CHECK_ARRAY_ERROR(status, "Copying between buffers", status);
 	}
@@ -444,7 +466,7 @@ public:
 		Name = other.getName();
 		BufferFullSize = other.getBufferFullSize();
 		ioQue = clEnv::instance()->getIOqueue();
-		context = clEnv::instance()->getContext();
+		//context = clEnv::instance()->getContext();
 		Array = nullptr;
 		Buffer = nullptr;
 		if (Host_Alloc_Flag)
@@ -475,7 +497,7 @@ public:
 		Name = other->getName();
 		BufferFullSize = other->getBufferFullSize();
 		ioQue = clEnv::instance()->getIOqueue();
-		context = clEnv::instance()->getContext();
+		//context = clEnv::instance()->getContext();
 		Array = nullptr;
 		Buffer = nullptr;
 		if (Host_Alloc_Flag)
@@ -752,7 +774,7 @@ public:
 	void FillBuffer(void* fillval, size_t typesize, int fillsize, int offset = 0, cl_command_queue *queue = NULL, int num_wait = 0,
 		cl_event *wait = NULL, cl_event *evt = NULL)
 	{
-		FillBufferFunc(fillval, queue, typesize, fullsize, offset, num_wait, wait, evt);
+		FillBufferFunc(fillval, queue, typesize, fillsize, offset, num_wait, wait, evt);
 	}
 	
 	// dont use frequently as this sets entire padded array to zero and then fills it
@@ -773,6 +795,7 @@ public:
 	}
 	
 	// does not change values in padded sections
+	// TODO: test to see if this is faster than fillAll (it probably isnt)
 	void fastfill(const T val)
 	{
 		T *p = Array;
@@ -911,8 +934,8 @@ public:
 		cl_command_queue *queue = NULL, int num_wait = 0, cl_event* wait = NULL)
 	{
 		cl_event copyEvent;
-		enqueue_copy_buffer_to_buffer(src_buf, Buffer, copy_length, queue, 
-			num_wait, wait, &copyEvent)
+		enqueue_copy_buffer_to_buffer(src_buf, Buffer, copy_length, queue,
+			num_wait, wait, &copyEvent);
 		clWaitForEvents(1, &copyEvent);
 	}
 
@@ -1192,6 +1215,47 @@ public:
 		return counter;
 	};
 
+/////////////////////////////////////////////////////////////////////////////////
+/////////      Functions for renaming/cleaning/copying output files       ///////
+/////////////////////////////////////////////////////////////////////////////////
+
+	
+
+	
+	void RenameTxtFile(std::string SourceName = "")
+	{
+		if (SourceName.length() == 0)
+			SourceName = Name + ".txt";
+		std::string DestFileName = curDumpSaveDir + SLASH + SourceName;
+		RenameFile(SourceName, DestFileName);
+	}
+
+	void RenameBinFile(std::string SourceName = "")
+	{
+		if (SourceName.length() == 0)
+			SourceName = Name + ".bin";
+		std::string DestFileName = curDumpSaveDir + SLASH + SourceName;
+		RenameFile(SourceName, DestFileName);
+	}
+
+
+	void CleanFile(std::string SourceName = "")
+	{
+		int maxAttempt = 100;
+		if (SourceName.length() == 0)
+			SourceName = Name;
+		std::fstream stream;
+		if(fileopen(stream, SourceName, FileOut, maxAttempt))
+		{
+			stream.close();
+		}
+		else
+		{
+			LOGMESSAGE("could not clean file " + SourceName + ", so this file will retain old information");
+		}
+	}
+
+
 protected:
 	void delay(double sec)
 	{
@@ -1366,7 +1430,7 @@ public:
 		Name = other.getName();
 		BufferFullSize = other.getBufferFullSize();
 		ioQue = clEnv::instance()->getIOqueue();
-		context = clEnv::instance()->getContext();
+		//context = clEnv::instance()->getContext();
 		Array = nullptr;
 		Buffer = nullptr;
 		if (Host_Alloc_Flag)
@@ -1397,7 +1461,7 @@ public:
 		Name = other->getName();
 		BufferFullSize = other->getBufferFullSize();
 		ioQue = clEnv::instance()->getIOqueue();
-		context = clEnv::instance()->getContext();
+		//context = clEnv::instance()->getContext();
 		Array = nullptr;
 		Buffer = nullptr;
 		if (Host_Alloc_Flag)
@@ -1592,7 +1656,7 @@ public:
 	void reallocate_device_only(const int n1)
 	{
 		if (Device_Alloc_Flag)
-			reallocate_device(n1, context, queue);
+			reallocate_device(n1);
 
 		SizeX = n1;
 		FullSize = n1;
@@ -1890,7 +1954,7 @@ public:
 	void zeros()
 	{
 		curEl = 0;
-		Array1D<T>::zeros();
+		ArrayBase<T>::zeros();
 	}
 
 	void reset()
@@ -2432,18 +2496,6 @@ private:
 	// values to the file.
 	void (*saveDataFunc)(TimeData<T>*, std::fstream&, int);
 
-	void iniFile()
-	{
-		std::string FileName = Name + ".txt";
-		if (fileopen(stream, FileName, FileOut) == false)
-		{
-			CHECK_ARRAY_ERROR(true, "Error initializing file for "
-				"saving TimeData Array", ERROR_IN_TIMEDATA_ARRAY);
-		}
-
-		fileCreated = true;
-	}
-
 	// This should not be called, so it is set to private.
 	TimeData()
 	{
@@ -2460,7 +2512,7 @@ public:
 	{
 		ArrayBase<T>::ini(name_);
 		fileCreated = false;
-		iniFile();
+		//iniFile();
 		saveDataFunc = &TimeData::genericSaveFunc;
 	}
 
@@ -2473,6 +2525,39 @@ public:
 		ArrayBase<T>::FreeDevice();
 	}
 
+	void iniFile(bool restartRun_)
+	{
+		std::string FileName = Name + ".txt";
+		
+
+		std::string logMess;
+
+		if (restartRun_)
+		{
+			logMess = "Not initializing new file for " + Name + " array, because "\
+				"run is being restarted. Warning: This will result in error if "\
+				"file doesn't currently exist.";
+		}
+		else
+		{
+			std::fstream stream;
+
+			logMess = "Initializing file for " + Name + " array. Warning: "\
+				"If restarting run, old data has been deleted";
+
+			if (fileopen(stream, FileName, FileOut) == false)
+			{
+				CHECK_ARRAY_ERROR(true, "Error initializing file for "
+					"saving TimeData Array", ERROR_IN_TIMEDATA_ARRAY);
+			}
+
+			stream.close();
+		}
+
+
+		LOGMESSAGE(logMess);
+		fileCreated = true;
+	}
 
 	static void genericSaveFunc(TimeData<T>* td_, std::fstream& stream_, int j_)
 	{
@@ -2504,7 +2589,7 @@ public:
 
 	// make sure that the curInd is set as a kernel argument before 
 	// calling this function.
-	void setTimeAndIncrement(int time_, cl_command_queue* queue = NULL,
+	bool setTimeAndIncrement(int time_, cl_command_queue* queue = NULL,
 		cl_bool block_flag = CL_TRUE, int num_wait = 0, cl_event* wait = NULL,
 		cl_event* evt = NULL)
 	{
@@ -2515,7 +2600,9 @@ public:
 		if (curInd == ArrayBase<T>::SizeY)
 		{
 			appendData_from_device(queue, block_flag, num_wait, wait, evt);
+			return true;
 		}
+		return false;
 	}
 
 	bool appendData_from_device(cl_command_queue* queue = NULL, 
@@ -2538,7 +2625,7 @@ public:
 
 	bool appendData()
 	{
-		int i, j;
+		int j;
 
 		CHECK_ARRAY_ERROR(!fileCreated, "Trying to append to unitialized "
 			"TimeData save file", ERROR_IN_TIMEDATA_ARRAY);
@@ -2577,7 +2664,7 @@ public:
 		for (j = 0; j < curInd; j++)
 		{
 			stream << timeArr[j] << "\t";
-			(*fun_ptr)(this, stream, j);
+			(*saveDataFunc)(this, stream, j);
 			stream << "\n";
 		}
 
@@ -2593,6 +2680,13 @@ template <typename T, typename Tbase, int VecSize_>
 class Array2Dv : public Array2D <T>
 {
 public:
+	Array2Dv(std::string name_)
+	{
+		ArrayBase<T>::ini(name_);
+	}
+	Array2Dv()
+	{
+	}
 
 };
 
@@ -3102,7 +3196,7 @@ public:
 		err = glGetError();
 		CHECK_ARRAY_ERROR(err, "glFinish returned error", err);
 
-		create_pos_buffer_from_gl(*context, clflags);
+		create_pos_buffer_from_gl(*staticBaseVar::context, clflags);
 	}
 
 	void AllocateColor(int csize)
@@ -3190,21 +3284,21 @@ public:
 	}
 
 
-	void create_pos_buffer_from_gl(cl_context context, int clflags)
+	void create_pos_buffer_from_gl(cl_context context_, int clflags)
 	{
 		Device_Alloc_Flag = 1;
 		clFlags = clflags;
 		int status;
-		Buffer = clCreateFromGLBuffer(context, clFlags, GLpos, &status);
+		Buffer = clCreateFromGLBuffer(context_, clFlags, GLpos, &status);
 		CHECK_ARRAY_ERROR(status, "Error creating pos buffer from GL Buffer", status);
 	}
 
-	void create_col_buffer_from_gl(cl_context context, int clflags)
+	void create_col_buffer_from_gl(cl_context context_, int clflags)
 	{
 		CHECK_ARRAY_ERROR(GLcol == -1, "Color VBO must be created before clBuffer",
 			ERROR_IN_OPENGL_ARRAY);
 		int status;
-		ColorBuf = clCreateFromGLBuffer(context, clflags, GLcol, &status);
+		ColorBuf = clCreateFromGLBuffer(context_, clflags, GLcol, &status);
 		CHECK_ARRAY_ERROR(status, "Error creating color buffer from GL Buffer", status);
 		Device_Col_Alloc_Flag = 1;
 	}

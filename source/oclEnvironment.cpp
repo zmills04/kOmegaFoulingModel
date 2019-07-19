@@ -49,6 +49,7 @@ void clEnv::iniContext()
 	context = clCreateContext(properties, 1, &device, nullptr, nullptr, &status);
 	ERROR_CHECKING(status, "create context failed", ERROR_OCL_INITIALIZATION);
 	contextFlag = true;
+//	staticBaseVar::setArrayContext(&context);
 }
 
 

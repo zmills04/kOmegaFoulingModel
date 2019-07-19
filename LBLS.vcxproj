@@ -496,13 +496,17 @@
     <None Include="source\Kernels\kOmegaKernels.cl" />
     <None Include="source\Kernels\lbKernels.cl" />
     <None Include="source\Kernels\outputKernels.cl" />
-    <None Include="source\Kernels\sortKernels.cl" />
     <None Include="source\Kernels\Structures.cl" />
     <None Include="source\Kernels\trKernels.cl" />
     <None Include="source\Kernels\tfdKernels.cl" />
     <None Include="source\Kernels\trKernelsDisplay.cl" />
     <None Include="source\Kernels\trKernelsShear.cl" />
     <None Include="source\Kernels\trKernelsSort.cl" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="source\MethodClassLayout.txt">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </Text>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

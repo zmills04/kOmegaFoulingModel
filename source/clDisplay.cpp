@@ -57,7 +57,7 @@ LRESULT CALLBACK WndProc1(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 							 double locationy = d.Window_Center.y + d.Window_Dims.y -								(double)d.down_pixel_y / ppy;
 
-							 vtr.save_box(locationx, locationy, spacing_x, spacing_y);
+							 vtr.saveBox(locationx, locationy, spacing_x, spacing_y);
 						 }
 						return 0;
 
@@ -112,7 +112,7 @@ LRESULT CALLBACK WndProc1(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		}
 		case 'z':
 		{
-					vtr.Save_SS();
+					//vtr.Save_SS();
 					return 0;
 		}
 		case 'y':

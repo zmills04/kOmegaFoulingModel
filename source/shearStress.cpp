@@ -38,6 +38,8 @@ void shearStress::allocateArrays()
 
 	if (calcSSFlag)
 	{
+		ssOutput.iniFile(vtr.restartRunFlag);
+
 		if (ssLocSave == bothWalls) { ssOutputSize = shearBLSizeTotal; }
 		else if (ssLocSave == topWall) { ssOutputSize = shearBLSizeTop; }
 		else { ssOutputSize = shearBLSizeBot; }
@@ -68,8 +70,8 @@ void shearStress::allocateBuffers()
 	blIndsLoc.FillBuffer({ { -1, -1 } });
 }
 
-void shearStress::calculateShear(cl_command_queue* que_ = nullptr,
-	cl_event* waitevt = nullptr, int numwait = 0, cl_event* evt_ = nullptr)
+void shearStress::calculateShear(cl_command_queue* que_, cl_event* waitevt,
+	int numwait, cl_event* evt_)
 {
 	// since these need to be called sequentually in the same queue, 
 	// the wait event will only be passed to nodeShearKernel, and 
@@ -179,17 +181,18 @@ void shearStress::saveDebug()
 void shearStress::saveParams()
 {
 	p.setParameter("Save Shear Stress", calcSSFlag);
-
-	if (ssLocSave == bothWalls) { 
-		p.setParameter<std::string>("Save Shear Loc", "bothWalls"); 
+	std::string ssLocSaveString;
+	if (ssLocSave == bothWalls) {
+		ssLocSaveString = "bothWalls";
 	}
 	else if (ssLocSave == topWall) {
-		p.setParameter<std::string>("Save Shear Loc", "topWall");
+		ssLocSaveString = "topWall";
 	}
 	else {
-		p.setParameter<std::string>("Save Shear Loc", "botWall");
+		ssLocSaveString = "botWall";
+		
 	}
-	
+	p.setParameter<std::string>("Save Shear Loc", ssLocSaveString);
 	p.setParameter("Max Out Lines SS", maxOutLinesSS);
 }
 
@@ -202,7 +205,7 @@ void shearStress::saveTimeData()
 {
 	if (calcSSFlag)
 	{
-		ssOutput.setTimeAndIncrement(p.Time, TRQUEUE_REF);
+		ssOutput.appendData_from_device(TRQUEUE_REF);
 	}
 }
 
@@ -253,7 +256,7 @@ void shearStress::setKernelArgs()
 	trShearRemovalKernel.set_argument(ind++, vls.C.get_buf_add());
 	vtr.BL.setBuffers(trShearRemovalKernel, ind, BLArrList, 5);
 	vtr.P.setBuffers(trShearRemovalKernel, ind, ParArrList, 6);
-	trShearRemovalKernel.set_argument(ind++, vtr.BL_dep.get_buf_add());
+	trShearRemovalKernel.set_argument(ind++, vtr.blDep.get_buf_add());
 	trShearRemovalKernel.setOptionInd(ind);
 	trShearRemovalKernel.set_argument(ind++, &zer2);
 
@@ -328,11 +331,9 @@ void shearStress::updateParRemArgs()
 	trShearRemovalKernel.reset_global_size(removalOptionVal.y);
 }
 
-
-
-void shearStress::updateShearArrays()
+void shearStress::updateShearArrays(bool reSizeFlag)
 {
-	if (shearNodeDynSize != vls.ssArr.curFullSize())
+	if (reSizeFlag)
 	{
 		shearNodeDynSize = vls.ssArr.curFullSize();
 		shearCoeffs.reallocate_device_only(2 * shearNodeDynSize);

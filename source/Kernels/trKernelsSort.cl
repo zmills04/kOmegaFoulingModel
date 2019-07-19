@@ -412,6 +412,10 @@ void TR_release_par(global double2* __restrict__ source_pos,
 	__global uint2* RandArray,
 	__global double* __restrict__ trP,
 	__global double* U_array,
+#ifdef CALC_IO_DISTS
+	__global __restrict__ uint* ioDists,
+	int ioDistsInd,
+#endif
 	uint maxel,
 	uint Conc_number)
 {
@@ -426,6 +430,13 @@ void TR_release_par(global double2* __restrict__ source_pos,
 		return;
 	}
 
+#ifdef CALC_IO_DISTS
+	if(source_Dep_Flag[i] == 3)
+	{
+		int indexSave = NUM_PAR_SIZES * ioDistsInd + source_type[i];
+		atomic_add(&ioDists[indexSave], source_Num_rep[i]);
+	}
+#endif
 
 	uint2 RandEl = RandArray[i];
 	double Umv = trP[TRP_UMAX_IND];
@@ -558,10 +569,10 @@ __kernel void find_umax(__global double* input,
 {
 	const int tid = get_global_id(0); // = local_id(0)
 	const int localSize = get_local_size(0);
-	const int stride = gid * 2;
+	const int stride = tid * 2;
 
-	double input1 = (stride < FULLSIZEY) ? input[UVALS_START_INDEX + stride] : 0.;
-	double input2 = (stride+1 < FULLSIZEY) ? input[UVALS_START_INDEX + stride+1] : 0.;
+	double input1 = (stride < FULLSIZEY) ? input[UVALS_START_INDEX + stride * CHANNEL_LENGTH_FULL] : 0.;
+	double input2 = (stride+1 < FULLSIZEY) ? input[UVALS_START_INDEX + (stride+1)* CHANNEL_LENGTH_FULL] : 0.;
 	
 	sdata[tid] = max(input1, input2);
 

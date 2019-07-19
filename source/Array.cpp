@@ -5,6 +5,14 @@
 
 #include "Array.h"
 
+cl_context* staticBaseVar::context = nullptr;
+
+std::string staticBaseVar::curDumpSaveDir = "";
+
+
+
+
+
 //template <typename T>
 //cl_command_queue* ArrayBase<T>::ioQue = {};
 //

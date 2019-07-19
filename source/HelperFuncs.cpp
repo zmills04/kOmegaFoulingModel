@@ -69,6 +69,40 @@ bool fileopen(std::fstream &stream, std::string &FileName, FileMode Mode)
 	return fileopen(stream, FileName, Mode, 100);
 }
 
+void MakeDir(std::string& NewDir)
+{
+#if defined(_WIN32)
+#pragma warning(suppress: 6031)
+	_mkdir(NewDir.c_str());
+#else 
+	mkdir(NewDir.c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
+#endif //_WIN32
+}
+
+void CopyFile(std::string NameSrc, std::string NameDest)
+{
+	
+	std::fstream  hSrc, hDst;
+	fileopen(hSrc, NameSrc, BinaryIn);
+	fileopen(hDst, NameDest, BinaryOut);
+	hDst << hSrc.rdbuf();
+	hSrc.close();
+	hDst.close();
+}
+
+void RenameFile(std::string SourceFileName, std::string DestFileName)
+{
+	int maxAttempt = 100;
+
+	for (int i = 0; i < maxAttempt; i++)
+	{
+		if (std::rename(SourceFileName.c_str(), DestFileName.c_str()))
+		{
+			return;
+		}
+		delay_func(0.1);
+	}
+}
 
 double boxMuller(double meanval, double stdval)
 {

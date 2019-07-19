@@ -52,7 +52,9 @@ public:
 	const static double eps;
 	static double DELTA_L, DELTA_T, DELTA_M, DELTA_F, DELTA_P; //delta_p is dX^2*dM/dT^2 (units of energy) Not sure why P is used to identify this.
 	 
-		
+	// X location of Wavy Section Start, period length of waves, and number of period
+	int xWavyStart, wavyPeriodLen, numWavyPeriods;
+	
 	static double Pipe_radius;
 	static int Channel_Height, nX, nY, XsizeFull;
 	static unsigned int FullSize, distSize;
@@ -197,7 +199,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////
 
-	std::string outDir, curDumpSaveDir;
+	std::string outDir;
 	Array1Dd Timeout;
 	int sort_called = 0;
 	int update_walls = 0;
@@ -205,21 +207,20 @@ public:
 
 	// Simulation control
 	void ini();
-	void start();
 	void step();
 	void finish();
 
 	// Update output functions
-	void updateAvgs();
-	void updateNu();
-	void updateSS();
-	void updateIODist();
+	//void updateAvgs();
+	//void updateNu();
+	//void updateSS();
+	//void updateIODist();
 	
 	// Save output functions
-	void SaveAvgs();
-	void SaveNu();
-	void SaveSS();
-	void SaveIO();
+	//void SaveAvgs();
+	//void SaveNu();
+	//void SaveSS();
+	//void SaveIO();
 	void DumpStep();
 	void RenameOutputFiles();
 
@@ -228,12 +229,9 @@ public:
 
 
 	/// Convenience Functions for file operations
-	void RenameFile(std::string SourceName);
-	void RenameFile(std::string SourceName, std::string DestName);
-	void CopyFile(std::string NameSrc, std::string NameDest);
-	void CleanFile(std::string Name);
-	void MakeDir(std::string &NewDir);
-	void cleanfiles();
+	//void CopyFile(std::string NameSrc, std::string NameDest);
+	//void MakeDir(std::string &NewDir);
+	//void cleanfiles();
 
 
 	// Empty functions to allow for templated function pointer wrapper

@@ -149,6 +149,12 @@
 #define INI_POISEUILLE              true
 #define FLUID_SAVE_MACROS_ON_START  false
 #define USE_TURBULENCE_MODEL        true
+#define LB_SAVE_AVG_INFO			true
+#define USE_TURB_VEL_BC				true
+
+#define IN_KERNEL_IBB		// cannot be set with yaml params file
+
+
 // Initialization time (to obtain pseudo steady state)
 // dump step is time between saves during this initialization
 // LB ini steps is steps with just lb being solved before
@@ -189,6 +195,8 @@
 #define KOMEGA_MAX_ABS_TOL			1.0e-7
 #define KOMEGA_MAX_ITERS			1000
 
+#define WALLD_SEARCH_RADIUS			50
+
 
 
 /////////////////////////////////////////////////////////////
@@ -220,7 +228,7 @@
 #define THERMAL_MAX_ABS_TOL			1.0e-7
 #define THERMAL_MAX_ITERS			1000
 
-
+#define NU_CUTOFF_RADIUS			5.
 
 /////////////////////////////////////////////////////////////
 //////               Particle Parameters               //////
@@ -413,47 +421,63 @@
 
 
 
+// Bit flags for vls.nType
 //Type 1 Boundaries are IBB boundaries applied before collision step (q < 0.5)
 //Type 2 Boundaries are IBB boundaries applied after collision step (q >= 0.5)
-#define C_BOUND 0x8
-#define E_BOUND 0x10
-#define W_BOUND 0x20
-#define N_BOUND 0x40
-#define S_BOUND 0x80
-#define NE_BOUND 0x400
-#define SW_BOUND 0x800
-#define SE_BOUND 0x1000
-#define NW_BOUND 0x2000
-#define E_BOUND_T1 0x4000
-#define W_BOUND_T1 0x8000
-#define N_BOUND_T1 0x10000
-#define S_BOUND_T1 0x20000
-#define NE_BOUND_T1 0x40000
-#define SW_BOUND_T1 0x80000
-#define SE_BOUND_T1 0x100000
-#define NW_BOUND_T1 0x200000
-#define E_BOUND_T2 0x400000
-#define W_BOUND_T2 0x800000
-#define N_BOUND_T2 0x1000000
-#define S_BOUND_T2 0x2000000
-#define NE_BOUND_T2 0x4000000
-#define SW_BOUND_T2 0x8000000
-#define SE_BOUND_T2 0x10000000
-#define NW_BOUND_T2 0x20000000
 
-#define SOLID_NODE 0x0
-#define FLUID_NODE 0x1
-#define FOULED_NODE 0x2
-#define BOUNDARY_NODE 0x40000000
-#define GHOST_NODE 0x4
+#define C_BOUND			0x0 //just a placeholder. Not actually used
+#define M_SOLID_NODE	0x1
+#define M_FLUID_NODE	0x2
+#define M0_SOLID_NODE	0x4
+#define M0_FLUID_NODE	0x8
+#define M_FOUL_NODE		0x9  // M0_FLUID_NODE | M_SOLID_NODE
+
+#ifndef IN_KERNEL_IBB
+	#define E_BOUND		0x100
+	#define W_BOUND		0x200
+	#define N_BOUND		0x400
+	#define S_BOUND		0x800
+	#define NE_BOUND	0x1000
+	#define SW_BOUND	0x2000
+	#define SE_BOUND	0x4000
+	#define NW_BOUND	0x8000
+	#define BOUNDARY_NODE 0xFF00  // E_BOUND | W_BOUND | ... | NW_BOUND
+#else
+	#define E_BOUND		0x100
+	#define W_BOUND		0x200
+	#define N_BOUND		0x400
+	#define S_BOUND		0x800
+	#define NE_BOUND	0x1000
+	#define SW_BOUND	0x2000
+	#define SE_BOUND	0x4000
+	#define NW_BOUND	0x8000
+	#define E_BOUND_T1	0x10000
+	#define W_BOUND_T1	0x20000
+	#define N_BOUND_T1	0x40000
+	#define S_BOUND_T1	0x80000
+	#define NE_BOUND_T1 0x100000
+	#define SW_BOUND_T1 0x200000
+	#define SE_BOUND_T1 0x400000
+	#define NW_BOUND_T1 0x800000
+	#define E_BOUND_T2	0x1000000
+	#define W_BOUND_T2	0x2000000
+	#define N_BOUND_T2	0x4000000
+	#define S_BOUND_T2	0x8000000
+	#define NE_BOUND_T2 0x10000000
+	#define SW_BOUND_T2 0x20000000
+	#define SE_BOUND_T2 0x40000000
+	#define NW_BOUND_T2 0x80000000
+	#define BOUNDARY_NODE 0xFFFFFF00
+#endif
+
 
 
 // vls.M flag values 
-#define M_SOLID_NODE	0b0001
-#define M_FLUID_NODE	0b0010
-#define M0_SOLID_NODE	0b0100
-#define M0_FLUID_NODE	0b1000
-#define M_FOUL_NODE		0b1001
+#define M_SOLID_NODE	0x1
+#define M_FLUID_NODE	0x2
+#define M0_SOLID_NODE	0x4
+#define M0_FLUID_NODE	0x8
+#define M_FOUL_NODE		0x9
 
 
 
@@ -498,6 +522,9 @@
 #define WF_01_SOLID			0x0040
 #define WF_11_SOLID			0x0080
 
+#define WF_WALL				0x000C
+
+
 #define WF_TEST_ALL_SOLID	0x00F0
 
 
@@ -521,6 +548,7 @@
 #define ERROR_IN_OPENGL_ARRAY								-116
 #define ERROR_IN_TIMEDATA_ARRAY 							-117
 #define ERROR_IN_LOGGER										-118
+#define ERROR_INITIALIZING_VFD								-119
 
 #ifdef _DEBUG
 

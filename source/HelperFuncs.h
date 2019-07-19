@@ -18,6 +18,11 @@ void delay_func(double sec);
 bool fileopen(std::fstream &stream, std::string &FileName, FileMode mode_, const int att);
 bool fileopen(std::fstream &stream, std::string &FileName, FileMode Mode);
 
+void MakeDir(std::string& NewDir);
+
+void CopyFile(std::string NameSrc, std::string NameDest);
+
+void RenameFile(std::string SourceFileName, std::string DestFileName);
 
 double boxMuller(double meanval, double stdval);
 

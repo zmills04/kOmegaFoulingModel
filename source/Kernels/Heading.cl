@@ -75,6 +75,8 @@ constant double2 CXY_DOUBLE[8] = {
 	(double2)(1., -1.),
 	(double2)(-1., 1.)};
 
+
+//https://github.com/ddemidov/vexcl-experiments/blob/master/sort-by-key-atomic.cpp
 #ifndef OPENCL_VERSION_1_2
 void AtomicAdd(__global double *val, double delta)
 {
@@ -95,6 +97,27 @@ void AtomicAdd(__global double *val, double delta)
 	} while (atom_cmpxchg((volatile __global ulong *)val, old.i, new.i) != old.i);
 }
 #endif
+
+bool AtomicMin(volatile __global double* __restrict__ source, const double newValDouble) {
+	union {
+		double f;
+		ulong i;
+	} newVal;
+	union {
+		double f;
+		ulong i;
+	} prevVal;
+	do {
+		prevVal.f = *source;
+		newVal.f = min(prevVal.f, newValDouble);
+	} while (atomic_cmpxchg((volatile __global ulong *)source, prevVal.i, newVal.i) != prevVal.i);
+
+
+	// returns true if source == newValDouble (i.e. newValDouble was smaller and therefore
+	// the new value in source)
+	return (*source == newValDouble);
+
+}
 
 ////////////////////////////////////////////////
 ////// Random number generator Functions  //////
@@ -162,39 +185,56 @@ uint2 MWC64X_NextUint2(uint2 s, double2* resd)
 
 
 
+// Bit flags for vls.nType
 //Type 1 Boundaries are IBB boundaries applied before collision step (q < 0.5)
 //Type 2 Boundaries are IBB boundaries applied after collision step (q >= 0.5)
-#define C_BOUND 0x8
-#define E_BOUND 0x10
-#define W_BOUND 0x20
-#define N_BOUND 0x40
-#define S_BOUND 0x80
-#define NE_BOUND 0x400
-#define SW_BOUND 0x800
-#define SE_BOUND 0x1000
-#define NW_BOUND 0x2000
-#define E_BOUND_T1 0x4000
-#define W_BOUND_T1 0x8000
-#define N_BOUND_T1 0x10000
-#define S_BOUND_T1 0x20000
-#define NE_BOUND_T1 0x40000
-#define SW_BOUND_T1 0x80000
-#define SE_BOUND_T1 0x100000
-#define NW_BOUND_T1 0x200000
-#define E_BOUND_T2 0x400000
-#define W_BOUND_T2 0x800000
-#define N_BOUND_T2 0x1000000
-#define S_BOUND_T2 0x2000000
-#define NE_BOUND_T2 0x4000000
-#define SW_BOUND_T2 0x8000000
-#define SE_BOUND_T2 0x10000000
-#define NW_BOUND_T2 0x20000000
 
-#define SOLID_NODE 0x0
-#define FLUID_NODE 0x1
-#define FOULED_NODE 0x2
-#define BOUNDARY_NODE 0x3FFFFFF8
-#define GHOST_NODE 0x4
+#define C_BOUND			0x0 //just a placeholder. Not actually used
+#define M_SOLID_NODE	0x1
+#define M_FLUID_NODE	0x2
+#define M0_SOLID_NODE	0x4
+#define M0_FLUID_NODE	0x8
+#define M_FOUL_NODE		0x9  // M0_FLUID_NODE | M_SOLID_NODE
+
+#ifndef IN_KERNEL_IBB
+	#define E_BOUND		0x100
+	#define W_BOUND		0x200
+	#define N_BOUND		0x400
+	#define S_BOUND		0x800
+	#define NE_BOUND	0x1000
+	#define SW_BOUND	0x2000
+	#define SE_BOUND	0x4000
+	#define NW_BOUND	0x8000
+	#define BOUNDARY_NODE 0xFF00  // E_BOUND | W_BOUND | ... | NW_BOUND
+	#define NESW_BOUNDARY_NODE 0x0F00
+#else
+	#define E_BOUND		0x100
+	#define W_BOUND		0x200
+	#define N_BOUND		0x400
+	#define S_BOUND		0x800
+	#define NE_BOUND	0x1000
+	#define SW_BOUND	0x2000
+	#define SE_BOUND	0x4000
+	#define NW_BOUND	0x8000
+	#define E_BOUND_T1	0x10000
+	#define W_BOUND_T1	0x20000
+	#define N_BOUND_T1	0x40000
+	#define S_BOUND_T1	0x80000
+	#define NE_BOUND_T1 0x100000
+	#define SW_BOUND_T1 0x200000
+	#define SE_BOUND_T1 0x400000
+	#define NW_BOUND_T1 0x800000
+	#define E_BOUND_T2	0x1000000
+	#define W_BOUND_T2	0x2000000
+	#define N_BOUND_T2	0x4000000
+	#define S_BOUND_T2	0x8000000
+	#define NE_BOUND_T2 0x10000000
+	#define SW_BOUND_T2 0x20000000
+	#define SE_BOUND_T2 0x40000000
+	#define NW_BOUND_T2 0x80000000
+	#define BOUNDARY_NODE 0xFFFFFF00
+	#define NESW_BOUNDARY_NODE 0x00000F00
+#endif
 
 
 #define OPTION_SAVE_MACRO_FIELDS			0x2
@@ -211,6 +251,22 @@ uint2 MWC64X_NextUint2(uint2 s, double2* resd)
 #define NW_NEIGH (CHANNEL_LENGTH_FULL-1)
 #define SE_NEIGH (-CHANNEL_LENGTH_FULL+1)
 #define SW_NEIGH (-CHANNEL_LENGTH_FULL-1)
+
+
+#define WF_EMPTY			0x0000
+#define WF_SOLID			0x0001
+#define WF_FLUID			0x0002
+#define WF_BOT_WALL			0x0004
+#define WF_TOP_WALL			0x0008
+#define WF_00_SOLID			0x0010
+#define WF_10_SOLID			0x0020
+#define WF_01_SOLID			0x0040
+#define WF_11_SOLID			0x0080
+
+#define WF_WALL				0x000C
+
+
+#define WF_TEST_ALL_SOLID	0x00F0
 
 // adding ibbRev[dir-1] to ibb index give index of the 
 // reverse disribution 

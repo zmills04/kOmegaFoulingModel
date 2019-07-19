@@ -7,385 +7,65 @@
 #include "BiCGStabGenerator.h"
 
 
-void clProblem::RenameFile(std::string SourceName)
+
+//////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////
+//////////////             Functions for Outputting Data                  ////////////////
+//////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////
+
+// Save Files, Check for save bin, check for savedump
+void clProblem::DumpStep()
 {
-	std::string DestFileName = curDumpSaveDir + SLASH + SourceName;
-	RenameFile(SourceName, DestFileName);
-}
+	// save Arrays and Time Data
+	// Functions being called will check flags to see if
+	// they should save data (rarely called, so not calling
+	// function that returns immediatly will not affect
+	// performance
+	vlb.save2file();
+	vlb.saveTimeData();
+	
+	vfd.save2file();
+	vfd.saveTimeData();
+	
+	vtr.save2file();
+	vtr.saveTimeData();
+	
+	vls.save2file();
+	vls.saveTimeData();
 
-void clProblem::RenameFile(std::string SourceFileName, std::string DestFileName)
-{
-	int maxAttempt = 100;
+	vfl.save2file();
+	vfl.saveTimeData();
+		
+	currentDumpStep++;
+};
 
-	for (int i = 0; i < maxAttempt; i++)
-	{
-		if (std::rename(SourceFileName.c_str(), DestFileName.c_str()))
-		{
-			return;
-		}
-		delay_func(0.1);
-	}
-}
-
-void clProblem::CleanFile(std::string Name)
-{
-	int maxAttempt = 100;
-	std::fstream stream;
-	for (int i = 0; i < maxAttempt; i++)
-	{
-		fileopen(stream, Name, FileOut);
-		if (stream.is_open())
-		{
-			stream.close();
-			return;
-		}
-		delay_func(0.1);
-	}
-}
-
-void clProblem::MakeDir(std::string &NewDir)
-{
-#if defined(_WIN32)
-#pragma warning(suppress: 6031)
-	_mkdir(NewDir.c_str());
-#else 
-	mkdir(NewDir.c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
-#endif //_WIN32
-}
-
-void clProblem::CopyFile(std::string NameSrc, std::string NameDest)
-{
-	std::fstream  hSrc, hDst;
-	fileopen(hSrc, NameSrc, BinaryIn);
-	fileopen(hDst, NameDest, BinaryOut);
-	hDst << hSrc.rdbuf();
-	hSrc.close();
-	hDst.close();
-}
-
-void clProblem::cleanfiles()
-{
-	CleanFile(AVG_OUTPUT_FILE);
-#ifdef CALCULATE_NU
-	CleanFile(NUSSELT_OUTPUT_FILE);
-#endif
-#ifdef WALL_SHEAR_STRESS
-	CleanFile(STRESS_OUTPUT_FILE);
-#endif
-#ifdef SAVE_IO_DISTS
-	CleanFile(IO_OUTPUT_FILE);
-#endif
-}
-
-
+// Creates folder in results and copies data currently in
+// main dir to new folder
 void clProblem::RenameOutputFiles()
 {
 	if (flOutputDump == false)
 		return;
-	
+
 	std::ostringstream streamObj;
 	streamObj << std::scientific;
 	streamObj << std::setprecision(6);
 	streamObj << (double)Time;
 
-	curDumpSaveDir = outDir;
+	std::string curDumpSaveDir = outDir;
 	curDumpSaveDir.append(SLASH);
 	curDumpSaveDir.append(streamObj.str());
-	
+
+	staticBaseVar::setCurDumpDir(curDumpSaveDir);
+
 	MakeDir(curDumpSaveDir);
 
-	RenameFile("lbro.txt");
-	RenameFile("lbm.txt");
-	RenameFile("lbux.txt");
-	RenameFile("lbuy.txt");
-
-	if (vlb.kOmegaSolverFlag)
-	{
-		RenameFile("lbkappa.txt");
-		RenameFile("lbomega.txt");
-		//RenameFile("lbnut.txt");
-	}
-
-	if (vfd.thermalSolverFlag)
-		RenameFile("temp.txt");
-	
-	if (vtr.trSolverFlag)
-		RenameFile("BLdep_tot.txt");
-	RenameFile("lsc.txt");
+	vls.renameSaveFiles();
+	vlb.renameSaveFiles();
+	vfd.renameSaveFiles();
+	vtr.renameSaveFiles();
+	vfl.renameSaveFiles();
 }
-
-/// Not updated and checked for errors
-void clProblem::SaveAvgs()
-{
-	//FILE *hFile;
-	//char FileName[] = AVG_OUTPUT_FILE;
-	//int maxAttempt = 100;
-	//for (int i = 0; i < maxAttempt; i++)
-	//{
-	//	hFile = fopen(FileName, "a");
-	//	if (hFile != NULL)
-	//		break;
-	//	printf("cannot open output file %s, waiting", FileName);
-	//	delay_func(0.1);
-	//}
-
-	//if (hFile == NULL)
-	//{
-	//	printf("cannot open output file %s, data lost", FileName);
-	//	curLine = 0;
-	//	return;
-	//}
-	//clFinish(*clEnv::instance()->getLBqueue());
-	//if (vlb.Save_loc == 0)
-	//	return;
-	//vlb.RoJout.read_from_buffer_size(vlb.Save_loc * 5);
-	//vtr.Umean_Current = vlb.RoJout((vlb.Save_loc - 1) * 5 + 1) / vls.Masses(0);
-	//for (int i = 0; i < vlb.Save_loc; i++)
-	//{
-	//	double Umean = vlb.RoJout[i * 5 + 1] / vls.Masses(0);
-	//	double Tmin = vlb.RoJout[i * 5 + 2];
-	//	double Tmout1 = vlb.RoJout[i * 5 + 3];
-	//	double Tmout2 = vlb.RoJout[i * 5 + 4];
-
-	//	double Nuss1 = 4.*vlb.Pipe_radius*vlb.Pipe_radius*Umean / (double)(X_STOP_POS - X_RELEASE_POS) / vfd.Alpha_fluid*log(Tmin / Tmout1);
-	//	double Nuss2 = 4.*vlb.Pipe_radius*vlb.Pipe_radius*Umean / (double)(CHANNEL_LENGTH - X_RELEASE_POS) / vfd.Alpha_fluid*log(Tmin / Tmout2);
-
-	//	double Fluid_tot = vls.Masses(0);
-	//	double Foul_tot = vls.Masses(1);
-	//	double Ro = vlb.RoJout[i * 5 + 0];
-	//	double Roavg = Ro / vls.Masses(0);
-	//	fprintf(hFile, "%g\t", Fluid_tot);
-	//	fprintf(hFile, "%g\t", Foul_tot);
-	//	fprintf(hFile, "%g\t", Ro);
-	//	fprintf(hFile, "%g\t", Roavg);
-	//	fprintf(hFile, "%g\t", vlb.RoJout(i * 5 + 1));
-	//	fprintf(hFile, "%g\t", Umean);
-	//	fprintf(hFile, "%g\t", Tmin);
-	//	fprintf(hFile, "%g\t", Tmout1);
-	//	fprintf(hFile, "%g\t", Tmout2);
-	//	fprintf(hFile, "%g\t", Nuss1);
-	//	fprintf(hFile, "%g\n", Nuss2);
-	//}
-
-	//fclose(hFile);
-
-	return;
-}
-
-
-/// Not updated and checked for errors
-void clProblem::SaveNu()
-{
-	FILE *hFile;
-	char FileName[] = NUSSELT_OUTPUT_FILE;
-	int maxAttempt = 100;
-	for (int i = 0; i < maxAttempt; i++)
-	{
-		hFile = fopen(FileName, "a");
-		if (hFile != NULL)
-			break;
-		printf("cannot open output file %s, waiting", FileName);
-		delay_func(0.1);
-	}
-
-	if (hFile == NULL)
-	{
-		printf("cannot open output file %s, data lost", FileName);
-		return;
-	}
-
-	clFinish(*clEnv::instance()->getFDqueue());
-	if (vfd.Save_loc_Nu == 0)
-		return;
-	vfd.Nu.read_from_buffer_size(vfd.Save_loc_Nu*vfd.Nu.getSizeY());
-
-	for (int i = 0; i < vfd.Save_loc_Nu; i++)
-	{
-		for (int j = 0; j < vfd.Nu.getSizeY(); j++)
-		{
-			fprintf(hFile, "%g\t", vfd.Nu(i, j));
-		}
-		fprintf(hFile, "\n");
-
-	}
-
-	fclose(hFile);
-
-	return;
-}
-
-
-/// Not updated and checked for errors
-void clProblem::SaveSS()
-{
-	FILE *hFile;
-	char FileName[] = STRESS_OUTPUT_FILE;
-	int maxAttempt = 100;
-	for (int i = 0; i < maxAttempt; i++)
-	{
-		hFile = fopen(FileName, "a");
-		if (hFile != NULL)
-			break;
-		printf("cannot open output file %s, waiting", FileName);
-		delay_func(0.1);
-	}
-
-	if (hFile == NULL)
-	{
-		printf("cannot open output file %s, data lost", FileName);
-		return;
-	}
-	clFinish(*clEnv::instance()->getTRqueue());
-	if (vtr.Save_loc_SS == 0)
-		return;
-	vtr.SS_output.read_from_buffer_size(vtr.Save_loc_SS*vtr.numbl_bounds);
-
-	for (int i = 0; i < vtr.Save_loc_SS; i++)
-	{
-		for (int j = 0; j < vtr.numbl_bounds; j++)
-		{
-			fprintf(hFile, "%g\t", vtr.SS_output(i, j));
-		}
-		fprintf(hFile, "\n");
-	}
-
-	fclose(hFile);
-
-	return;
-}
-
-/// Not updated and checked for errors
-void clProblem::SaveIO()
-{
-	FILE *hFile;
-	char FileName[] = IO_OUTPUT_FILE;
-	int maxAttempt = 100;
-	for (int i = 0; i < maxAttempt; i++)
-	{
-		hFile = fopen(FileName, "a");
-		if (hFile != NULL)
-			break;
-		printf("cannot open output file %s, waiting", FileName);
-		delay_func(0.1);
-	}
-
-	if (hFile == NULL)
-	{
-		printf("cannot open output file %s, data lost", FileName);
-		return;
-	}
-	clFinish(*clEnv::instance()->getTRqueue());
-	if (vtr.Save_IO_Loc == 0)
-		return;
-	vtr.IO_dists_save.read_from_buffer_size(vtr.Save_IO_Loc * 2 * vtr.Nd);
-
-	for (int i = 0; i < vtr.Save_IO_Loc; i++)
-	{
-		for (int j = 0; j < vtr.Nd * 2; j++)
-		{
-			fprintf(hFile, "%d\t", vtr.IO_dists_save(i * 2 * vtr.Nd + j));
-		}
-		fprintf(hFile, "\n");
-	}
-
-	fclose(hFile);
-
-	return;
-}
-
-
-
-
-
-//////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////
-//////////////               Update Output Functions                      ////////////////
-//////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-void clProblem::updateAvgs()
-{
-	if (Time < saveAvgStartTime)
-		return;
-	vlb.updateOutputs();
-	if (vlb.Save_loc == OUTPUT_MAX_LINES)
-	{
-		p.SaveAvgs();
-		vlb.resetOutputs();
-	}
-}
-
-void clProblem::updateNu()
-{
-	if (Time < saveNuStartTime)
-		return;
-	vfd.UpdateNu();
-	if (vfd.Save_loc_Nu == OUTPUT_MAX_LINES_NU)
-	{
-		p.SaveNu();
-		vfd.reset_Nu_out();
-	}
-}
-
-void clProblem::updateSS()
-{
-	if (Time < saveSSStartTime)
-		return;
-	vtr.UpdateSS();
-	if (vtr.Save_loc_SS == OUTPUT_MAX_LINES_SS)
-	{
-		p.SaveSS();
-		vtr.reset_SS_out();
-	}
-}
-
-void clProblem::updateIODist()
-{
-	if (Time < saveIOStartTime)
-		return;
-	vtr.Update_IO_Dists();
-	if (vtr.Save_IO_Loc == OUTPUT_MAX_LINES_IO)
-	{
-		p.SaveIO();
-		vtr.Reset_IO_Dists();
-	}
-}
-
-// Save Files, Check for save bin, check for savedump
-void clProblem::DumpStep()
-{
-	//save files
-	vlb.save2file();
-	vfd.save2file();
-	vtr.save2file();
-	vls.save2file();
-	vfl.save2file();
-
-	p.SaveAvgs();
-	vlb.resetOutputs();
-
-	if (vfd.calcNuFlag)
-	{
-		p.SaveNu();
-		vfd.reset_Nu_out();
-	}
-
-	if (vtr.calcSSFlag)
-	{
-		p.SaveSS();
-		vtr.reset_SS_out();
-	}
-
-	if (vtr.calcIOFlag)
-	{
-		p.SaveIO();
-		vtr.Reset_IO_Dists();
-	}
-	
-	currentDumpStep++;
-};
 
 //////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -407,10 +87,6 @@ void clProblem::ini()
 	outDir = OUTPUT_DIR;
 	MakeDir(outDir);
 	setSourceDefines();
-	if (restartRunFlag == false)
-	{
-		cleanfiles();
-	}
 };
 
 
@@ -418,37 +94,38 @@ void clProblem::step()
 {
 	if (Next_Clump_Time < TimeN && vtr.trSolverFlag)
 	{
-		vtr.clumpParticles();
+		vtr.parSort.clumpParticles();
 		Next_Clump_Time += Time_Btw_Clump;
 	}
 
 	if (nextSaveAvgTime < TimeN)
 	{
-		updateAvgs();
+		vlb.updateTimeData();
 		nextSaveAvgTime += (int)dTlb * saveTimeStepAvg;
 	}
 
 	if (nextSaveNuTime < TimeN && vfd.calcNuFlag)
 	{
-		updateNu();
+		vfd.updateTimeData();
 		nextSaveNuTime += (int)dTlb * saveTimeStepNu;
 	}
 
-	if (nextSaveSSTime < TimeN && vtr.calcSSFlag)
+	if (nextSaveSSTime < TimeN && vtr.wallShear.calcSSFlag)
 	{
-		updateSS();
+		vtr.wallShear.updateTimeData();
 		nextSaveSSTime += (int)dTlb * saveTimeStepSS;
 	}
 
 	if (nextSaveIOTime < TimeN && vtr.calcIOFlag)
 	{
-		updateIODist();
+		vtr.updateTimeData();
 		nextSaveIOTime += (int)dTlb * saveTimeStepIO;
 	}
 
 	bool dumpBinFlag = false; 
 	bool saveDumpFlag = false;
 	bool dumpFlag = false;
+
 	if (nextDumpStepTime < TimeN)
 	{
 		p.DumpStep();
@@ -469,6 +146,8 @@ void clProblem::step()
 		vfl.saveRestartFiles();
 	}
 
+	// If dump save step, copy files from main folder
+	// to newly created results folder
 	if (nextDumpSave < currentDumpStep)
 	{
 		saveDumpFlag = true;
@@ -486,7 +165,8 @@ void clProblem::step()
 	}
 	if (saveDumpFlag)
 	{
-		RenameFile(YAML_PARAM_FILE);
+		std::string saveYAMLName = staticBaseVar::curDumpSaveDir + SLASH + YAML_PARAM_FILE;
+		RenameFile(YAML_PARAM_FILE, saveYAMLName);
 	}
 	
 #ifdef MAINTAIN_FLOWRATE
@@ -626,6 +306,15 @@ void clProblem::setParameter(std::string pname_, T val_)
 	*yamlOut << YAML::EndMap;
 }
 
+template <>
+void clProblem::setParameter(std::string pname_, std::string val_)
+{
+	*yamlOut << YAML::BeginMap;
+	*yamlOut << YAML::Key << pname_;
+	*yamlOut << YAML::Value << val_;
+	*yamlOut << YAML::EndMap;
+}
+
 
 // THis should be called before incrementing Time,
 // but after all other outputs have been done, and 
@@ -754,6 +443,11 @@ void clProblem::loadParams()
 	nX = p.getParameter<int>("nX");
 	nY = p.getParameter<int>("nY");
 	XsizeFull = int(ceil((double)nX / (double)BLOCKSIZE)) * BLOCKSIZE;
+
+	xWavyStart = p.getParameter("Wavy Start Loc", -1);
+	wavyPeriodLen = p.getParameter("Period Length", -1);
+	numWavyPeriods = p.getParameter("Num Wave Periods", -1);
+
 
 	nn = { { nX, nY } };
 	Pipe_radius = p.getParameter<double>("Pipe Radius");
@@ -1018,3 +712,232 @@ bool clProblem::dumpNumStepDef = false;
 bool clProblem::useOpenGL = false;
 
 
+
+///// Not updated and checked for errors
+//void clProblem::SaveNu()
+//{
+//	FILE *hFile;
+//	char FileName[] = NUSSELT_OUTPUT_FILE;
+//	int maxAttempt = 100;
+//	for (int i = 0; i < maxAttempt; i++)
+//	{
+//		hFile = fopen(FileName, "a");
+//		if (hFile != NULL)
+//			break;
+//		printf("cannot open output file %s, waiting", FileName);
+//		delay_func(0.1);
+//	}
+//
+//	if (hFile == NULL)
+//	{
+//		printf("cannot open output file %s, data lost", FileName);
+//		return;
+//	}
+//
+//	clFinish(*clEnv::instance()->getFDqueue());
+//	if (vfd.Save_loc_Nu == 0)
+//		return;
+//	vfd.Nu.read_from_buffer_size(vfd.Save_loc_Nu*vfd.Nu.getSizeY());
+//
+//	for (int i = 0; i < vfd.Save_loc_Nu; i++)
+//	{
+//		for (int j = 0; j < vfd.Nu.getSizeY(); j++)
+//		{
+//			fprintf(hFile, "%g\t", vfd.Nu(i, j));
+//		}
+//		fprintf(hFile, "\n");
+//
+//	}
+//
+//	fclose(hFile);
+//
+//	return;
+//}
+//
+//
+///// Not updated and checked for errors
+//void clProblem::SaveSS()
+//{
+//	FILE *hFile;
+//	char FileName[] = STRESS_OUTPUT_FILE;
+//	int maxAttempt = 100;
+//	for (int i = 0; i < maxAttempt; i++)
+//	{
+//		hFile = fopen(FileName, "a");
+//		if (hFile != NULL)
+//			break;
+//		printf("cannot open output file %s, waiting", FileName);
+//		delay_func(0.1);
+//	}
+//
+//	if (hFile == NULL)
+//	{
+//		printf("cannot open output file %s, data lost", FileName);
+//		return;
+//	}
+//	clFinish(*clEnv::instance()->getTRqueue());
+//	if (vtr.Save_loc_SS == 0)
+//		return;
+//	vtr.SS_output.read_from_buffer_size(vtr.Save_loc_SS*vtr.numbl_bounds);
+//
+//	for (int i = 0; i < vtr.Save_loc_SS; i++)
+//	{
+//		for (int j = 0; j < vtr.numbl_bounds; j++)
+//		{
+//			fprintf(hFile, "%g\t", vtr.SS_output(i, j));
+//		}
+//		fprintf(hFile, "\n");
+//	}
+//
+//	fclose(hFile);
+//
+//	return;
+//}
+//
+///// Not updated and checked for errors
+//void clProblem::SaveIO()
+//{
+//	FILE *hFile;
+//	char FileName[] = IO_OUTPUT_FILE;
+//	int maxAttempt = 100;
+//	for (int i = 0; i < maxAttempt; i++)
+//	{
+//		hFile = fopen(FileName, "a");
+//		if (hFile != NULL)
+//			break;
+//		printf("cannot open output file %s, waiting", FileName);
+//		delay_func(0.1);
+//	}
+//
+//	if (hFile == NULL)
+//	{
+//		printf("cannot open output file %s, data lost", FileName);
+//		return;
+//	}
+//	clFinish(*clEnv::instance()->getTRqueue());
+//	if (vtr.Save_IO_Loc == 0)
+//		return;
+//	vtr.IO_dists_save.read_from_buffer_size(vtr.Save_IO_Loc * 2 * vtr.Nd);
+//
+//	for (int i = 0; i < vtr.Save_IO_Loc; i++)
+//	{
+//		for (int j = 0; j < vtr.Nd * 2; j++)
+//		{
+//			fprintf(hFile, "%d\t", vtr.IO_dists_save(i * 2 * vtr.Nd + j));
+//		}
+//		fprintf(hFile, "\n");
+//	}
+//
+//	fclose(hFile);
+//
+//	return;
+//}
+
+/// Not updated and checked for errors
+//void clProblem::SaveAvgs()
+//{
+//	//FILE *hFile;
+//	//char FileName[] = AVG_OUTPUT_FILE;
+//	//int maxAttempt = 100;
+//	//for (int i = 0; i < maxAttempt; i++)
+//	//{
+//	//	hFile = fopen(FileName, "a");
+//	//	if (hFile != NULL)
+//	//		break;
+//	//	printf("cannot open output file %s, waiting", FileName);
+//	//	delay_func(0.1);
+//	//}
+//
+//	//if (hFile == NULL)
+//	//{
+//	//	printf("cannot open output file %s, data lost", FileName);
+//	//	curLine = 0;
+//	//	return;
+//	//}
+//	//clFinish(*clEnv::instance()->getLBqueue());
+//	//if (vlb.Save_loc == 0)
+//	//	return;
+//	//vlb.RoJout.read_from_buffer_size(vlb.Save_loc * 5);
+//	//vtr.Umean_Current = vlb.RoJout((vlb.Save_loc - 1) * 5 + 1) / vls.Masses(0);
+//	//for (int i = 0; i < vlb.Save_loc; i++)
+//	//{
+//	//	double Umean = vlb.RoJout[i * 5 + 1] / vls.Masses(0);
+//	//	double Tmin = vlb.RoJout[i * 5 + 2];
+//	//	double Tmout1 = vlb.RoJout[i * 5 + 3];
+//	//	double Tmout2 = vlb.RoJout[i * 5 + 4];
+//
+//	//	double Nuss1 = 4.*vlb.Pipe_radius*vlb.Pipe_radius*Umean / (double)(X_STOP_POS - X_RELEASE_POS) / vfd.Alpha_fluid*log(Tmin / Tmout1);
+//	//	double Nuss2 = 4.*vlb.Pipe_radius*vlb.Pipe_radius*Umean / (double)(CHANNEL_LENGTH - X_RELEASE_POS) / vfd.Alpha_fluid*log(Tmin / Tmout2);
+//
+//	//	double Fluid_tot = vls.Masses(0);
+//	//	double Foul_tot = vls.Masses(1);
+//	//	double Ro = vlb.RoJout[i * 5 + 0];
+//	//	double Roavg = Ro / vls.Masses(0);
+//	//	fprintf(hFile, "%g\t", Fluid_tot);
+//	//	fprintf(hFile, "%g\t", Foul_tot);
+//	//	fprintf(hFile, "%g\t", Ro);
+//	//	fprintf(hFile, "%g\t", Roavg);
+//	//	fprintf(hFile, "%g\t", vlb.RoJout(i * 5 + 1));
+//	//	fprintf(hFile, "%g\t", Umean);
+//	//	fprintf(hFile, "%g\t", Tmin);
+//	//	fprintf(hFile, "%g\t", Tmout1);
+//	//	fprintf(hFile, "%g\t", Tmout2);
+//	//	fprintf(hFile, "%g\t", Nuss1);
+//	//	fprintf(hFile, "%g\n", Nuss2);
+//	//}
+//
+//	//fclose(hFile);
+//
+//	return;
+//}
+//
+////
+
+
+//void clProblem::updateAvgs()
+//{
+//	if (Time < saveAvgStartTime)
+//		return;
+//	vlb.updateOutputs();
+//	if (vlb.Save_loc == OUTPUT_MAX_LINES)
+//	{
+//		p.SaveAvgs();
+//		vlb.resetOutputs();
+//	}
+//}
+//
+//void clProblem::updateNu()
+//{
+//	if (Time < saveNuStartTime)
+//		return;
+//	vfd.UpdateNu();
+//	if (vfd.Save_loc_Nu == OUTPUT_MAX_LINES_NU)
+//	{
+//		p.SaveNu();
+//		vfd.reset_Nu_out();
+//	}
+//}
+//
+//void clProblem::updateSS()
+//{
+//	if (Time < saveSSStartTime)
+//		return;
+//	vtr.UpdateSS();
+//	if (vtr.Save_loc_SS == OUTPUT_MAX_LINES_SS)
+//	{
+//		p.SaveSS();
+//		vtr.reset_SS_out();
+//	}
+//}
+//
+//void clProblem::updateIODist()
+//{
+//	if (Time < saveIOStartTime)
+//		return;
+//	vtr.Update_IO_Dists();
+//	if (vtr.Save_IO_Loc == OUTPUT_MAX_LINES_IO)
+//	{
+//		p.SaveIO();
+//		vtr.Reset_IO_Dists();
+//	}
+//}

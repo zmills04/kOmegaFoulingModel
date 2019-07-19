@@ -8,6 +8,9 @@
 #include "clProblem.h"
 #include "clVariablesTR.h"
 
+// TODO: make sure that this is working after change to 
+//		defining arrays as constants in opencl source
+
 void particleProperties::allocateArrays()
 {
 }
@@ -131,7 +134,7 @@ void particleProperties::ini()
 {
 	// fills Pparam base class with data contained in
 	// this classes arrays
-	fillPropStructArray();
+	//fillPropStructArray();
 
 	// Writes arrays to file in a folder called particles
 	saveParticleArrays();
@@ -230,7 +233,7 @@ void particleProperties::saveParams()
 void particleProperties::saveParticleArrays()
 {
 	std::string NewDir = "particles";
-	p.MakeDir(NewDir);
+	MakeDir(NewDir);
 	Dp.savetxt("particles" SLASH "D_p");
 	D_p_real.savetxt("particles" SLASH "D_p_real");
 	Q_A_prime.savetxt("particles" SLASH "Q_A_prime");

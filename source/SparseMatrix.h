@@ -47,13 +47,22 @@ public:
 // (index of (i,j) in A array is IndArray(i+j*XsizeFull, 0 or C), its E neigh is IndArray(i,j,E))
 	Array2Di IndArray;  
 
-// Pointer to vls.M
-	Array2Dc* Map;
+// Pointer to vls.nType
+#ifdef IN_KERNEL_IBB
+	Array2Di* Map;
+#else
+	Array2D<cl_short>* Map;
+#endif
+
 
 	CSR_Inds() {}; // only using default constructor and destructor
 	~CSR_Inds() {};
 
-	void ini(const int nx_, const int fx_, const int ny_, const int fy_, Array2Dc *map_)
+#ifdef IN_KERNEL_IBB
+	void ini(const int nx_, const int fx_, const int ny_, const int fy_, Array2Di *map_)
+#else
+	void ini(const int nx_, const int fx_, const int ny_, const int fy_, Array2D<cl_short>* map_)
+#endif
 	{
 		cols = fx_*fy_;
 		Xsize = nx_;
@@ -131,7 +140,7 @@ public:
 		int localcount = 0;
 		if (i >= Xsize || j >= Ysize)
 			return 0;
-		if (Map->operator()(i, j) == LB_SOLID)
+		if (Map->operator()(i, j) & M0_SOLID_NODE)
 			return 0;
 		
 		int ind = i + j*XsizeFull;
@@ -177,7 +186,7 @@ public:
 		if (i < 0 || i >= Xsize || j < 0 || j >= Ysize)
 			return false;
 
-		if (Map->operator()(i, j) == 1)
+		if (Map->operator()(i, j) & M0_FLUID_NODE)
 		{
 			return true;
 		}
@@ -377,7 +386,7 @@ public:
 		int localcount = 0;
 		if (i >= Xsize || j >= Ysize)
 			return 0;
-		if (Map->operator()(i, j) == LB_SOLID)
+		if (Map->operator()(i, j) & M0_SOLID_NODE)
 			return 0;
 
 
@@ -389,7 +398,7 @@ public:
 
 		if (js >= 0)
 		{
-			if (Map->operator()(i, js) == 1)
+			if (Map->operator()(i, js) & M0_FLUID_NODE)
 			{
 				IndArray(ind, S) = nnz_++;
 				localcount++;
@@ -398,7 +407,7 @@ public:
 		
 		if (iw < i && i < ie)
 		{
-			if (Map->operator()(iw, j) == 1)
+			if (Map->operator()(iw, j) & M0_FLUID_NODE)
 			{
 				IndArray(ind, W) = nnz_++;
 				localcount++;
@@ -407,7 +416,7 @@ public:
 			localcount++;
 			IndArray(ind, C) = nnz_++;
 
-			if (Map->operator()(ie, j) == 1)
+			if (Map->operator()(ie, j) & M0_FLUID_NODE)
 			{
 				IndArray(ind, E) = nnz_++;
 				localcount++;
@@ -415,13 +424,13 @@ public:
 		}
 		else if (ie < iw && iw < i)
 		{
-			if (Map->operator()(ie, j) == 1)
+			if (Map->operator()(ie, j) & M0_FLUID_NODE)
 			{
 				IndArray(ind, E) = nnz_++;
 				localcount++;
 			}
 
-			if (Map->operator()(iw, j) == 1)
+			if (Map->operator()(iw, j) & M0_FLUID_NODE)
 			{
 				IndArray(ind, W) = nnz_++;
 				localcount++;
@@ -435,13 +444,13 @@ public:
 			localcount++;
 			IndArray(ind, C) = nnz_++;
 
-			if (Map->operator()(ie, j) == 1)
+			if (Map->operator()(ie, j) & M0_FLUID_NODE)
 			{
 				IndArray(ind, E) = nnz_++;
 				localcount++;
 			}
 
-			if (Map->operator()(iw, j) == 1)
+			if (Map->operator()(iw, j) & M0_FLUID_NODE)
 			{
 				IndArray(ind, W) = nnz_++;
 				localcount++;
@@ -450,7 +459,7 @@ public:
 
 		if (jn < Ysize - 1)
 		{
-			if (Map->operator()(i, jn) == 1)
+			if (Map->operator()(i, jn) & M0_FLUID_NODE)
 			{
 				IndArray(ind, N) = nnz_++;
 				localcount++;
@@ -579,10 +588,10 @@ public:
 		if (i >= Xsize || j >= Ysize)
 			return 0;
 
-		if (Map->operator()(i, j) == LB_SOLID)
+		if (Map->operator()(i, j) & M0_SOLID_NODE)
 			return 0;
 		int ind = i + j*XsizeFull;
-		if (Map->operator()(i, j - 1) == LB_SOLID || Map->operator()(i, j + 1) == LB_SOLID)
+		if ((Map->operator()(i, j - 1) & M0_SOLID_NODE) || (Map->operator()(i, j + 1) & M0_SOLID_NODE))
 		{
 			localcount++;
 			IndArray(ind, C) = nnz_++;
@@ -597,7 +606,7 @@ public:
 
 		if (js >= 0)
 		{
-			if (Map->operator()(i, js) == 1)
+			if (Map->operator()(i, js) & M0_FLUID_NODE)
 			{
 				IndArray(ind, S) = nnz_++;
 				localcount++;
@@ -606,7 +615,7 @@ public:
 
 		if (iw < i && i < ie)
 		{
-			if (Map->operator()(iw, j) == 1)
+			if (Map->operator()(iw, j) & M0_FLUID_NODE)
 			{
 				IndArray(ind, W) = nnz_++;
 				localcount++;
@@ -615,7 +624,7 @@ public:
 			localcount++;
 			IndArray(ind, C) = nnz_++;
 
-			if (Map->operator()(ie, j) == 1)
+			if (Map->operator()(ie, j) & M0_FLUID_NODE)
 			{
 				IndArray(ind, E) = nnz_++;
 				localcount++;
@@ -623,13 +632,13 @@ public:
 		}
 		else if (ie < iw && iw < i)
 		{
-			if (Map->operator()(ie, j) == 1)
+			if (Map->operator()(ie, j) & M0_FLUID_NODE)
 			{
 				IndArray(ind, E) = nnz_++;
 				localcount++;
 			}
 
-			if (Map->operator()(iw, j) == 1)
+			if (Map->operator()(iw, j) & M0_FLUID_NODE)
 			{
 				IndArray(ind, W) = nnz_++;
 				localcount++;
@@ -643,13 +652,13 @@ public:
 			localcount++;
 			IndArray(ind, C) = nnz_++;
 
-			if (Map->operator()(ie, j) == 1)
+			if (Map->operator()(ie, j) & M0_FLUID_NODE)
 			{
 				IndArray(ind, E) = nnz_++;
 				localcount++;
 			}
 
-			if (Map->operator()(iw, j) == 1)
+			if (Map->operator()(iw, j) & M0_FLUID_NODE)
 			{
 				IndArray(ind, W) = nnz_++;
 				localcount++;
@@ -658,7 +667,7 @@ public:
 
 		if (jn < Ysize - 1)
 		{
-			if (Map->operator()(i, jn) == 1)
+			if (Map->operator()(i, jn) & M0_FLUID_NODE)
 			{
 				IndArray(ind, N) = nnz_++;
 				localcount++;

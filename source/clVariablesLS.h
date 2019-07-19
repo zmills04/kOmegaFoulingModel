@@ -28,10 +28,10 @@ public:
 		// Func Pointer for calling loadParams
 	std::function<void(void)> loadParamsPtr;
 
-	clVariablesLS() : BL("lsbl"), Masses("lsmasses"), C0("lsc0"), C("lsc"),
-		M("lbm"), ibbArr(WORKGROUPSIZE_IBB*2,"ibbArr", WORKGROUPSIZE_IBB, 1),
+	clVariablesLS() : dXCoeffs("dXCoeffs"), BL("lsbl"), Masses("lsmasses"), C0("lsc0"), C("lsc"),
+		ibbArr(WORKGROUPSIZE_IBB*2,"ibbArr", WORKGROUPSIZE_IBB, 1), nType("nType"),
 		ssArr(WORKGROUPSIZE_TR_SHEAR * 2, "ssArr", WORKGROUPSIZE_TR_SHEAR, 1),
-		dXArr("dXArr"), dXArr0("dXArr0"), bFlag("bFlag")
+		dXArr("dXArr"), dXArr0("dXArr0"), bFlag("bFlag"), ssArrIndMap("ssIndMap"), lsMap("lsMap")
 
 	{
 		loadParamsPtr = std::bind(&clVariablesLS::loadParams, this);
@@ -42,6 +42,12 @@ public:
 	};
 
 	enum { find_ibb, find_dx, find_dx0 };
+
+	// Used for indexing dx arrays
+	enum dxCoeffInd {
+		dxind_e, dxind_w, dxind_c, dyind_n, dyind_s,
+		dyind_c, dx2ind_e, dx2ind_w, dx2ind_c, dy2ind_n, dy2ind_s, dy2ind_c
+	};
 
 
 	////////////////////////////////////////////////////////////////////////////
@@ -72,18 +78,28 @@ public:
 	Array1Dv2d C, C0;	//Location of boundary points (C is current location
 						// and C0 is original location)
 
-	Array2Dc M;	// Array defining the current state of lattice nodes
+	//Array2Dc M;	// Array defining the current state of lattice nodes
 				// bit flags set for whether it is a solid node or fluid node
 				// currently and at t = 0. (From this, foul node can be determined)
 
+	// Array defining the type of each node. Bit flags defined in 
+	// constDef are used to set information about node. 
+#ifdef IN_KERNEL_IBB
+	Array2Di nType;	// needs to be into to store all bitfields
+#else
+	Array2D<cl_short> nType;
+#endif
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                   Method Arrays               ///////////////
 ////////////////////////////////////////////////////////////////////////////
 
-	Array3Dd dXArr0;	// Spacing between nodes and wall, with dXarr being
-	Array3Dd dXArr;		// the original spacing and dXarrCur being the current
+	Array3Dd dXArr0;	// Spacing between nodes and wall, with dXArr0 being
+	Array3Dd dXArr;		// the original spacing and dXArr being the current
 						// spacing
+
+	// Coefficients for calculation of derivatives
+	Array3Dd dXCoeffs; // distances between nodes
 
 
 	DynArray1Di ibbArr;	// Array containing location of distributions bouncing back 
@@ -92,9 +108,12 @@ public:
 						// to get node location in x,y,dist coordinates.
 
 	DynArray1Di ssArr;	// Array containing location of nodes at which shear is calculated 
-						// Use vlb.NodeType to get directions pointing into wall 
+						// Use vls.nType to get directions pointing into wall 
 						// (Shear stress calculation only considers N,S,E,W
 						// directions crossing BL)
+	Array2Di ssArrIndMap; // Maps indicies in full domain to corresponding index
+						// in ssArr (needed for calculation of friction velocity
+						// in LB collision step)
 
 	Array1Dd Masses;	// Number of lattice sites containing 
 						// Fluid (ind 0) and fouling layer (ind 1)
@@ -108,6 +127,8 @@ public:
 	Array1Di ssArrInds; // index of first element in ssArr for a given x value
 						// i.e. ssArrInds(2) is the first element in ssArr that is located at x = 2
 
+	Array2D<cl_ushort> lsMap; // nearest BL for each x index (j = 0: bottom wall, j = 1: top wall)
+	
 	// These arrays were originally used for IBB implementation. New implementation
 	// will just use ii0 array, which contains absolute position of bounced back distribution
 	// and dXArrCur, which contains distances (trying to avoid reading from memory as much as possible)
@@ -220,6 +241,10 @@ public:
 	// restart variables when a run is restarted)
 	void loadParams();
 
+	// Copies saved files from main folder into results folder to ensure
+	// that next files do not save 
+	void renameSaveFiles();
+
 	// Writes output data to file(specific arrays, not all of them)
 	void save2file();
 
@@ -301,9 +326,14 @@ public:
 	//void bcSetBoundaryNode(cl_int2 ii0, cl_int2 ii1, int dir, double dist,
 	//	int bl, cl_double2 vCc, cl_double2 vC0, cl_double2 vC1, cl_double2 vCn);
 
-	// Fills ibb array based on dXArr values (if not = 1.0 and a fluid node)
-	// called by both iniIBBArray and updateIBBArray
-	cl_bool2 fillIBBArray();
+	// Fills ibb and ss arrays based on dXArr values (if not = 1.0 and a fluid node)
+	// called by both ini and updateBoundaryArray
+#ifndef IN_KERNEL_IBB
+	cl_bool2 fillBoundaryArray();
+#else
+	bool fillBoundaryArray();
+#endif
+
 
 	//Determines if intersection (vd) is located between v0 and v1
 	//returns true if it is btw and false if not
@@ -321,6 +351,10 @@ public:
 	void bcSetdXArr0(cl_int2 ii0, cl_int2 ii1, int dir, double dist,
 		int bl, cl_double2 vCc, cl_double2 vC0, cl_double2 vC1, cl_double2 vCn);
 
+	// Calculates coefficients for calculation of derivatives used by thermal and 
+	// kOmega solvers
+	void calcDxTerms();
+
 	// Compares M but flags in M array to count number of solid, fluid and fouling
 	// layer nodes
 	void iniCountSolid();
@@ -333,6 +367,12 @@ public:
 
 	// Fills M0 array
 	void iniFillMap0();
+
+	// fills lsmMap array
+	void iniLSMap();
+
+	// Fills nType with boundary info
+	void iniNodeBoundaryInfo();
 
 	//Initializes IBB arrays and calls update_IBB_arrays
 	//void iniIBBArray();
@@ -351,7 +391,7 @@ public:
 	void updatedXArr();
 
 	//Fills Arrays used to update IBB arrays
-	void updateIBBArray();
+	void updateBoundaryArrays();
 
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////               Solving Functions               ///////////////

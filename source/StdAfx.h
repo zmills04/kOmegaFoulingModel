@@ -39,6 +39,12 @@
 #endif //_WIN32
 
 // TODO: reference additional headers your program requires here
+// TODO: remove unnecessary functions, defines and includes
+// TODO: add comments
+// TODO: move functions to separate file
+
+
+
 #include "ConstDef.h"
 
 
@@ -229,7 +235,10 @@ static int checkVal(
 	}
 }
 
-enum FileMode {FileIn, FileOut, FileAppend, BinaryIn, BinaryOut};
+
+enum FileMode { FileIn, FileOut, FileAppend, BinaryIn, BinaryOut };
+
+
 
 #ifndef PRINT_ERROR_MESSAGES
 #define PRINT_ERROR					do {} while(0)
@@ -638,6 +647,31 @@ inline std::ostream& operator<<(std::ostream& os, const cl_uint16& el)
 	return os;
 }
 
+inline std::ostream& operator<<(std::ostream& os, const cl_ushort2& el)
+{
+	os << el.x << "\t" << el.y;
+	return os;
+}
+//std::ostream& operator<<(std::ostream& os, const cl_uint3& el)
+//{
+//	os << el.x << "\t" << el.y << "\t" << el.z;
+//	return os;
+//}
+inline std::ostream& operator<<(std::ostream& os, const cl_ushort4& el)
+{
+	os << el.x << "\t" << el.y << "\t" << el.z << "\t" << el.w;
+	return os;
+}
+inline std::ostream& operator<<(std::ostream& os, const cl_ushort8& el)
+{
+	os << el.lo << "\t" << el.hi;
+	return os;
+}
+inline std::ostream& operator<<(std::ostream& os, const cl_ushort16& el)
+{
+	os << el.lo << "\t" << el.hi;
+	return os;
+}
 
 inline std::ostream& operator<<(std::ostream& os, const cl_double2& el)
 {
@@ -877,6 +911,94 @@ inline std::istream& operator>>(std::istream& is, const cl_uint16& el)
 	return is;
 }
 
+inline std::istream& operator>>(std::istream& is, const cl_ushort2& el)
+{
+	unsigned int* xval_ = (unsigned int*)& el.x;
+	unsigned int* yval_ = (unsigned int*)& el.y;
+	is >> *xval_;
+	is >> *yval_;
+	return is;
+}
+//std::istream& operator>>(std::istream& is, const cl_uint3& el)
+//{
+//	unsigned int *xval_ = (unsigned int*)&el.x;
+//	unsigned int *yval_ = (unsigned int*)&el.y;
+//	unsigned int *zval_ = (unsigned int*)&el.z;
+//	is >> *xval_;
+//	is >> *yval_;
+//	is >> *zval_;
+//	return is;
+//}
+inline std::istream& operator>>(std::istream& is, const cl_ushort4& el)
+{
+	unsigned int* xval_ = (unsigned int*)& el.x;
+	unsigned int* yval_ = (unsigned int*)& el.y;
+	unsigned int* zval_ = (unsigned int*)& el.z;
+	unsigned int* wval_ = (unsigned int*)& el.w;
+	is >> *xval_;
+	is >> *yval_;
+	is >> *zval_;
+	is >> *wval_;
+	return is;
+}
+inline std::istream& operator>>(std::istream& is, const cl_ushort8& el)
+{
+	unsigned int* s1val_ = (unsigned int*)& el.s0;
+	unsigned int* s2val_ = (unsigned int*)& el.s1;
+	unsigned int* s3val_ = (unsigned int*)& el.s2;
+	unsigned int* s4val_ = (unsigned int*)& el.s3;
+	unsigned int* s5val_ = (unsigned int*)& el.s4;
+	unsigned int* s6val_ = (unsigned int*)& el.s5;
+	unsigned int* s7val_ = (unsigned int*)& el.s6;
+	unsigned int* s8val_ = (unsigned int*)& el.s7;
+	is >> *s1val_;
+	is >> *s2val_;
+	is >> *s3val_;
+	is >> *s4val_;
+	is >> *s5val_;
+	is >> *s6val_;
+	is >> *s7val_;
+	is >> *s8val_;
+	return is;
+}
+
+inline std::istream& operator>>(std::istream& is, const cl_ushort16& el)
+{
+	unsigned int* s1val_ = (unsigned int*)& el.s0;
+	unsigned int* s2val_ = (unsigned int*)& el.s1;
+	unsigned int* s3val_ = (unsigned int*)& el.s2;
+	unsigned int* s4val_ = (unsigned int*)& el.s3;
+	unsigned int* s5val_ = (unsigned int*)& el.s4;
+	unsigned int* s6val_ = (unsigned int*)& el.s5;
+	unsigned int* s7val_ = (unsigned int*)& el.s6;
+	unsigned int* s8val_ = (unsigned int*)& el.s7;
+	unsigned int* s9val_ = (unsigned int*)& el.s8;
+	unsigned int* s10val_ = (unsigned int*)& el.s9;
+	unsigned int* s11val_ = (unsigned int*)& el.sa;
+	unsigned int* s12val_ = (unsigned int*)& el.sb;
+	unsigned int* s13val_ = (unsigned int*)& el.sc;
+	unsigned int* s14val_ = (unsigned int*)& el.sd;
+	unsigned int* s15val_ = (unsigned int*)& el.se;
+	unsigned int* s16val_ = (unsigned int*)& el.sf;
+
+	is >> *s1val_;
+	is >> *s2val_;
+	is >> *s3val_;
+	is >> *s4val_;
+	is >> *s5val_;
+	is >> *s6val_;
+	is >> *s7val_;
+	is >> *s8val_;
+	is >> *s9val_;
+	is >> *s10val_;
+	is >> *s11val_;
+	is >> *s12val_;
+	is >> *s13val_;
+	is >> *s14val_;
+	is >> *s15val_;
+	is >> *s16val_;
+	return is;
+}
 
 
 
@@ -1072,6 +1194,7 @@ inline std::istream& operator>>(std::istream& is, const cl_float16& el)
 #define Subtract2(A, B) { {A.x - B.x, A.y - B.y} } 
 #define Add2(A, B)		{ {A.x + B.x, A.y + B.y}}
 #define GETLEN(A)		(sqrt(A.x*A.x + A.y*A.y))
+#define Multiply2(A, B)	{{A.x*B, A.y*B}}
 #define Divide2(A, B)	{{A.x/B, A.y/B}}
 #define VNORM(A)		Divide2(A, GETLEN(A))
 #define DOT_PROD(A, B)	(A.x*B.x + A.y*B.y)

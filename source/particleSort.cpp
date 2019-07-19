@@ -20,7 +20,7 @@
 
 void particleSort::allocateArrays()
 {
-	Ploc.allocate(vtr.TrDomainSize.x*vtr.TrDomainSize.y + 2);
+	Ploc.allocate(vtr.trDomainSize.x*vtr.trDomainSize.y + 2);
 	Ptemp.setSizes(vtr.nN, vtr.nN, 1);
 }
 
@@ -156,7 +156,7 @@ void particleSort::clumpParticles()
 				Pcur.pos = Divide2(Pcur.pos, (double)count_pars);
 				Pcur.timer = (cl_ushort)(intTimer/count_pars);
 				cl_int2 Posi = { { (int)floor(Pcur.pos.x), (int)floor(Pcur.pos.y) } };
-				Pcur.loc = Posi.x + vtr.TrDomainSize.x * Posi.y;
+				Pcur.loc = Posi.x + vtr.trDomainSize.x * Posi.y;
 				Ptemp.setStruct(Pcur, cur_red_ind++);
 			}
 		}
@@ -289,8 +289,8 @@ void particleSort::iniTrp()
 	// find start inds
 	for (int i = 0; i < vls.nBL; i++)
 	{
-		if ((vls.C[vls.BL(i, 0)].x <= vtr.X_release) &&
-			(vls.C[vls.BL(i, 1)].x > vtr.X_release))
+		if ((vls.C[vls.BL(i, 0)].x <= vtr.xReleaseVal) &&
+			(vls.C[vls.BL(i, 1)].x > vtr.xReleaseVal))
 		{
 			BL_rel_bot = i;
 			LSC_rel_bot = vls.BL(i, 0);
@@ -300,8 +300,8 @@ void particleSort::iniTrp()
 	
 	for (int i = (int)(vls.nBL / 2) + 1; i < vls.nBL; i++)
 	{
-		if ((vls.C[vls.BL(i, 1)].x <= vtr.X_release) &&
-			(vls.C[vls.BL(i, 0)].x > vtr.X_release))
+		if ((vls.C[vls.BL(i, 1)].x <= vtr.xReleaseVal) &&
+			(vls.C[vls.BL(i, 0)].x > vtr.xReleaseVal))
 		{
 			BL_rel_top = i;
 			LSC_rel_top = vls.BL(i, 1);
@@ -332,7 +332,7 @@ void particleSort::iniTrp()
 	}
 		
 	int y0 = 0;
-	int x0 = (int)vtr.X_release - 1;
+	int x0 = (int)vtr.xReleaseVal - 1;
 	while (vls.M(x0, y0) == LB_SOLID)
 		y0++;
 	
@@ -342,10 +342,10 @@ void particleSort::iniTrp()
 
 	
 	trP[TRP_UMAX_VAL_IND] = 3. / 2. * vlb.Re * vlb.MuVal / p.Pipe_radius;
-	double Xtop_val = vls.C[vls.BL(BL_rel_top, 1)].y + (vtr.X_release - vls.C[vls.BL(BL_rel_top, 1)].x) *
+	double Xtop_val = vls.C[vls.BL(BL_rel_top, 1)].y + (vtr.xReleaseVal - vls.C[vls.BL(BL_rel_top, 1)].x) *
 		(vls.C[vls.BL(BL_rel_top, 0)].y - vls.C[vls.BL(BL_rel_top, 1)].y) /
 		(vls.C[vls.BL(BL_rel_top, 0)].x - vls.C[vls.BL(BL_rel_top, 1)].x);
-	trP[TRP_OFFSET_Y_IND] = vls.C[vls.BL(BL_rel_bot, 1)].y + (vtr.X_release - vls.C[vls.BL(BL_rel_bot, 1)].x) *
+	trP[TRP_OFFSET_Y_IND] = vls.C[vls.BL(BL_rel_bot, 1)].y + (vtr.xReleaseVal - vls.C[vls.BL(BL_rel_bot, 1)].x) *
 		(vls.C[vls.BL(BL_rel_bot, 0)].y - vls.C[vls.BL(BL_rel_bot, 1)].y) /
 		(vls.C[vls.BL(BL_rel_bot, 0)].x - vls.C[vls.BL(BL_rel_bot, 1)].x);
 	
@@ -391,8 +391,8 @@ void particleSort::operator()(cl_event *TR_prev_evt, int numevt)
 	int n1 = -1;
 	Ploc.FillBuffer((void*)& Ploc_inds, sizeof(cl_int4), 1,
 		0, IOQUEUE_REF, numevt, TR_prev_evt);
-	Ploc.FillBuffer((void*)& n1, sizeof(int), 2 * vtr.TrDomainSize.x *
-		vtr.TrDomainSize.y, 4, IOQUEUE_REF);
+	Ploc.FillBuffer((void*)& n1, sizeof(int), 2 * vtr.trDomainSize.x *
+		vtr.trDomainSize.y, 4, IOQUEUE_REF);
 
 	Ptemp.copyToParOnDevice(vtr.P, false, vtr.nN, IOQUEUE_REF, 0,
 		nullptr, &ioEvt);
@@ -401,8 +401,7 @@ void particleSort::operator()(cl_event *TR_prev_evt, int numevt)
 	
 	for (size_t pass = 1; pass <= numMerges; ++pass)
 	{
-		unsigned int srcLogicalBlockSize = 
-			_cast< unsigned int>(localRange << (pass - 1));
+		unsigned int srcLogicalBlockSize = static_cast< unsigned int>(localRange << (pass - 1));
 		if (pass & 0x1)
 		{
 			globalMergeKernel.setOptionCallKernel(kerA, &srcLogicalBlockSize);
@@ -429,8 +428,8 @@ void particleSort::reReleasePar()
 	cl_uint maxval = Ploc(0).y;
 	double Umean = vlb.calcUmean();
 	cl_uint par_in = MAX((cl_uint)(inletConcDtDivDx*Umean) / maxval, 1);
-	trReReleaseKernel.set_argument(9, &maxval);
-	trReReleaseKernel.set_argument(10, &par_in);
+	trReReleaseKernel.setOption(&maxval);
+	trReReleaseKernel.setOption(&par_in, 1);
 	trReReleaseKernel.set_global_call_kernel(maxval);
 }
 
@@ -490,6 +489,14 @@ void particleSort::setKernelArgs()
 	trReReleaseKernel.set_argument(ind++, vtr.RandList.get_buf_add());
 	trP.setBuffers(trReReleaseKernel, ind);
 	trReReleaseKernel.set_argument(ind++, vlb.Ux_array.get_buf_add());
+	if (vtr.calcIOFlag)
+	{
+		trReReleaseKernel.set_argument(ind++, vlb.Ux_array.get_buf_add());
+		vtr.ioDistsArgIndex = ind;
+		trReReleaseKernel.set_argument(ind++, vtr.ioDistsSave.getCurIndAdd());
+	}
+	trReReleaseKernel.setOptionInd(ind);
+
 	// These are set before the kernel is called
 	//trReReleaseKernel.set_argument(9, maxel);
 	//trReReleaseKernel.set_argument(10, Concentration Number);
@@ -552,7 +559,7 @@ void particleSort::setSourceDefines()
 	setSrcDefinePrefix, "SORT_NUM_MERGES", count);
 	
 	// Trp indicies
-	setSrcDefinePrefix, "TRP_X_RELEASE", vtr.X_release);
+	setSrcDefinePrefix, "TRP_X_RELEASE", vtr.xReleaseVal);
 	setSrcDefinePrefix, "TRP_TOP_LOC_IND", TRP_TOP_LOC_IND);
 	setSrcDefinePrefix, "TRP_BOT_LOC_IND", TRP_BOT_LOC_IND);
 	setSrcDefinePrefix, "TRP_UMAX_VAL_IND", TRP_UMAX_VAL_IND);
@@ -570,7 +577,7 @@ void particleSort::setSourceDefines()
 	setSrcDefinePrefix, "LSC_STOP_TOP", LSC_stop_top);
 
 	int y0 = 0;
-	int x0 = (int)vtr.X_release - 1;
+	int x0 = (int)vtr.xReleaseVal - 1;
 	while (vls.M(x0, y0) == LB_SOLID)
 		y0++;
 
@@ -608,10 +615,10 @@ void particleSort::updateTimeData()
 
 void particleSort::updateTrp()
 {
-	double Xtop_val = vls.C[vls.BL(BL_rel_top, 1)].y + (vtr.X_release - vls.C[vls.BL(BL_rel_top, 1)].x) *
+	double Xtop_val = vls.C[vls.BL(BL_rel_top, 1)].y + (vtr.xReleaseVal - vls.C[vls.BL(BL_rel_top, 1)].x) *
 		(vls.C[vls.BL(BL_rel_top, 0)].y - vls.C[vls.BL(BL_rel_top, 1)].y) /
 		(vls.C[vls.BL(BL_rel_top, 0)].x - vls.C[vls.BL(BL_rel_top, 1)].x);
-	trP[TRP_OFFSET_Y_IND] = vls.C[vls.BL(BL_rel_bot, 1)].y + (vtr.X_release - vls.C[vls.BL(BL_rel_bot, 1)].x) *
+	trP[TRP_OFFSET_Y_IND] = vls.C[vls.BL(BL_rel_bot, 1)].y + (vtr.xReleaseVal - vls.C[vls.BL(BL_rel_bot, 1)].x) *
 		(vls.C[vls.BL(BL_rel_bot, 0)].y - vls.C[vls.BL(BL_rel_bot, 1)].y) /
 		(vls.C[vls.BL(BL_rel_bot, 0)].x - vls.C[vls.BL(BL_rel_bot, 1)].x);
 	trP[TRP_BVAL_IND] = Xtop_val - trP[TRP_OFFSET_Y_IND];
@@ -619,7 +626,7 @@ void particleSort::updateTrp()
 	trP[TRP_TOP_LOC_IND] = floor(Xtop_val) - trP[TRP_OFFSET_Y_IND];
 		
 	int y0 = 0;
-	int x0 = (int)vtr.X_release - 1;
+	int x0 = (int)vtr.xReleaseVal - 1;
 	while (vls.M(x0, y0) == LB_SOLID)
 		y0++;
 	

@@ -14,6 +14,11 @@
 // TODO: get rid of bool typedef and replace with regular bools
 // TODO: Make sure all classes include setSourceDefines function,
 //			and that they are called before generating source code
+// TODO: Implement checks to ensure that places where short is used instead of 
+//		int do not require values greater than 32768 for short and 65535 for ushort
+// TODO: Make sure that all uses of nType in kernels use NTYPE_TYPE rather than int
+//		or short. This is crucial because it will not throw any build errors,
+//		but will screw everything up if NTYPE_TYPE isnt used.
 #include "StdAfx.h"
 #include "oclEnvironment.h"
 #include "Reducer.h"
@@ -54,6 +59,8 @@ int main(int argc, char* argv[])
 
 void ini()
 {
+	staticBaseVar::setArrayContext(CLCONTEXT_REF);
+
 	omp_set_num_threads(OPENMP_NUMBER_THREADS);
 
 	p.ini();
@@ -67,8 +74,8 @@ void ini()
 
 	//vlb.ini_IBB();
 
-	if(vfd.calcNuFlag)
-		vfd.initialize_Nu_kernel();
+	if (vfd.calcNuFlag)
+		vfd.iniNuCoeffs();
 
 #ifdef USE_OPENGL
 	vls.iniGL();
@@ -95,27 +102,27 @@ void ini()
 
 
 	if (!vtr.restartRunFlag)
-		vtr.initial_sort_particles();
+		vtr.parSort.initialSort();
 
 	clEnv::instance()->finishQueues();
 
 
 	// Shouldnt be necessary since CPU mem >> GPU mem,
 	// but may be useful when utilizing 2 GPUs on same computer
-	vls.freeHostMem();
-	vlb.freeHostMem();
-	vfd.freeHostMem();
-	vtr.freeHostMem();
-	vfl.freeHostMem();
+	vls.freeHostArrays();
+	vlb.freeHostArrays();
+	vfd.freeHostArrays();
+	vtr.freeHostArrays();
+	vfl.freeHostArrays();
 
-	vtr.TR_Node_kernel[0].call_kernel();
-	vtr.TR_Wall_Node_kernel[0].call_kernel();
+	//vtr.TR_Node_kernel[0].call_kernel();
+	//vtr.TR_Wall_Node_kernel[0].call_kernel();
 
 
 	if (vtr.restartRunFlag)
 	{
-		if (vtr.Ploc(1).y > 0)
-			vtr.Update_Par_Rem_Args();
+		//if (vtr.parSort.Ploc(1).y > 0)
+		//	vtr.Update_Par_Rem_Args();
 	}
 
 
@@ -154,8 +161,8 @@ bool testFinish()
 
 void Solve_LB_only()
 {
-	cl_event Col_Fluid;
-	vlb.Collision_kernel.call_kernel(LBQUEUE_REF, 0, NULL, &Col_Fluid);
+	//cl_event Col_Fluid;
+	//vlb.Collision_kernel.call_kernel(LBQUEUE_REF, 0, NULL, &Col_Fluid);
 	clFlush(LBQUEUE);
 	
 	//need to implement class for calculating mass losses to make necessary adjustments
@@ -164,7 +171,7 @@ void Solve_LB_only()
 	vlb.alter ^= 1;
 	clFlush(LBQUEUE);
 	clFlush(FDQUEUE);
-	clReleaseEvent(Col_Fluid);
+//	clReleaseEvent(Col_Fluid);
 }
 
 

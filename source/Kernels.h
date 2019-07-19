@@ -268,10 +268,10 @@ public:
 	}
 
 	template <typename T>
-	void setOption(T *val_)
+	void setOption(T *val_, const int offset = 0)
 	{
 		CHECK_KERNEL_ERROR(optionInd == -1, "Must set optionInd before using setOptionCallKernel", ERROR_SETTING_KERNEL_ARG);
-		set_argument<T>(optionInd, val_);
+		set_argument<T>(optionInd+offset, val_);
 	}
 
 	// TODO: see if this is necessary for 2.0 kernels since
@@ -314,7 +314,7 @@ public:
 	void setOptionCallKernel(T *val_, cl_command_queue *que = NULL, int num_list = 0, cl_event *wait = NULL, cl_event *evt = NULL)
 	{
 		CHECK_KERNEL_ERROR(optionInd == -1, "Must set optionInd before using setOptionCallKernel", ERROR_SETTING_KERNEL_ARG);
-		set_argument<T>(optionInd, val);
+		set_argument<T>(optionInd, val_);
 		call_kernel(que, num_list, wait, evt);
 	}
 };

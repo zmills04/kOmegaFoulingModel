@@ -306,11 +306,14 @@ void TR_shear_2(__global double4* __restrict__ Weights,
 /////////////////                                    /////////////////
 //////////////////////////////////////////////////////////////////////
 
+// TODO: Update to use shear stress calculation performed in LB step
+
+
 // Updates the arrays storing coefficients/indicies used in the
 // calculation of shear stress at nodes and boundary links
 __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_TR_SHEAR, 1, 1)))
 void TR_Find_Shear_Coeffs1(__global int* __restrict__ ssArr,//0
-	__global int* __restrict__ nType,
+	__global NTYPE_TYPE* __restrict__ nType,
 	__global double* CFSS,
 	int numBnodes)
 {

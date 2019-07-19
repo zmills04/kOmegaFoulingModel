@@ -58,11 +58,9 @@ public:
 	// Func Pointer for calling loadParams
 	std::function<void(void)> loadParamsPtr;
 
-	clVariablesTR() : ioDistsSave("ioDists"), blDep("blDep"),
+	clVariablesTR() : ioDistsSave("ioDists"), blDep("blDep_temp"),
 		reflectInfo("reflectInfo"), reflectInds("reflectInds"), 
-		trIndicies("trIndicies"), updateFlag("updateFlag"),
-		PV("PV"), numWallNodes("numWallNodes"), RandList("RandList"), 
-		nodeNeigh("nodeNeigh"), blIndInd("blIndInd"), 
+		updateFlag("updateFlag"), PV("PV"), RandList("RandList"), 
 		activeInds("activeInds", WORKGROUPSIZE_TR, 2),
 		wallInds("wallInds", WORKGROUPSIZE_TR, 2)
 	{
@@ -145,12 +143,12 @@ public:
 	// Current index to save BL number when updating NodI array
 	// Used in legacy code. May no longer be needed, or its implementation
 	// may need to be changed slightly
-	Array2Di blIndInd;
+	//Array2Di blIndInd;
 
 	// indicies of neighbors surrounding each node
 	// Used in legacy code. May no longer be needed, or its implementation
 	// may need to be changed slightly
-	Array2Di nodeNeigh;
+	//Array2Di nodeNeigh;
 
 	// Contains the coefficients used to calculate NodV
 	// size - trDomainSize
@@ -171,7 +169,7 @@ public:
 	// NodeT* Nod;
 
 	// Number of nodes along the wall
-	Array1Di numWallNodes;
+	//Array1Di numWallNodes;
 
 	// particle velocities (info must be kept between updating of location and
 	// deposit kernels
@@ -189,7 +187,7 @@ public:
 	// List of indicies of NodI, NodC etc that are active for tracers
 	// Used in legacy code. May no longer be needed, or its implementation
 	// may need to be changed slightly
-	Array1Di trIndicies;
+	// Array1Di trIndicies;
 
 	// indicates if particle has been updated or not (to avoid two
 	// updates when it crosses into a new node)
@@ -208,7 +206,7 @@ public:
 									// shouldnt need this as the indicies 
 									// can be easily calculated
 
-	TimeData<double> ioDistsSave;	// distributions at inlet and outlet
+	TimeData<cl_uint> ioDistsSave;	// distributions at inlet and outlet
 									// to save as timedata
 
 ////////////////////////////////////////////////////////////////////////////	
@@ -362,6 +360,9 @@ public:
 	int Num_wall_nodes, Num_wall_nodes_max;
 
 
+	int ioDistsArgIndex;
+
+
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                                               ///////////////
@@ -391,6 +392,10 @@ public:
 	// Loads parameters passed in yaml parameter file, (also reads in 
 	// restart variables when a run is restarted)
 	void loadParams();
+
+	// Copies saved files from main folder into results folder to ensure
+	// that next files do not save 
+	void renameSaveFiles();
 
 	// Writes output data to file(specific arrays, not all of them)
 	void save2file();
@@ -440,7 +445,7 @@ public:
 	// checks if neighboring node at (i,j) is an active node
 	// adds it to Node_Neigh array if it does. This is a legacy code function
 	// and either is no longer needed or needs significant refactoring
-	void checkNeighNode(int i, int j, int* cur_ind, int nod_loc);
+	//void checkNeighNode(int i, int j, int* cur_ind, int nod_loc);
 
 	// fills NodI with information from BLinks
 	void fillNodeI(int i, Array2Dd& dist2Center);
@@ -493,9 +498,14 @@ public:
 	void iniRand();
 
 	// Two functions generate NodI and NodC structures of arrays
-	// Legacy code and needs significant restructuring.
+
 	void iniNode();			// generates temporary Nod structure of arrays
-	void iniNodC();	// splits Nod into NodC and NodI
+	void iniNodC(Array2Dd& distInfoX, Array2Dd& distInfoY,
+		Array2Dd& distInfoX0, Array2Dd& distInfoY0, Array2Di& distInfoType);	// splits Nod into NodC and NodI
+
+	// Initializes activeInds and wallInds arrays
+	void iniIndexInfo();
+
 
 	// Initializes arrays containing node neighbor arrays
 	// Legacy code restructed arrays to remove any permanent wall nodes
@@ -504,7 +514,7 @@ public:
 	// code needed to implement methods to find neighbors. Refactored code
 	// does not do this restructuring, so may not need to use same techinques
 	// as legacy code.
-	void iniNodeNeighs();
+	// void iniNodeNeighs();
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////              Updating Functions               ///////////////
@@ -518,7 +528,7 @@ public:
 	
 	// Calls kernels to update tracer locations
 	void updateWallParticles();
-	
+
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                Output Functions               ///////////////
@@ -529,7 +539,7 @@ public:
 	void saveBox(double x1, double y1, double dx, double dy);
 
 	// files that dont change after initialization (only need bin saved once)
-	void saveRestartFilesIni();    
+	// void saveRestartFilesIni();    
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                Display Functions              ///////////////

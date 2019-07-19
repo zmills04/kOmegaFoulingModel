@@ -159,6 +159,10 @@ public:
 	// restart variables when a run is restarted)
 	void loadParams();
 
+	// Copies saved files from main folder into results folder to ensure
+	// that next files do not save 
+	void renameSaveFiles() {};
+
 	// Writes output data to file(specific arrays, not all of them)
 	void save2file() {};
 

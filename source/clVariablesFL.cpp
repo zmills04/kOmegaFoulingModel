@@ -53,9 +53,9 @@ void clVariablesFL::saveParams()
 
 void clVariablesFL::allocateArrays()
 {
-	FI.allocate(Num_active_nodes);
-	BLdep_tot.zeros(Num_active_nodes, vtr.Nd);
-	BLdep_tot_temp.zeros(Num_active_nodes, vtr.Nd);
+	//FI.allocate(Num_active_nodes);
+	BLdep_tot.zeros(Num_active_nodes, vtr.parP.Nd);
+	BLdep_tot_temp.zeros(Num_active_nodes, vtr.parP.Nd);
 }
 
 void clVariablesFL::ini()
@@ -79,7 +79,7 @@ void clVariablesFL::ini()
 		save2file();
 }
 
-void clVariablesFL::testRestartRun()
+bool clVariablesFL::testRestartRun()
 {	
 	restartRunFlag = p.getParameter("Restart Run", false);
 	if (restartRunFlag == false)
@@ -96,7 +96,7 @@ void clVariablesFL::testRestartRun()
 			IO_end.z = 0;
 			IO_end.w = 0;
 			Num_active_nodes = 0;
-			return;
+			return false;
 		}
 		int ind = 0;
 		while (vls.C0[ind].x < vtr.xReleasePos)
@@ -145,10 +145,21 @@ void clVariablesFL::testRestartRun()
 			"BLdep_tot must be provided in load file to restart from checkpoint",
 			ERROR_INITIALIZING_VFL);
 
-		ERROR_CHECKING(FI.load("load" SLASH "fli") == false,
-			"fli must be provided in load file to restart from checkpoint",
-			ERROR_INITIALIZING_VFL);
+		//ERROR_CHECKING(FI.load("load" SLASH "fli") == false,
+		//	"fli must be provided in load file to restart from checkpoint",
+		//	ERROR_INITIALIZING_VFL);
 	}
+	return true;
+}
+
+void clVariablesFL::renameSaveFiles()
+{
+
+}
+
+void clVariablesFL::saveTimeData()
+{
+
 }
 
 void clVariablesFL::createKernels()
@@ -258,287 +269,287 @@ double clVariablesFL::Gaussian_Kernel(double input)
 
 void clVariablesFL::ini_foulI()
 {
-	int fiind = 0;
-	int blind = 0;
-
-	cl_double8 ioWeight;
-	
-	for (int kk = 0; kk < 2; kk++)
-	{
-		ioWeight.s[kk] = 0.;
-	}
-	for (int kk = 2; kk < 8; kk++)
-	{
-		ioWeight.s[kk] = 1. / 6. * AMT_REDUCE_DEP;
-	}
-
-
-	double cutoff_rad = 4.5*LS_SPACING;
-
-	while (TRUE)
-	{
-		blind++;
-		if (vls.BL(blind, 0) == IO_end.x)
-			break;
-	}
-
-	blind--;
-	cl_uint bl_inlet = blind;
-	for (int ii = 0; ii < 4; ii++)
-	{
-		foulI FItemp;
-		int i = IO_end.x + ii;
-		FItemp.C_ind = i;
-		FItemp.BL_ind = bl_inlet;
-		cl_double2 LP = { { vls.C0[i - 1].x, vls.C0[i - 1].y } };
-		cl_double2 CP = { { vls.C0[i].x, vls.C0[i].y } };
-		cl_double2 RP = { { vls.C0[i + 1].x, vls.C0[i + 1].y } };
-		cl_double2 tanvec0 = Subtract2(CP, LP);
-		cl_double2 normvec0 = { { -tanvec0.y, tanvec0.x } };
-		cl_double2 tanvec1 = Subtract2(RP, CP);
-		cl_double2 normvec1 = { { -tanvec1.y, tanvec1.x } };
-		cl_double len0 = GETLEN(tanvec0);
-		cl_double len1 = GETLEN(tanvec1);
-		normvec0 = Divide2(normvec0, len0);
-		normvec1 = Divide2(normvec1, len1);
-
-		FItemp.vN = { { (normvec0.x + normvec1.x) / 2., (normvec0.y + normvec1.y) / 2. } };
-		FItemp.disp = 0.;
-		FItemp.WeightsL = ioWeight.lo;
-		FItemp.WeightsR = ioWeight.hi;
-		blind++;
-#pragma warning(suppress: 6386)
-		FI[fiind++] = FItemp;
-
-	}
-
-	int fiind_inlet = fiind;
-
-	for (cl_uint i = IO_end.x + 4; i <= IO_end.y - 5; i++)
-	{
-		foulI FItemp;
-		cl_uint bl_start = blind - 3;
-		FItemp.C_ind = i;
-		FItemp.BL_ind = bl_start;
-		cl_double2 LP = { { vls.C0[i - 1].x, vls.C0[i - 1].y } };
-		cl_double2 CP = { { vls.C0[i].x, vls.C0[i].y } };
-		cl_double2 RP = { { vls.C0[i + 1].x, vls.C0[i + 1].y } };
-		cl_double2 tanvec0 = Subtract2(CP,LP);
-		cl_double2 normvec0 = { { -tanvec0.y, tanvec0.x } };
-		cl_double2 tanvec1 = Subtract2(RP, CP);
-		cl_double2 normvec1 = { { -tanvec1.y, tanvec1.x } };
-		cl_double len0 = GETLEN(tanvec0);
-		cl_double len1 = GETLEN(tanvec1);
-		normvec0 = Divide2(normvec0, len0);
-		normvec1 = Divide2(normvec1, len1);
-
-		FItemp.vN = { { (normvec0.x + normvec1.x) / 2., (normvec0.y + normvec1.y) / 2. } };
-		FItemp.disp = 0.;
-
-		cl_double8 Wtemp;
-		double sumW = 0.;
-		for (int kk = 0; kk < 8; kk++)
-		{
-			cl_double2 neigh_pos = get_center(vls.C0[vls.BL(bl_start + kk, 0)], vls.C0[vls.BL(bl_start+kk, 1)]);
-			cl_double2 dVec = Subtract2(CP, neigh_pos);
-			double dist = GETLEN(dVec);
-			double cutoff_temp = cutoff_rad;
-			//if (dist >= cutoff_rad)
-			//	cutoff_temp *= 1.25;
-			double Si = dist / cutoff_temp;
-			double wtt = Gaussian_Kernel(Si);
-
-			double red_amt;
-			if(neigh_pos.x < REDUCE_DEP_STOP1)
-				red_amt = AMT_REDUCE_DEP;
-			else if (neigh_pos.x < REDUCE_DEP_STOP2)
-			{
-				red_amt = AMT_REDUCE_DEP + (neigh_pos.x - REDUCE_DEP_STOP1) * (1. - AMT_REDUCE_DEP) / (REDUCE_DEP_STOP2 - REDUCE_DEP_STOP1);
-			}
-			else
-				red_amt = 1.;
-
-			Wtemp.s[kk] = wtt * red_amt;
-			sumW += wtt;
-		}
-		for (int kk = 0; kk < 8; kk++)
-		{
-			Wtemp.s[kk] /= sumW;
-		}
-		FItemp.WeightsL = Wtemp.lo;
-		FItemp.WeightsR = Wtemp.hi;
-		
-		blind++;
-		FI[fiind++] = FItemp;
-		if (fiind == fiind_inlet)
-		{
-			for (int zz = 0; zz < fiind_inlet; zz++)
-			{
-				FI[zz].WeightsL = FI[fiind].WeightsL;
-				FI[zz].WeightsR = FI[fiind].WeightsR;
-			}
-		}
-	}
-	
-	cl_uint bl_outlet = blind-3;
-	for (cl_uint i = IO_end.y - 4; i <= IO_end.y; i++)
-	{
-		foulI FItemp;
-		FItemp.C_ind = i;
-		FItemp.BL_ind = bl_outlet;
-		cl_double2 LP = { { vls.C0[i - 1].x, vls.C0[i - 1].y } };
-		cl_double2 CP = { { vls.C0[i].x, vls.C0[i].y } };
-		cl_double2 RP = { { vls.C0[i + 1].x, vls.C0[i + 1].y } };
-		cl_double2 tanvec0 = Subtract2(CP, LP);
-		cl_double2 normvec0 = { { -tanvec0.y, tanvec0.x } };
-		cl_double2 tanvec1 = Subtract2(RP, CP);
-		cl_double2 normvec1 = { { -tanvec1.y, tanvec1.x } };
-		cl_double len0 = GETLEN(tanvec0);
-		cl_double len1 = GETLEN(tanvec1);
-		normvec0 = Divide2(normvec0, len0);
-		normvec1 = Divide2(normvec1, len1);
-
-		FItemp.vN = { { (normvec0.x + normvec1.x) / 2., (normvec0.y + normvec1.y) / 2. } };
-		FItemp.disp = 0.;
-		FItemp.WeightsL = { { 1. / 7., 1. / 7., 1. / 7., 1. / 7. } };
-		FItemp.WeightsR = { { 1. / 7., 1. / 7., 1. / 7., 0. } };
-		blind++;
-		FI[fiind++] = FItemp;
-	}
-
-	
-	blind = vls.nBL / 2;
-	while (TRUE)
-	{
-		blind++;
-		if (vtr.BL[blind].P1ind == IO_end.z)
-			break;
-	}
-
-	bl_inlet = blind;
-
-	int fiind_inlet_start = fiind;
-	for (int ii = 0; ii < 4; ii++)
-	{
-		foulI FItemp;
-		int i = IO_end.z - ii;
-		FItemp.C_ind = i;
-		FItemp.BL_ind = bl_inlet;
-		cl_double2 RP = { { vls.C0[i - 1].x, vls.C0[i - 1].y } };
-		cl_double2 CP = { { vls.C0[i].x, vls.C0[i].y } };
-		cl_double2 LP = { { vls.C0[i + 1].x, vls.C0[i + 1].y } };
-		cl_double2 tanvec0 = Subtract2(LP, CP);
-		cl_double2 normvec0 = { { -tanvec0.y, tanvec0.x } };
-		cl_double2 tanvec1 = Subtract2(CP, RP);
-		cl_double2 normvec1 = { { -tanvec1.y, tanvec1.x } };
-		cl_double len0 = GETLEN(tanvec0);
-		cl_double len1 = GETLEN(tanvec1);
-		normvec0 = Divide2(normvec0, len0);
-		normvec1 = Divide2(normvec1, len1);
-
-		FItemp.vN = { { (normvec0.x + normvec1.x) / 2., (normvec0.y + normvec1.y) / 2. } };
-		FItemp.disp = 0.;
-		FItemp.WeightsL = ioWeight.lo;
-		FItemp.WeightsR = ioWeight.hi;
-		blind++;
-		FI[fiind++] = FItemp;
-
-	}
-
-	fiind_inlet = fiind;
-	
-	for (cl_uint i = IO_end.z - 4; i >= IO_end.w + 5; i--)
-	{
-		cl_uint bl_start = blind - 3;
-		foulI FItemp;
-		FItemp.C_ind = i;
-		FItemp.BL_ind = bl_start;
-		cl_double2 RP = { { vls.C0[i - 1].x, vls.C0[i - 1].y } };
-		cl_double2 CP = { { vls.C0[i].x, vls.C0[i].y } };
-		cl_double2 LP = { { vls.C0[i + 1].x, vls.C0[i + 1].y } };
-		cl_double2 tanvec0 = Subtract2(LP, CP);
-		cl_double2 normvec0 = { { -tanvec0.y, tanvec0.x } };
-		cl_double2 tanvec1 = Subtract2(CP, RP);
-		cl_double2 normvec1 = { { -tanvec1.y, tanvec1.x } };
-		cl_double len0 = GETLEN(tanvec0);
-		cl_double len1 = GETLEN(tanvec1);
-		normvec0 = Divide2(normvec0, len0);
-		normvec1 = Divide2(normvec1, len1);
-
-		FItemp.vN = { { (normvec0.x + normvec1.x) / 2., (normvec0.y + normvec1.y) / 2. } };
-		FItemp.disp = 0.;
-
-		
-
-		cl_double8 Wtemp;
-		double sumW = 0.;
-		for (int kk = 0; kk < 8; kk++)
-		{
-			cl_double2 neigh_pos = get_center(vtr.BL[bl_start + kk].vP0, vtr.BL[bl_start + kk].vP1);
-			cl_double2 dVec = Subtract2(CP, neigh_pos);
-			double dist = GETLEN(dVec);
-			double cutoff_temp = cutoff_rad;
-			//if (dist >= cutoff_rad)
-			//	cutoff_temp *= 1.25;
-			double Si = dist / cutoff_temp;
-			double wtt = Gaussian_Kernel(Si);
-
-			double red_amt;
-			if (neigh_pos.x < REDUCE_DEP_STOP1)
-				red_amt = AMT_REDUCE_DEP;
-			else if (neigh_pos.x < REDUCE_DEP_STOP2)
-			{
-				red_amt = AMT_REDUCE_DEP + (neigh_pos.x - REDUCE_DEP_STOP1) * (1. - AMT_REDUCE_DEP) / (REDUCE_DEP_STOP2 - REDUCE_DEP_STOP1);
-			}
-			else
-				red_amt = 1.;
-
-			Wtemp.s[kk] = wtt * red_amt;
-			sumW += wtt;
-		}
-		for (int kk = 0; kk < 8; kk++)
-		{
-			Wtemp.s[kk] /= sumW;
-		}
-		FItemp.WeightsL = Wtemp.lo;
-		FItemp.WeightsR = Wtemp.hi;
-
-		FI[fiind++] = FItemp;
-		if (fiind == fiind_inlet)
-		{
-			for (int zz = fiind_inlet_start; zz < fiind_inlet; zz++)
-			{
-				FI[zz].WeightsL = FI[fiind].WeightsL;
-				FI[zz].WeightsR = FI[fiind].WeightsR;
-			}
-		}
-		blind++;
-	}
-
-	bl_outlet = blind-3;
-	for (cl_uint i = IO_end.w + 4; i >= IO_end.w; i--)
-	{
-		foulI FItemp;
-		FItemp.C_ind = i;
-		FItemp.BL_ind = bl_outlet;
-		cl_double2 RP = { { vls.C0[i - 1].x, vls.C0[i - 1].y } };
-		cl_double2 CP = { { vls.C0[i].x, vls.C0[i].y } };
-		cl_double2 LP = { { vls.C0[i + 1].x, vls.C0[i + 1].y } };
-		cl_double2 tanvec0 = Subtract2(LP, CP);
-		cl_double2 normvec0 = { { -tanvec0.y, tanvec0.x } };
-		cl_double2 tanvec1 = Subtract2(CP, RP);
-		cl_double2 normvec1 = { { -tanvec1.y, tanvec1.x } };
-		cl_double len0 = GETLEN(tanvec0);
-		cl_double len1 = GETLEN(tanvec1);
-		normvec0 = Divide2(normvec0, len0);
-		normvec1 = Divide2(normvec1, len1);
-
-		FItemp.vN = { { (normvec0.x + normvec1.x) / 2., (normvec0.y + normvec1.y) / 2. } };
-		FItemp.disp = 0.;
-		FItemp.WeightsL = { { 1. / 7., 1. / 7., 1. / 7., 1. / 7. } };
-		FItemp.WeightsR = { { 1. / 7., 1. / 7., 1. / 7., 0. } };
-		FI[fiind++] = FItemp;
-	}
+//	int fiind = 0;
+//	int blind = 0;
+//
+//	cl_double8 ioWeight;
+//	
+//	for (int kk = 0; kk < 2; kk++)
+//	{
+//		ioWeight.s[kk] = 0.;
+//	}
+//	for (int kk = 2; kk < 8; kk++)
+//	{
+//		ioWeight.s[kk] = 1. / 6. * AMT_REDUCE_DEP;
+//	}
+//
+//
+//	double cutoff_rad = 4.5*LS_SPACING;
+//
+//	while (TRUE)
+//	{
+//		blind++;
+//		if (vls.BL(blind, 0) == IO_end.x)
+//			break;
+//	}
+//
+//	blind--;
+//	cl_uint bl_inlet = blind;
+//	for (int ii = 0; ii < 4; ii++)
+//	{
+//		foulI FItemp;
+//		int i = IO_end.x + ii;
+//		FItemp.C_ind = i;
+//		FItemp.BL_ind = bl_inlet;
+//		cl_double2 LP = { { vls.C0[i - 1].x, vls.C0[i - 1].y } };
+//		cl_double2 CP = { { vls.C0[i].x, vls.C0[i].y } };
+//		cl_double2 RP = { { vls.C0[i + 1].x, vls.C0[i + 1].y } };
+//		cl_double2 tanvec0 = Subtract2(CP, LP);
+//		cl_double2 normvec0 = { { -tanvec0.y, tanvec0.x } };
+//		cl_double2 tanvec1 = Subtract2(RP, CP);
+//		cl_double2 normvec1 = { { -tanvec1.y, tanvec1.x } };
+//		cl_double len0 = GETLEN(tanvec0);
+//		cl_double len1 = GETLEN(tanvec1);
+//		normvec0 = Divide2(normvec0, len0);
+//		normvec1 = Divide2(normvec1, len1);
+//
+//		FItemp.vN = { { (normvec0.x + normvec1.x) / 2., (normvec0.y + normvec1.y) / 2. } };
+//		FItemp.disp = 0.;
+//		FItemp.WeightsL = ioWeight.lo;
+//		FItemp.WeightsR = ioWeight.hi;
+//		blind++;
+//#pragma warning(suppress: 6386)
+//		FI[fiind++] = FItemp;
+//
+//	}
+//
+//	int fiind_inlet = fiind;
+//
+//	for (cl_uint i = IO_end.x + 4; i <= IO_end.y - 5; i++)
+//	{
+//		foulI FItemp;
+//		cl_uint bl_start = blind - 3;
+//		FItemp.C_ind = i;
+//		FItemp.BL_ind = bl_start;
+//		cl_double2 LP = { { vls.C0[i - 1].x, vls.C0[i - 1].y } };
+//		cl_double2 CP = { { vls.C0[i].x, vls.C0[i].y } };
+//		cl_double2 RP = { { vls.C0[i + 1].x, vls.C0[i + 1].y } };
+//		cl_double2 tanvec0 = Subtract2(CP,LP);
+//		cl_double2 normvec0 = { { -tanvec0.y, tanvec0.x } };
+//		cl_double2 tanvec1 = Subtract2(RP, CP);
+//		cl_double2 normvec1 = { { -tanvec1.y, tanvec1.x } };
+//		cl_double len0 = GETLEN(tanvec0);
+//		cl_double len1 = GETLEN(tanvec1);
+//		normvec0 = Divide2(normvec0, len0);
+//		normvec1 = Divide2(normvec1, len1);
+//
+//		FItemp.vN = { { (normvec0.x + normvec1.x) / 2., (normvec0.y + normvec1.y) / 2. } };
+//		FItemp.disp = 0.;
+//
+//		cl_double8 Wtemp;
+//		double sumW = 0.;
+//		for (int kk = 0; kk < 8; kk++)
+//		{
+//			cl_double2 neigh_pos = get_center(vls.C0[vls.BL(bl_start + kk, 0)], vls.C0[vls.BL(bl_start+kk, 1)]);
+//			cl_double2 dVec = Subtract2(CP, neigh_pos);
+//			double dist = GETLEN(dVec);
+//			double cutoff_temp = cutoff_rad;
+//			//if (dist >= cutoff_rad)
+//			//	cutoff_temp *= 1.25;
+//			double Si = dist / cutoff_temp;
+//			double wtt = Gaussian_Kernel(Si);
+//
+//			double red_amt;
+//			if(neigh_pos.x < REDUCE_DEP_STOP1)
+//				red_amt = AMT_REDUCE_DEP;
+//			else if (neigh_pos.x < REDUCE_DEP_STOP2)
+//			{
+//				red_amt = AMT_REDUCE_DEP + (neigh_pos.x - REDUCE_DEP_STOP1) * (1. - AMT_REDUCE_DEP) / (REDUCE_DEP_STOP2 - REDUCE_DEP_STOP1);
+//			}
+//			else
+//				red_amt = 1.;
+//
+//			Wtemp.s[kk] = wtt * red_amt;
+//			sumW += wtt;
+//		}
+//		for (int kk = 0; kk < 8; kk++)
+//		{
+//			Wtemp.s[kk] /= sumW;
+//		}
+//		FItemp.WeightsL = Wtemp.lo;
+//		FItemp.WeightsR = Wtemp.hi;
+//		
+//		blind++;
+//		FI[fiind++] = FItemp;
+//		if (fiind == fiind_inlet)
+//		{
+//			for (int zz = 0; zz < fiind_inlet; zz++)
+//			{
+//				FI[zz].WeightsL = FI[fiind].WeightsL;
+//				FI[zz].WeightsR = FI[fiind].WeightsR;
+//			}
+//		}
+//	}
+//	
+//	cl_uint bl_outlet = blind-3;
+//	for (cl_uint i = IO_end.y - 4; i <= IO_end.y; i++)
+//	{
+//		foulI FItemp;
+//		FItemp.C_ind = i;
+//		FItemp.BL_ind = bl_outlet;
+//		cl_double2 LP = { { vls.C0[i - 1].x, vls.C0[i - 1].y } };
+//		cl_double2 CP = { { vls.C0[i].x, vls.C0[i].y } };
+//		cl_double2 RP = { { vls.C0[i + 1].x, vls.C0[i + 1].y } };
+//		cl_double2 tanvec0 = Subtract2(CP, LP);
+//		cl_double2 normvec0 = { { -tanvec0.y, tanvec0.x } };
+//		cl_double2 tanvec1 = Subtract2(RP, CP);
+//		cl_double2 normvec1 = { { -tanvec1.y, tanvec1.x } };
+//		cl_double len0 = GETLEN(tanvec0);
+//		cl_double len1 = GETLEN(tanvec1);
+//		normvec0 = Divide2(normvec0, len0);
+//		normvec1 = Divide2(normvec1, len1);
+//
+//		FItemp.vN = { { (normvec0.x + normvec1.x) / 2., (normvec0.y + normvec1.y) / 2. } };
+//		FItemp.disp = 0.;
+//		FItemp.WeightsL = { { 1. / 7., 1. / 7., 1. / 7., 1. / 7. } };
+//		FItemp.WeightsR = { { 1. / 7., 1. / 7., 1. / 7., 0. } };
+//		blind++;
+//		FI[fiind++] = FItemp;
+//	}
+//
+//	
+//	blind = vls.nBL / 2;
+//	while (TRUE)
+//	{
+//		blind++;
+//		if (vtr.BL[blind].P1ind == IO_end.z)
+//			break;
+//	}
+//
+//	bl_inlet = blind;
+//
+//	int fiind_inlet_start = fiind;
+//	for (int ii = 0; ii < 4; ii++)
+//	{
+//		foulI FItemp;
+//		int i = IO_end.z - ii;
+//		FItemp.C_ind = i;
+//		FItemp.BL_ind = bl_inlet;
+//		cl_double2 RP = { { vls.C0[i - 1].x, vls.C0[i - 1].y } };
+//		cl_double2 CP = { { vls.C0[i].x, vls.C0[i].y } };
+//		cl_double2 LP = { { vls.C0[i + 1].x, vls.C0[i + 1].y } };
+//		cl_double2 tanvec0 = Subtract2(LP, CP);
+//		cl_double2 normvec0 = { { -tanvec0.y, tanvec0.x } };
+//		cl_double2 tanvec1 = Subtract2(CP, RP);
+//		cl_double2 normvec1 = { { -tanvec1.y, tanvec1.x } };
+//		cl_double len0 = GETLEN(tanvec0);
+//		cl_double len1 = GETLEN(tanvec1);
+//		normvec0 = Divide2(normvec0, len0);
+//		normvec1 = Divide2(normvec1, len1);
+//
+//		FItemp.vN = { { (normvec0.x + normvec1.x) / 2., (normvec0.y + normvec1.y) / 2. } };
+//		FItemp.disp = 0.;
+//		FItemp.WeightsL = ioWeight.lo;
+//		FItemp.WeightsR = ioWeight.hi;
+//		blind++;
+//		FI[fiind++] = FItemp;
+//
+//	}
+//
+//	fiind_inlet = fiind;
+//	
+//	for (cl_uint i = IO_end.z - 4; i >= IO_end.w + 5; i--)
+//	{
+//		cl_uint bl_start = blind - 3;
+//		foulI FItemp;
+//		FItemp.C_ind = i;
+//		FItemp.BL_ind = bl_start;
+//		cl_double2 RP = { { vls.C0[i - 1].x, vls.C0[i - 1].y } };
+//		cl_double2 CP = { { vls.C0[i].x, vls.C0[i].y } };
+//		cl_double2 LP = { { vls.C0[i + 1].x, vls.C0[i + 1].y } };
+//		cl_double2 tanvec0 = Subtract2(LP, CP);
+//		cl_double2 normvec0 = { { -tanvec0.y, tanvec0.x } };
+//		cl_double2 tanvec1 = Subtract2(CP, RP);
+//		cl_double2 normvec1 = { { -tanvec1.y, tanvec1.x } };
+//		cl_double len0 = GETLEN(tanvec0);
+//		cl_double len1 = GETLEN(tanvec1);
+//		normvec0 = Divide2(normvec0, len0);
+//		normvec1 = Divide2(normvec1, len1);
+//
+//		FItemp.vN = { { (normvec0.x + normvec1.x) / 2., (normvec0.y + normvec1.y) / 2. } };
+//		FItemp.disp = 0.;
+//
+//		
+//
+//		cl_double8 Wtemp;
+//		double sumW = 0.;
+//		for (int kk = 0; kk < 8; kk++)
+//		{
+//			cl_double2 neigh_pos = get_center(vtr.BL[bl_start + kk].vP0, vtr.BL[bl_start + kk].vP1);
+//			cl_double2 dVec = Subtract2(CP, neigh_pos);
+//			double dist = GETLEN(dVec);
+//			double cutoff_temp = cutoff_rad;
+//			//if (dist >= cutoff_rad)
+//			//	cutoff_temp *= 1.25;
+//			double Si = dist / cutoff_temp;
+//			double wtt = Gaussian_Kernel(Si);
+//
+//			double red_amt;
+//			if (neigh_pos.x < REDUCE_DEP_STOP1)
+//				red_amt = AMT_REDUCE_DEP;
+//			else if (neigh_pos.x < REDUCE_DEP_STOP2)
+//			{
+//				red_amt = AMT_REDUCE_DEP + (neigh_pos.x - REDUCE_DEP_STOP1) * (1. - AMT_REDUCE_DEP) / (REDUCE_DEP_STOP2 - REDUCE_DEP_STOP1);
+//			}
+//			else
+//				red_amt = 1.;
+//
+//			Wtemp.s[kk] = wtt * red_amt;
+//			sumW += wtt;
+//		}
+//		for (int kk = 0; kk < 8; kk++)
+//		{
+//			Wtemp.s[kk] /= sumW;
+//		}
+//		FItemp.WeightsL = Wtemp.lo;
+//		FItemp.WeightsR = Wtemp.hi;
+//
+//		FI[fiind++] = FItemp;
+//		if (fiind == fiind_inlet)
+//		{
+//			for (int zz = fiind_inlet_start; zz < fiind_inlet; zz++)
+//			{
+//				FI[zz].WeightsL = FI[fiind].WeightsL;
+//				FI[zz].WeightsR = FI[fiind].WeightsR;
+//			}
+//		}
+//		blind++;
+//	}
+//
+//	bl_outlet = blind-3;
+//	for (cl_uint i = IO_end.w + 4; i >= IO_end.w; i--)
+//	{
+//		foulI FItemp;
+//		FItemp.C_ind = i;
+//		FItemp.BL_ind = bl_outlet;
+//		cl_double2 RP = { { vls.C0[i - 1].x, vls.C0[i - 1].y } };
+//		cl_double2 CP = { { vls.C0[i].x, vls.C0[i].y } };
+//		cl_double2 LP = { { vls.C0[i + 1].x, vls.C0[i + 1].y } };
+//		cl_double2 tanvec0 = Subtract2(LP, CP);
+//		cl_double2 normvec0 = { { -tanvec0.y, tanvec0.x } };
+//		cl_double2 tanvec1 = Subtract2(CP, RP);
+//		cl_double2 normvec1 = { { -tanvec1.y, tanvec1.x } };
+//		cl_double len0 = GETLEN(tanvec0);
+//		cl_double len1 = GETLEN(tanvec1);
+//		normvec0 = Divide2(normvec0, len0);
+//		normvec1 = Divide2(normvec1, len1);
+//
+//		FItemp.vN = { { (normvec0.x + normvec1.x) / 2., (normvec0.y + normvec1.y) / 2. } };
+//		FItemp.disp = 0.;
+//		FItemp.WeightsL = { { 1. / 7., 1. / 7., 1. / 7., 1. / 7. } };
+//		FItemp.WeightsR = { { 1. / 7., 1. / 7., 1. / 7., 0. } };
+//		FI[fiind++] = FItemp;
+//	}
 }
 
 cl_double2 clVariablesFL::get_center(cl_double2 P0, cl_double2 P1)
@@ -765,7 +776,7 @@ bool clVariablesFL::test_bounds()
 }
 
 
-void clVariablesFL::freeHostMem()
+void clVariablesFL::freeHostArrays()
 {
 
 }
@@ -779,9 +790,9 @@ void clVariablesFL::save_variables()
 
 	vtr.saveDebug();
 	vls.saveDebug();
-	vlb.saveDebug();
+	//vlb.saveDebug();
 	vfd.saveDebug();
-	vtr.P.save_txt_from_device_full("trc");
+	vtr.P.saveFromDevice(true, trStructBase::saveTxtFl);
 }
 
 void clVariablesFL::CallRename(char *file, const char *fol)
@@ -790,14 +801,14 @@ void clVariablesFL::CallRename(char *file, const char *fol)
 	char Buf2[80];
 	sprintf(Buf2, "%s.txt", file);
 	sprintf(Buf, "%s" SLASH "%s.txt", fol, file);
-	p.RenameFile(Buf2, Buf);
+	RenameFile(Buf2, Buf);
 }
 
 void clVariablesFL::RenameDebug_Files(int dirnumber)
 {
 	std::string NewDir = "debugFiles_" + std::to_string(dirnumber);
 
-	p.MakeDir(NewDir);
+	MakeDir(NewDir);
 	CallRename("lsc", NewDir.c_str());
 	CallRename("lbm", NewDir.c_str());
 	CallRename("lbms", NewDir.c_str());
@@ -842,62 +853,62 @@ void clVariablesFL::RenameDebug_Files(int dirnumber)
 void clVariablesFL::update_TR(cl_event *wait_fill, int Num_Wnodes_temp)
 {
 
-	cl_uint offset = vtr.Ploc(1).x;
-	cl_uint total_removal = vtr.Ploc(1).y - offset;
-	update_TR_kernel[3].set_argument(2, &offset);
-	update_TR_kernel[3].set_argument(3, &total_removal);
+	//cl_uint offset = vtr.Ploc(1).x;
+	//cl_uint total_removal = vtr.Ploc(1).y - offset;
+	//update_TR_kernel[3].set_argument(2, &offset);
+	//update_TR_kernel[3].set_argument(3, &total_removal);
 
 
-	update_TR_kernel[0].call_kernel(NULL, 1, wait_fill);  ///Update Nodes
-	update_TR_kernel[1].call_kernel();  ///Update Wall Nodes
-	update_TR_kernel[2].call_kernel();	///Update Particles
-	update_TR_kernel[3].call_kernel();	///Update Wall Particles
+	//update_TR_kernel[0].call_kernel(NULL, 1, wait_fill);  ///Update Nodes
+	//update_TR_kernel[1].call_kernel();  ///Update Wall Nodes
+	//update_TR_kernel[2].call_kernel();	///Update Particles
+	//update_TR_kernel[3].call_kernel();	///Update Wall Particles
 
-	vtr.Num_W_nodes.read_from_buffer();
-	clFlush(TRQUEUE);
+	//vtr.Num_W_nodes.read_from_buffer();
+	//clFlush(TRQUEUE);
 
-	clFinish(FDQUEUE);
+	//clFinish(FDQUEUE);
 
-	// May or may not need to keep this (will require re-implementing method in LBsolver)
-	//vlb.update_IBB_arrays();
-	vtr.update_Shear_arrays();
-	vtr.update_trp();
+	//// May or may not need to keep this (will require re-implementing method in LBsolver)
+	////vlb.update_IBB_arrays();
+	//vtr.update_Shear_arrays();
+	//vtr.update_trp();
 
-	clFinish(TRQUEUE);
-	vtr.Num_wall_nodes = vtr.Num_W_nodes(0);
-	//cl_event Fill_Evt;
-	//vtr.Num_W_nodes.FillBuffer(IOQUEUE, 0, &Fill_Evt);
+	//clFinish(TRQUEUE);
+	//vtr.Num_wall_nodes = vtr.Num_W_nodes(0);
+	////cl_event Fill_Evt;
+	////vtr.Num_W_nodes.FillBuffer(IOQUEUE, 0, &Fill_Evt);
 
-	if (Num_Wnodes_temp < vtr.Num_W_nodes(0))
-	{
-		double gsize = (double)vtr.Num_W_nodes(0) / WORKGROUPSIZE_TR_WALL;
-		vtr.Num_wall_nodes_max = (int)(ceil(gsize)*WORKGROUPSIZE_TR_WALL);
+	//if (Num_Wnodes_temp < vtr.Num_W_nodes(0))
+	//{
+	//	double gsize = (double)vtr.Num_W_nodes(0) / WORKGROUPSIZE_TR_WALL;
+	//	vtr.Num_wall_nodes_max = (int)(ceil(gsize)*WORKGROUPSIZE_TR_WALL);
 
-		vtr.TR_Wall_Par_kernel[0].reset_global_size(vtr.Num_W_nodes(0));
-		vtr.TR_Wall_Node_kernel[0].reset_global_size(vtr.Num_W_nodes(0));
-		vtr.TR_Wall_Node_kernel[1].reset_global_size(vtr.Num_W_nodes(0));
-
-
-		vtr.Winds.reallocate(vtr.Num_wall_nodes_max);
-		clFinish(IOQUEUE);
-
-		update_TR_kernel[4].set_argument(1, vtr.Winds.get_buf_add());
+	//	vtr.TR_Wall_Par_kernel[0].reset_global_size(vtr.Num_W_nodes(0));
+	//	vtr.TR_Wall_Node_kernel[0].reset_global_size(vtr.Num_W_nodes(0));
+	//	vtr.TR_Wall_Node_kernel[1].reset_global_size(vtr.Num_W_nodes(0));
 
 
-		vtr.TR_Wall_Par_kernel[0].set_argument(7, vtr.Winds.get_buf_add());
-		vtr.TR_Wall_Node_kernel[0].set_argument(4, vtr.Winds.get_buf_add());
-		vtr.TR_Wall_Node_kernel[1].set_argument(4, vtr.Winds.get_buf_add());
-	}
+	//	vtr.Winds.reallocate(vtr.Num_wall_nodes_max);
+	//	clFinish(IOQUEUE);
 
-	vtr.TR_Wall_Par_kernel[0].set_argument(8, &vtr.Num_wall_nodes);
-	vtr.TR_Wall_Node_kernel[0].set_argument(5, &vtr.Num_wall_nodes);
-	vtr.TR_Wall_Node_kernel[1].set_argument(5, &vtr.Num_wall_nodes);
-	
-	////update_TR_kernel[4].call_kernel(1, &Fill_Evt);
-	update_TR_kernel[4].call_kernel();
+	//	update_TR_kernel[4].set_argument(1, vtr.Winds.get_buf_add());
 
-	clFlush(TRQUEUE);
-	//clReleaseEvent(Fill_Evt);
+
+	//	vtr.TR_Wall_Par_kernel[0].set_argument(7, vtr.Winds.get_buf_add());
+	//	vtr.TR_Wall_Node_kernel[0].set_argument(4, vtr.Winds.get_buf_add());
+	//	vtr.TR_Wall_Node_kernel[1].set_argument(4, vtr.Winds.get_buf_add());
+	//}
+
+	//vtr.TR_Wall_Par_kernel[0].set_argument(8, &vtr.Num_wall_nodes);
+	//vtr.TR_Wall_Node_kernel[0].set_argument(5, &vtr.Num_wall_nodes);
+	//vtr.TR_Wall_Node_kernel[1].set_argument(5, &vtr.Num_wall_nodes);
+	//
+	//////update_TR_kernel[4].call_kernel(1, &Fill_Evt);
+	//update_TR_kernel[4].call_kernel();
+
+	//clFlush(TRQUEUE);
+	////clReleaseEvent(Fill_Evt);
 }
 
 
@@ -1073,42 +1084,11 @@ void clVariablesFL::setKernelArgs()
 	//}
 }
 
-void clVariablesFL::Release_Objects()
-{// Should be handled by destructors
-	//update_FL_kernel[0].free_memory();
-	//update_FL_kernel[1].free_memory();
 
-	//update_LS_kernel[0].free_memory();
-	//update_LS_kernel[1].free_memory();
-	//update_LS_kernel[2].free_memory();
-	//update_LS_kernel[3].free_memory();
-	//update_LS_kernel[4].free_memory();
-	//update_LB_kernel[0].free_memory();
-	//update_LB_kernel[1].free_memory();
-
-	//update_FD_kernel.free_memory();
-
-	//update_TR_kernel[0].free_memory();
-	//update_TR_kernel[1].free_memory();
-	//update_TR_kernel[2].free_memory();
-	//update_TR_kernel[3].free_memory();
-	//update_TR_kernel[4].free_memory();
-
-
-	//update_GL_kernel.free_memory();
-
-	//FI.delete_array(IOQUEUE);
-	//RI.delete_array(IOQUEUE);
-	//BLdep_tot.delete_array(IOQUEUE);
-	//BLdep_tot_temp.delete_array(IOQUEUE);
-	//IO_ind_dist.delete_array(IOQUEUE);
-	//Sum_M_temp.delete_array(IOQUEUE);
-
-}
 
 void clVariablesFL::allocateBuffers()
 {
-	FI.allocate_buffer_w_copy();
+	//FI.allocate_buffer_w_copy();
 	RI.allocate_buffer_w_copy();
 	IO_ind_dist.allocate_buffer_w_copy(CL_MEM_READ_ONLY);
 	BLdep_tot.allocate_buffer_w_copy();
@@ -1126,7 +1106,7 @@ void clVariablesFL::save2file()
 
 void clVariablesFL::saveRestartFiles()
 {
-	FI.save_from_device("fli");
+	//FI.save_from_device("fli");
 	BLdep_tot.save_bin_from_device("BLdep_tot");
 }
 

@@ -32,7 +32,8 @@ public:
 	std::function<void(void)> loadParamsPtr;
 
 	clVariablesFD() : tempArray("temp"), Alphat("alphat"), 
-		alphaArray("alpha"), Nu("Nu")
+		alphaDer("alpha"), Nu("Nu"), nuDist("nuDist"), 
+		nuDistVec("nuNodCInds"), nuYInds("nuYinds"), NuMean("NuMean")
 	{
 		loadParamsPtr = std::bind(&clVariablesFD::loadParams, this);
 	};
@@ -47,8 +48,10 @@ public:
 ////////////////////////////////////////////////////////////////////////////
 	   
 
-	Kernel calcNu;			// Calculates Nusselt along wall
-	Kernel updateNuVars;		// Updates variables used in calculation of Nu 
+	Kernel calcNuKernel;		// Calculates Nusselt along wall
+	Kernel calcNuMeanKernel;	// Calculates Umean and Tbulk at beginning of each period
+	Kernel updateNuKernel[2];	// Updates coefficients for Nu calculation
+	//Kernel updateNuVars;		// Updates variables used in calculation of Nu 
 	Kernel TempUpdateCoeffs;	// Updates Temperature coefficients from SS
 								// to transient
 	Kernel SetSSCoeffs;			// Sets SS coefficients for thermal solver
@@ -78,8 +81,8 @@ public:
 	Array2Dd tempArray;		// Temp array, the pointer of which is passed
 							// to the thermal BiCGStab solver
 
-	Array3Dd alphaArray;	// Alpha values for each direction at each node
-							// Updated each time step (handles 
+	Array2Dv2d alphaDer;	// dAlpha/dx and dAlpha/dy
+							// Updated at each vfl update step 
 
 	//dX arrays, which were previously implemented in this function moved
 	//to clVariablesLS, since they will also be used for turb parameters
@@ -91,14 +94,21 @@ public:
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                   Output Arrays               ///////////////
 ////////////////////////////////////////////////////////////////////////////	
-	Array2Dd Nu;
+	TimeData<double> Nu, NuMean;
 
-	//buffers containing Nu(x) along both walls on host and device
-#ifdef USE_ORIG_NU
-	Array1Dv2d LBdist_bot, LBdist_top;
-	Array1Dv2i BLinds, LBnodey;
-	Array1Dd LBdist_temp;
-#endif
+
+	// Arrays used in the calculation of Nu along wall
+
+	// Arrays are length 2*(vtr.trDomainSize.x) with index
+	// i and i+vtr.trDomainSize.x corresponding to values used to calculate
+	// nu at x location i+vtr.trDomainXSize.x on bottom and top walls, respectively
+	Array1Dv2d nuDistVec;	// unit Normal from BL to wall node 
+	Array1Dd nuDist;		// magnitude of vector from BL to wall node 
+	Array1Di nuYInds;		// y index of wall node and node in vtr.NodC
+							// value = (y-index << 2) | nodeType
+							// nodeType & 0x1: use dXe
+							// nodeType & 0x2: use dYn
+
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                   Display Arrays              ///////////////
@@ -149,6 +159,23 @@ public:
 	double kSoot, kAir;		//Thermal conductivity of soot and air
 							//in SI units 
 	double rhoSoot, cpSoot; //Density and Cp of soot in SI units
+	double nuCutoffRadius;	// radius used to find surrounding nodes when calculating
+							// coefficients for Nu calculations
+	int nuNumNodes;			// Number of nodes in x-direction Nu is being calculated at 
+	int maxOutputLinesNu;	// number of output lines in Nu
+
+	// Coefficients used to calculate the harmonic mean
+	// Harmonic mean of alpha = k_c*k_n / ( A*(del^3) + B*(del^2 * (1-del)) + C*(del*(1-del)^2) + D((1-del)^3))
+	// A = k_n*ro_c*cp_c
+	// B = k_n*ro_c*cp_n + k_n*ro_n*cp_c + k_c*ro_c*cp_c 
+	// C = k_n*ro_n*cp_n + k_c*ro_c*cp_n + k_c*ro_n*cp_c
+	// D = k_c*ro_n*cp_n
+	// k is thermal conductivity, cp is heat capacity and ro is density, _c is center node, _n is neighboring node
+	// del is distance from c to interface divided by distance from c to n;
+
+
+	double kSootLB, kAirLB, cpSootLB, rhoSootLB, cpAirLB, rhoAirLB;
+
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                Method Variables               ///////////////
@@ -157,9 +184,12 @@ public:
 	//Pre-calculated values used to simplify calculation of Alpha array
 	double Alpha_den_air, Alpha_den_soot, Alpha_num_soot, Alpha_num_air;
 
-	int Save_loc_Nu;	//offset for current Nu values to save in Nu_buffer
-	int numNuNodes;	//Number of nodes where Nu is calculated
-	
+	int Save_loc_Nu;	// offset for current Nu values to save in Nu_buffer
+	int numNuNodes;	// Number of nodes where Nu is calculated
+	int numNuNodesFull; // padded x-size of nu array
+	int nuMeanNumNodes; // number of locations where umean and Tbulk is calculated
+	int nuMeanNumNodesFull; // padded nuMeanNumNodes
+	int wgSizeNuMean; //workgroup size in y direction for calcNuMeanKernel
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                                               ///////////////
@@ -189,6 +219,10 @@ public:
 	// Loads parameters passed in yaml parameter file, (also reads in 
 	// restart variables when a run is restarted)
 	void loadParams();
+
+	// Copies saved files from main folder into results folder to ensure
+	// that next files do not save 
+	void renameSaveFiles();
 
 	// Writes output data to file(specific arrays, not all of them)
 	void save2file();
@@ -235,6 +269,15 @@ public:
 	////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////
 
+	// Calculates the distance between a node and the closest point on a BL in the
+	// direction of the normal to the BL from the node.
+	bool bcFindIntersectionNormal(cl_double2& vC, double& dist, cl_double2 vL0,
+		cl_double2 vP0, cl_double2 vP1, cl_double2& vN);
+
+	void nuFindNearestNode(const int i, const int shiftInd);
+
+	// calculates alpha between two nodes
+	double calcAlphaDirection(const int i1, const int j1, const int i2, const int j2, const int dirInd);
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////            Initialization Functions           ///////////////
 	////////////////////////////////////////////////////////////////////////////
@@ -242,11 +285,8 @@ public:
 	//Initializes alpha array by filling it with air thermal diffusivity
 	void iniAlpha();
 
-	void iniNuKernel();
-
-	void createNuArrays();
-
-	void reIniNuKernel();
+	// Initializes Nu Coefficients
+	void iniNuCoeffs();
 
 
 	////////////////////////////////////////////////////////////////////////////	
@@ -256,6 +296,8 @@ public:
 	//Fills Alpha Array with Values based on interface thickness
 	void updateAlphaArray();
 
+	// Updates Nu Coefficients
+	void updateNuCoeffs();
 
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////               Solving Functions               ///////////////
@@ -275,9 +317,6 @@ public:
 	//////////////                Output Functions               ///////////////
 	////////////////////////////////////////////////////////////////////////////
 	
-	//Enqueues kernel to update Nu along boundary
-	void UpdateNu();
-
 
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////                Display Functions              ///////////////

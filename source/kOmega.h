@@ -28,7 +28,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 
-	kOmega() : dXCoeffs("dXCoeffs"), WallD("wallD"),
+	kOmega() : WallD("wallD"),
 		Diff_Omega("diffOmega"), Diff_K("diffK"), Fval_array("Fvals"),
 		Nut_array("lbnut"), dKdO_array("dKdO"), Sxy_array("lbsxy"),
 		Kappa_array("lbkappa"), Omega_array("lbomega")
@@ -37,11 +37,7 @@ public:
 	~kOmega() {}
 
 
-	// Used for indexing dx arrays
-	enum dxCoeffInd {
-		dxind_e, dxind_w, dxind_c, dyind_n, dyind_s,
-		dyind_c, dx2ind_e, dx2ind_w, dx2ind_c, dy2ind_n, dy2ind_s, dy2ind_c
-	};
+
 
 	// Used to specify the type of debugging being used for kOmega functions
 	enum { lbDbgSave, koDbgSave1, koDbgSave2, koDbgSave, DbgSave };
@@ -59,6 +55,7 @@ public:
 
 	Kernel kOmegaUpdateDiffCoeffs;	// Step 1 updating coefficients for kOmega Eqns
 	Kernel kOmegaUpdateCoeffs;		// Step 2 updating coefficients for kOmega Eqns
+	Kernel updateWallDKernel;		// updates wall distance array
 
 	// Reduction kernels
 	Reducer<double, ReduceGenerator::Min> minKappa, minOmega;
@@ -102,12 +99,11 @@ public:
 	
 	// Arrays for kOmega solver coefficients,
 	// which are used to calculate the soln matrix
-	Array3Dd dXCoeffs; // distances between nodes
 	Array2Dd WallD;	// wall distance of each node
 	Array2Dd Diff_Omega, Diff_K; // Diffusion terms
 	Array2Dd Fval_array; // F term 
 	Array3Dd dKdO_array; // derivatives of kappa and omega
-	Array3Dd Sxy_array; // shear terms
+	Array3Dd Sxy_array; // strain rate Tensor terms xx,xy and yy
 
 	// Used for debugging kOmega
 #ifdef DEBUG_TURBARR
@@ -171,7 +167,8 @@ public:
 	int kappaMaxIters, omegaMaxIters;
 
 
-
+	// Search radius for BLs when calculating wall distances
+	int wallDSearchRar;
 
 	// Characteristic Values used to initialize Kappa/Omega
 	double TurbIntensity, TurbLScale_inv;
@@ -216,6 +213,10 @@ public:
 	// Loads parameters passed in yaml parameter file, (also reads in 
 	// restart variables when a run is restarted)
 	void loadParams();
+
+	// Copies saved files from main folder into results folder to ensure
+	// that next files do not save 
+	void renameSaveFiles();
 
 	// Writes output data to file(specific arrays, not all of them)
 	void save2file();
@@ -266,12 +267,14 @@ public:
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 
+	// Iterates through BL indicies provided by first two arguments and 
+	// returns the minimum distance between nLoc and the wall.
+	double findMinDist(cl_int2 botSearchInds, cl_int2 topSearchInds, 
+		cl_double2& nLoc);
+
 ////////////////////////////////////////////////////////////////////////////	
 //////////////            Initialization Functions           ///////////////
 ////////////////////////////////////////////////////////////////////////////
-
-	// calculates coefficients for differentiation of K and Omega  
-	void calcDxTerms();
 
 	// Calculates turbulent viscosity array from values in kappa and omega
 	void calcNutArray();

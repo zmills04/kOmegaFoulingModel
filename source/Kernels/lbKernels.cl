@@ -1,4 +1,117 @@
 
+////////////////////////////////////////////////////////////
+////                                                    ////
+//// Old Propagation Code, which has an error somewhere ////
+////                                                    ////
+////////////////////////////////////////////////////////////
+
+//int lx = get_local_id(0);
+
+//prop_fE[lx] = -1.0;
+
+//barrier(CLK_LOCAL_MEM_FENCE);
+//// Update the 0-th direction distribution
+//FB[gi] = Fi[C_DIR];
+//// Propagation in directions orthogonal to the X axis (global memory)
+//if ((type & N_BOUND) == 0)
+//	FB[gi + (DIST_SIZE * N_DIR + N_NEIGH)] = Fi[N_DIR];
+//if ((type & S_BOUND) == 0)
+//	FB[gi + (DIST_SIZE * S_DIR + S_NEIGH)] = Fi[S_DIR];
+
+//// E propagation in shared memory
+//if (lx < (BLOCK_SIZE - 1) && gx < (CHANNEL_LENGTH - 1))
+//{
+//	prop_fE[lx + 1] = Fi[E_DIR];
+//	prop_fNE[lx + 1] = Fi[NE_DIR];
+//	prop_fSE[lx + 1] = Fi[SE_DIR];
+//	// E propagation in global memory (at right block boundary)
+//}
+//else
+//{
+//	int xprop_loc = (gx == CHANNEL_LENGTH - 1) ? (0) : (gx + 1);
+//	int Eprop = GET_GLOBAL_IDX(xprop_loc, gy);
+
+//	FB[Eprop + DIST_SIZE] = Fi[E_DIR];
+//	if ((type & N_BOUND) == 0)
+//	{
+//		int NEprop = GET_GLOBAL_IDX(xprop_loc, gy + 1);
+//		FB[NEprop + DIST_SIZE * NE_DIR] = Fi[NE_DIR];
+//	}
+//	if ((type & S_BOUND) == 0)
+//	{
+//		int SEprop = GET_GLOBAL_IDX(xprop_loc, gy - 1);
+//		FB[SEprop + DIST_SIZE * SE_DIR] = Fi[SE_DIR];
+//	}
+//}
+
+//barrier(CLK_LOCAL_MEM_FENCE);
+
+//// Save locally propagated distributions into global memory.
+//// The leftmost thread is not updated in this block.
+//if (lx > 0 && gx < CHANNEL_LENGTH)
+//{
+//	if (prop_fE[lx] != -1.0)
+//	{
+//		FB[gi + (DIST_SIZE)*E_DIR] = prop_fE[lx];
+
+//		if ((type & N_BOUND) == 0)
+//			FB[gi + (DIST_SIZE * NE_DIR + N_NEIGH)] = prop_fNE[lx];
+//		if ((type & S_BOUND) == 0)
+//			FB[gi + (DIST_SIZE * SE_DIR + S_NEIGH)] = prop_fSE[lx];
+//	}
+//}
+
+//barrier(CLK_LOCAL_MEM_FENCE);
+
+//prop_fE[lx] = -1.0;
+//barrier(CLK_LOCAL_MEM_FENCE);
+
+//// W propagation in shared memory
+//// Note: propagation to ghost nodes is done directly in global memory as there
+//// are no threads running for the ghost nodes.
+//if (lx > 0 && gx > 0)
+//{
+//	prop_fW[lx - 1] = Fi[W_DIR];
+//	prop_fNW[lx - 1] = Fi[NW_DIR];
+//	prop_fSW[lx - 1] = Fi[SW_DIR];
+
+//	// W propagation in global memory (at left block boundary)
+//}
+//else
+//{
+//	int xprop_loc = (gx > 0) ? (gx - 1) : (CHANNEL_LENGTH - 1);
+//	int Wprop = GET_GLOBAL_IDX(xprop_loc, gy);
+
+//	FB[Wprop + DIST_SIZE * W_DIR] = Fi[W_DIR];
+//	if ((type & N_BOUND) == 0)
+//	{
+//		int NWprop = GET_GLOBAL_IDX(xprop_loc, gy + 1);
+//		FB[NWprop + DIST_SIZE * NW_DIR] = Fi[NW_DIR];
+//	}
+//	if ((type & S_BOUND) == 0)
+//	{
+//		int SWprop = GET_GLOBAL_IDX(xprop_loc, gy - 1);
+//		FB[SWprop + DIST_SIZE * SW_DIR] = Fi[SW_DIR];
+//	}
+//}
+
+//barrier(CLK_LOCAL_MEM_FENCE);
+//// The rightmost thread is not updated in this block.
+//if (lx < (BLOCK_SIZE - 1) && gx < CHANNEL_LENGTH-1)
+//{
+//	if (prop_fE[lx] != -1.0)
+//	{
+//		FB[gi + (DIST_SIZE * W_DIR)] = prop_fW[lx];
+//		if ((type & N_BOUND) == 0)
+//		{
+//			FB[gi + (DIST_SIZE * NW_DIR + N_NEIGH)] = prop_fNW[lx];
+//		}
+//		if ((type & S_BOUND) == 0)
+//		{
+//			FB[gi + (DIST_SIZE * SW_DIR + S_NEIGH)] = prop_fSW[lx];
+//		}
+//	}
+//}
 
 
 inline void compute_0th_moment(const FTYPE *Fi, FTYPE *out)
@@ -25,15 +138,15 @@ __kernel void Calc_Ro_J(__global double *__restrict__ rho_array,
 	__global double *__restrict__ ivx,
 	__global double *__restrict__ ivy,
 	__global double *__restrict__ fvals,
-	__global const int *__restrict__ Map)
+	__global const NTYPE_TYPE *__restrict__ Map)
 {
 	const int gx = get_global_id(0);			
 	
 	if (gx > CHANNEL_LENGTH) { return; }
 	const int gy = get_global_id(1) + 1;
 	int gi = GET_GLOBAL_IDX(gx, gy);
-	const int type = Map[gi];					
-	if ((type & FLUID_NODE) == 0) { return; }	
+	const NTYPE_TYPE type = Map[gi];
+	if (type & M_SOLID_NODE) { return; }
 
 	double Fi[9];
 
@@ -50,7 +163,7 @@ __kernel void Calc_Ro_J(__global double *__restrict__ rho_array,
 	ivy[gi] = v0[1];
 }
 
-inline void postCollisionBC(const FTYPE *Fi, const int orientation, const int gi, __global FTYPE *__restrict__ dist_out)
+inline void postCollisionBC(const FTYPE *Fi, const NTYPE_TYPE orientation, const int gi, __global FTYPE *__restrict__ dist_out)
 {
 #define TEST_WRITE(dir)		if(orientation & (dir ## _BOUND)) { dist_out[gi + DIST_SIZE * (dir ## _REV)] = Fi[(dir ## _DIR)]; } 
 	CALL_ALL_DISTS_NO_C(TEST_WRITE);
@@ -64,8 +177,10 @@ __kernel void LB_collision_SRT_Fluid(__global double *__restrict__ rho_array,
 	__global double *__restrict__ ovy,
 	__global double *__restrict__ FA,
 	__global double *__restrict__ FB,
-	__global int *__restrict__ Map,
+	__global NTYPE_TYPE *__restrict__ Map,
+#ifdef IN_KERNEL_IBB
 	__global double *__restrict__ dxvals,
+#endif
 	int options)
 {
 
@@ -74,8 +189,9 @@ __kernel void LB_collision_SRT_Fluid(__global double *__restrict__ rho_array,
 	if (gx > CHANNEL_LENGTH) { return; }
 	const int gy = get_global_id(1);
 	const int gi = GET_GLOBAL_IDX(gx, gy);
-	const int type = Map[gi];
-	if ((type & FLUID_NODE) == 0) { return; }
+	const NTYPE_TYPE type = Map[gi];
+	
+	if (type & M_SOLID_NODE) { return; }
 
 	double Fi[9];
 
@@ -84,7 +200,7 @@ __kernel void LB_collision_SRT_Fluid(__global double *__restrict__ rho_array,
 	CALL_ALL_DISTS(GET_DIST_MACRO);
 #undef GET_DIST_MACRO
 
-	
+#ifdef IN_KERNEL_IBB
 	// IBB for q < 0.5
 #define TEST_WRITE(dir)		if(type & (dir ## _BOUND_T1)) { \
 								double q2 = 2.*dxvals[gi + DIST_SIZE * ((dir ## _DIR) - 1)]; \
@@ -93,7 +209,7 @@ __kernel void LB_collision_SRT_Fluid(__global double *__restrict__ rho_array,
 
 	CALL_ALL_DISTS_NO_C(TEST_WRITE);
 #undef TEST_WRITE
-
+#endif
 	
 	double v0[2], rho;
 	compute_macro_quant(Fi, &rho, v0);
@@ -170,7 +286,7 @@ __kernel void LB_collision_SRT_Fluid(__global double *__restrict__ rho_array,
 	Fi[7] += -Fi[7] * tau0 + xi_32 - xi_33 - xi_36 + xi_37 + xi_39 - xi_40 + xi_41 - xi_42 + xi_44 + xi_45 - xi_46 + xi_47 + xi_48 - xi_49 + xi_50 + xi_51 + xi_52 - xi_53 + xi_54 + xi_55 + xi_56;
 	Fi[8] += -Fi[8] * tau0 - xi_32 + xi_33 - xi_36 + xi_37 - xi_39 - xi_40 - xi_41 + xi_42 - xi_44 + xi_57;
 
-	
+#ifdef IN_KERNEL_IBB
 #define TEST_WRITE(dir)		if(type & (dir ## _BOUND_T2)) { \
 								double q2 = 0.5 / dxvals[gi + DIST_SIZE * ((dir ## _DIR) - 1)]; \
 								Fi[(dir ## _DIR)] = q2 * Fi[(dir ## _DIR)] + (1. - q2) * Fi[(dir ## _REV)]; \
@@ -178,7 +294,7 @@ __kernel void LB_collision_SRT_Fluid(__global double *__restrict__ rho_array,
 
 	CALL_ALL_DISTS_NO_C(TEST_WRITE);
 #undef TEST_WRITE
-
+#endif
 
 	
 	if (type & BOUNDARY_NODE)
@@ -215,128 +331,30 @@ __kernel void LB_collision_SRT_Fluid(__global double *__restrict__ rho_array,
 	
 	if ((type & NW_BOUND) == 0)
 		FB[gi + N_NEIGH + wneigh + DIST_SIZE * 8] = Fi[8];
-	//int lx = get_local_id(0);
 
-	//prop_fE[lx] = -1.0;
-
-	//barrier(CLK_LOCAL_MEM_FENCE);
-	//// Update the 0-th direction distribution
-	//FB[gi] = Fi[C_DIR];
-	//// Propagation in directions orthogonal to the X axis (global memory)
-	//if ((type & N_BOUND) == 0)
-	//	FB[gi + (DIST_SIZE * N_DIR + N_NEIGH)] = Fi[N_DIR];
-	//if ((type & S_BOUND) == 0)
-	//	FB[gi + (DIST_SIZE * S_DIR + S_NEIGH)] = Fi[S_DIR];
-
-	//// E propagation in shared memory
-	//if (lx < (BLOCK_SIZE - 1) && gx < (CHANNEL_LENGTH - 1))
-	//{
-	//	prop_fE[lx + 1] = Fi[E_DIR];
-	//	prop_fNE[lx + 1] = Fi[NE_DIR];
-	//	prop_fSE[lx + 1] = Fi[SE_DIR];
-	//	// E propagation in global memory (at right block boundary)
-	//}
-	//else
-	//{
-	//	int xprop_loc = (gx == CHANNEL_LENGTH - 1) ? (0) : (gx + 1);
-	//	int Eprop = GET_GLOBAL_IDX(xprop_loc, gy);
-
-	//	FB[Eprop + DIST_SIZE] = Fi[E_DIR];
-	//	if ((type & N_BOUND) == 0)
-	//	{
-	//		int NEprop = GET_GLOBAL_IDX(xprop_loc, gy + 1);
-	//		FB[NEprop + DIST_SIZE * NE_DIR] = Fi[NE_DIR];
-	//	}
-	//	if ((type & S_BOUND) == 0)
-	//	{
-	//		int SEprop = GET_GLOBAL_IDX(xprop_loc, gy - 1);
-	//		FB[SEprop + DIST_SIZE * SE_DIR] = Fi[SE_DIR];
-	//	}
-	//}
-
-	//barrier(CLK_LOCAL_MEM_FENCE);
-
-	//// Save locally propagated distributions into global memory.
-	//// The leftmost thread is not updated in this block.
-	//if (lx > 0 && gx < CHANNEL_LENGTH)
-	//{
-	//	if (prop_fE[lx] != -1.0)
-	//	{
-	//		FB[gi + (DIST_SIZE)*E_DIR] = prop_fE[lx];
-
-	//		if ((type & N_BOUND) == 0)
-	//			FB[gi + (DIST_SIZE * NE_DIR + N_NEIGH)] = prop_fNE[lx];
-	//		if ((type & S_BOUND) == 0)
-	//			FB[gi + (DIST_SIZE * SE_DIR + S_NEIGH)] = prop_fSE[lx];
-	//	}
-	//}
-
-	//barrier(CLK_LOCAL_MEM_FENCE);
-
-	//prop_fE[lx] = -1.0;
-	//barrier(CLK_LOCAL_MEM_FENCE);
-
-	//// W propagation in shared memory
-	//// Note: propagation to ghost nodes is done directly in global memory as there
-	//// are no threads running for the ghost nodes.
-	//if (lx > 0 && gx > 0)
-	//{
-	//	prop_fW[lx - 1] = Fi[W_DIR];
-	//	prop_fNW[lx - 1] = Fi[NW_DIR];
-	//	prop_fSW[lx - 1] = Fi[SW_DIR];
-
-	//	// W propagation in global memory (at left block boundary)
-	//}
-	//else
-	//{
-	//	int xprop_loc = (gx > 0) ? (gx - 1) : (CHANNEL_LENGTH - 1);
-	//	int Wprop = GET_GLOBAL_IDX(xprop_loc, gy);
-
-	//	FB[Wprop + DIST_SIZE * W_DIR] = Fi[W_DIR];
-	//	if ((type & N_BOUND) == 0)
-	//	{
-	//		int NWprop = GET_GLOBAL_IDX(xprop_loc, gy + 1);
-	//		FB[NWprop + DIST_SIZE * NW_DIR] = Fi[NW_DIR];
-	//	}
-	//	if ((type & S_BOUND) == 0)
-	//	{
-	//		int SWprop = GET_GLOBAL_IDX(xprop_loc, gy - 1);
-	//		FB[SWprop + DIST_SIZE * SW_DIR] = Fi[SW_DIR];
-	//	}
-	//}
-
-	//barrier(CLK_LOCAL_MEM_FENCE);
-	//// The rightmost thread is not updated in this block.
-	//if (lx < (BLOCK_SIZE - 1) && gx < CHANNEL_LENGTH-1)
-	//{
-	//	if (prop_fE[lx] != -1.0)
-	//	{
-	//		FB[gi + (DIST_SIZE * W_DIR)] = prop_fW[lx];
-	//		if ((type & N_BOUND) == 0)
-	//		{
-	//			FB[gi + (DIST_SIZE * NW_DIR + N_NEIGH)] = prop_fNW[lx];
-	//		}
-	//		if ((type & S_BOUND) == 0)
-	//		{
-	//			FB[gi + (DIST_SIZE * SW_DIR + S_NEIGH)] = prop_fSW[lx];
-	//		}
-	//	}
-	//}
 }
+
+
 #define DBGARR(dbgnum, dbgval)	DebugArrs[gi + dbgnum*DIST_SIZE] = dbgval
 
-__kernel void LB_collision_SRT_Fluid_w_kOmega(__global double *__restrict__ rho_array,
-	__global double *__restrict__ ovx,
-	__global double *__restrict__ ovy,
-	__global double *__restrict__ FA,
-	__global double *__restrict__ FB,
-	__global int *__restrict__ Map,
-	__global double *__restrict__ dxvals,
-	__global double *__restrict__ wallD,
-	__global double *__restrict__ iNut,
-	__global double *__restrict__ iK,
-	__global double *__restrict__ iO,
-	__global double *__restrict__ iSxy,
+__kernel void LB_collision_SRT_Fluid_w_kOmega(__global double* __restrict__ rho_array,
+	__global double* __restrict__ ovx,
+	__global double* __restrict__ ovy,
+	__global double* __restrict__ FA,
+	__global double* __restrict__ FB,
+	__global NTYPE_TYPE* __restrict__ Map,
+#ifdef IN_KERNEL_IBB
+	__global double* __restrict__ dxvals,
+#endif
+	__global double* __restrict__ wallD,
+	__global double* __restrict__ iNut,
+	__global double* __restrict__ iK,
+	__global double* __restrict__ iO,
+	__global double* __restrict__ iSxy,// strain rate tensor components
+#ifdef USE_TURB_VEL_BC
+	__global int* __restrict__ ssIndMap,
+	__global double* __restrict__ wallShearArr,
+#endif
 	int options)
 {
 
@@ -345,7 +363,7 @@ __kernel void LB_collision_SRT_Fluid_w_kOmega(__global double *__restrict__ rho_
 	if (gx > CHANNEL_LENGTH) { return; }
 	const int gy = get_global_id(1);
 	const int gi = GET_GLOBAL_IDX(gx, gy);
-	const int type = Map[gi];
+	const NTYPE_TYPE type = Map[gi];
 	if ((type & FLUID_NODE) == 0) { return; }
 
 
@@ -358,6 +376,7 @@ __kernel void LB_collision_SRT_Fluid_w_kOmega(__global double *__restrict__ rho_
 #undef GET_DIST_MACRO
 
 
+#ifdef IN_KERNEL_IBB
 	// IBB for q < 0.5
 #define TEST_WRITE(dir)		if(type & (dir ## _BOUND_T1)) { \
 								double q2 = 2.*dxvals[gi + DIST_SIZE * ((dir ## _DIR) - 1)]; \
@@ -366,25 +385,47 @@ __kernel void LB_collision_SRT_Fluid_w_kOmega(__global double *__restrict__ rho_
 
 	CALL_ALL_DISTS_NO_C(TEST_WRITE);
 #undef TEST_WRITE
-
+#endif
 
 	double v0[2], rho;
 	compute_macro_quant(Fi, &rho, v0);
 
+	// Read in and calculate necessary terms for calculation of 
+	// turbulent viscosity
 	double omegaval = iO[gi], kval = iK[gi], yval = wallD[gi];
-
 	double F2arg = max(2.*sqrt(kval) / (KO_BETA_STAR*omegaval*yval), 500.*MU_NUMBER / (yval*yval*omegaval));
 	double F2val = tanh(F2arg*F2arg); 
 
+
+	// Multiply F2val by the magnitude of the strain rate S = sqrt(2*S_ij*S_ij)
 	double sxx_val = iSxy[gi], sxy_val = iSxy[gi + DIST_SIZE], syy_val = iSxy[gi + DIST_SIZE*2];
-	F2val *= sqrt(2.*(sxx_val*sxx_val + 2.* sxy_val*sxy_val + syy_val*syy_val));
+	F2val *= sqrt(2. * (sxx_val * sxx_val + 2. * sxy_val * sxy_val + syy_val * syy_val));
 
-	//double nut_old = iNut[gi];
+	// Calculate Nu_turbulent
 	double nut = KO_A1*kval / max(KO_A1*omegaval, F2val);
-	//if ((type & (N_BOUND)) || (type & S_BOUND))
-	//	nut = NUT_WALL_VALUE;
-	iNut[gi] = nut;
+	
+	// Use SST boundary condition for any node with N,E,S,W neighbors
+	// on other side of boundary (i.e. these nodes have tau_wall already
+	// calculated, which can allow for easy calculation of friction Velocity
+	// Boundary condition for omega will be handled in the BiCGStab solver setup
 
+
+#ifdef USE_TURB_VEL_BC
+	if (type & NESW_BOUNDARY_NODE)
+	{
+		// get yplus value = sqrt(tau_wall/rho)*wall_distance/nu
+		double yplus = yval*sqrt(fabs(wallShearArr[ssIndMap[gi]]) / rho) / MU_NUMBER;
+		double velMag = sqrt(pown(v0[0], 2) + pown(v0[1], 2));
+		double fricVelVisc = velMag / yplus;
+		double fricVelLog = velMag / (log(yplus) / KO_KAPPA + 5.0);
+		double fricVel = pow(pown(fricVelLog, 4), pown(fricVelVisc, 4));
+		v0[0] *= fricVel / velMag;
+		v0[1] *= fricVel / velMag;
+	}
+#endif
+
+
+	iNut[gi] = nut;
 
 #ifndef DISABLE_TURBULENT_VISC
 	double tau_t = (1. / ((3.*(nut + MU_NUMBER)) + 0.5));
@@ -501,12 +542,27 @@ __kernel void LB_collision_SRT_Fluid_w_kOmega(__global double *__restrict__ rho_
 	sxy_new -= Fi[8] - feq;
 	Fi[8] += -Fi[8] * tau_t + feq*tau_t - feq - xi_45 - xi_46 - xi_47 + xi_51;
 
-	iSxy[gi] = -1.5 * (tau0) * sxx_new;
-	iSxy[gi + DIST_SIZE] = -1.5 * (tau0) * sxy_new;
-	iSxy[gi + DIST_SIZE*2] = -1.5 * (tau0) * syy_new;
+	//								   ____
+	//								   \
+	//                                  \	
+	// Shear stress t_ab = -3*nu*tau *	/    C_ia*C_ib * (fneq_i)
+	//								   /___i
 
 
+	//								      ____
+	//								      \
+	//									   \	
+	// Strain tensor S_ab = -1.5*tau/rho * /    C_ia*C_ib * (fneq_i) = t_ab/(2*rho*nu)
+	//								      /___i
 
+	// Storing strain rate Tensor components for use in kOmega and shear stress
+	// kernels
+	iSxy[gi] = -1.5 * (tau0) / rho * sxx_new;
+	iSxy[gi + DIST_SIZE] = -1.5 * (tau0) / rho * sxy_new;
+	iSxy[gi + DIST_SIZE*2] = -1.5 * (tau0) / rho * syy_new;
+
+
+#ifdef IN_KERNEL_IBB
 #define TEST_WRITE(dir)		if(type & (dir ## _BOUND_T2)) { \
 								double q2 = 0.5 / dxvals[gi + DIST_SIZE * ((dir ## _DIR) - 1)]; \
 								Fi[(dir ## _DIR)] = q2 * Fi[(dir ## _DIR)] + (1. - q2) * Fi[(dir ## _REV)]; \
@@ -514,7 +570,7 @@ __kernel void LB_collision_SRT_Fluid_w_kOmega(__global double *__restrict__ rho_
 
 	CALL_ALL_DISTS_NO_C(TEST_WRITE);
 #undef TEST_WRITE
-
+#endif
 
 
 	if (type & BOUNDARY_NODE)
@@ -558,6 +614,7 @@ __kernel void LB_collision_SRT_Fluid_w_kOmega(__global double *__restrict__ rho_
 #undef DBGARR
 
 // Interpolated bounce back kernel
+// TODO: Test that implementation is correct
 __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_IBB, 1, 1)))
 void lbIBB(__global int *__restrict__ ibbArr,
 	__global double *__restrict__ dXCurr,
@@ -569,11 +626,11 @@ void lbIBB(__global int *__restrict__ ibbArr,
 	if (i >= max_el)
 		return;
 
-	int loc = FB[ibbArr];
+	int loc = ibbArr[i];
 	
-	int dir = (gid / DIST_SIZE);
+	int dir = (loc / DIST_SIZE);
 	int revDir = loc + ibbRev[dir-1];
-	double twoQ = 2.*dXCurr[loc - dir*DIST_SIZE];
+	double twoQ = 2.*dXCurr[loc + (dir-1)*DIST_SIZE];
 
 	if (dxVal <= 0.5)
 	{
@@ -585,3 +642,4 @@ void lbIBB(__global int *__restrict__ ibbArr,
 		FB[revDir] = 1./twoQ * (FB[revDir] + (twoQ - 1.) * FB[revNeigh])
 	}
 }
+

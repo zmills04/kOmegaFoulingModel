@@ -32,50 +32,7 @@ void kOmega::allocateBuffers()
 	Diff_K.allocate_buffer_w_copy();
 	Fval_array.allocate_buffer_w_copy();
 	dKdO_array.allocate_buffer_w_copy();
-}
-
-void kOmega::calcDxTerms()
-{
-	/// Doing it this way will allow for more complicated corrections to be made
-	/// without worrying about effects on speed.
-
-	dXCoeffs.zeros(p.XsizeFull, p.nY, 12);
-
-	for (int i = 0; i < p.nX; i++)
-	{
-		for (int j = 0; j < p.nY; j++)
-		{
-			if (vls.M(i, j) == LB_SOLID)
-				continue;
-
-
-			double dx_e = vls.dXArr(i, j, 0), dx_w = vls.dXArr(i, j, 1), dx = dx_e + dx_w;
-			double dy_n = vls.dXArr(i, j, 2), dy_s = vls.dXArr(i, j, 3), dy = dy_n + dy_s;
-
-			double Xe_coeff = dx_w / (dx_e * dx), Xw_coeff = -dx_e / (dx_w * dx), Xc_coeff = (dx_e - dx_w) / (dx_e * dx_w);
-			double Yn_coeff = dy_s / (dy_n * dy), Ys_coeff = -dy_n / (dy_s * dy), Yc_coeff = (dy_n - dy_s) / (dy_n * dy_s);
-
-			double Xe2_coeff = 2. / (dx_e * dx), Xw2_coeff = 2. / (dx_w * dx), Xc2_coeff = -2. / (dx_e * dx_w);
-			double Yn2_coeff = 2. / (dy_n * dy), Ys2_coeff = 2. / (dy_s * dy), Yc2_coeff = -2. / (dy_n * dy_s);
-
-
-			dXCoeffs(i, j, dxind_e) = Xe_coeff;
-			dXCoeffs(i, j, dxind_w) = Xw_coeff;
-			dXCoeffs(i, j, dxind_c) = Xc_coeff;
-			dXCoeffs(i, j, dyind_n) = Yn_coeff;
-			dXCoeffs(i, j, dyind_s) = Ys_coeff;
-			dXCoeffs(i, j, dyind_c) = Yc_coeff;
-
-			dXCoeffs(i, j, dx2ind_e) = Xe2_coeff;
-			dXCoeffs(i, j, dx2ind_w) = Xw2_coeff;
-			dXCoeffs(i, j, dx2ind_c) = Xc2_coeff;
-			dXCoeffs(i, j, dy2ind_n) = Yn2_coeff;
-			dXCoeffs(i, j, dy2ind_s) = Ys2_coeff;
-			dXCoeffs(i, j, dy2ind_c) = Yc2_coeff;
-		}
-	}
-
-	dXCoeffs.allocate_buffer_w_copy();
+	WallD.allocate_buffer_w_copy();
 }
 
 void kOmega::calcNutArray()
@@ -84,7 +41,7 @@ void kOmega::calcNutArray()
 	{
 		for (int j = 0; j < p.nY; j++)
 		{
-			if (vls.M(i, j) != LB_SOLID)
+			if (vls.nType(i, j) & M_SOLID_NODE)
 				Nut_array(i, j) = Kappa(i, j) / Omega(i, j);
 		}
 	}
@@ -97,29 +54,92 @@ void kOmega::createKernels()
 	int GlobalY = p.nY;
 
 
-	if (vfd.thermalSolverFlag)
-	{
-		kOmegaUpdateDiffCoeffs.create_kernel(GetSourceProgram, LBQUEUE_REF,
-			"Update_kOmega_Diffusivities_Alphat");
-	}
-	else
-	{
-		kOmegaUpdateDiffCoeffs.create_kernel(GetSourceProgram, LBQUEUE_REF,
-			"Update_kOmega_Diffusivities");
-	}
-
+	kOmegaUpdateDiffCoeffs.create_kernel(GetSourceProgram, LBQUEUE_REF,
+		"Update_kOmega_Diffusivities");
 	kOmegaUpdateDiffCoeffs.set_size(GlobalX, WORKGROUPSIZEX_LB, GlobalY, WORKGROUPSIZEY_LB);
 
 	kOmegaUpdateCoeffs.create_kernel(GetSourceProgram, LBQUEUE_REF,
 		"Update_kOmega_Coeffs_Implicit");
 	kOmegaUpdateCoeffs.set_size(GlobalX, WORKGROUPSIZEX_LB, GlobalY, WORKGROUPSIZEY_LB);
 
+	updateWallDKernel.create_kernel(GetSourceProgram, LBQUEUE_REF,
+		"updateWallD");
+	updateWallDKernel.set_size(GlobalX, WORKGROUPSIZEX_LB, GlobalY, WORKGROUPSIZEY_LB);
+
+}
+
+
+// Iterates through BL indicies provided by first two arguments and 
+// returns the minimum distance between nLoc and the wall.
+double kOmega::findMinDist(cl_int2 botSearchInds, cl_int2 topSearchInds, cl_double2& nLoc)
+{
+	double dmin = 1000.;
+
+	for (int i = botSearchInds.x; i < botSearchInds.x; i++)
+	{
+		cl_double2 P0 = vls.C(vls.BL(i, 0)), P1 = vls.C(vls.BL(i, 1));
+		cl_double2 vT = Subtract2(P1, P0);
+		double vTmag = GETLEN(vT);
+		double dtemp = fabs(vT.y * nLoc.x - vT.x * nLoc.y + P1.x * P0.y - P1.y * P0.x) / vTmag;
+
+
+		vT = Divide2(vT, vTmag);
+		cl_double2 vN = { { -vT.y, vT.x} };
+
+		cl_double2 Pcut = Multiply2(vN, dtemp);
+		Pcut = Subtract2(nLoc, Pcut);
+		if (Pcut.x < P0.x)
+		{
+			cl_double2 P0Loc = Subtract2(nLoc, P0);
+			dtemp = GETLEN(P0Loc);
+		}
+		else if (Pcut.x > P1.x)
+		{
+			cl_double2 P1Loc = Subtract2(nLoc, P1);
+			dtemp = GETLEN(P1Loc);
+		}
+		dmin = MIN(dmin, dtemp);
+	}
+
+	for (int i = topSearchInds.x; i < topSearchInds.x; i++)
+	{
+		cl_double2 P0 = vls.C(vls.BL(i, 0)), P1 = vls.C(vls.BL(i, 1));
+		cl_double2 vT = Subtract2(P1, P0);
+		double vTmag = GETLEN(vT);
+		double dtemp = fabs(vT.y * nLoc.x - vT.x * nLoc.y + P1.x * P0.y - P1.y * P0.x) / vTmag;
+
+
+		vT = Divide2(vT, vTmag);
+		cl_double2 vN = { { -vT.y, vT.x} };
+
+		cl_double2 Pcut = Multiply2(vN, dtemp);
+		Pcut = Subtract2(nLoc, Pcut);
+		if (Pcut.x > P0.x)
+		{
+			cl_double2 P0Loc = Subtract2(nLoc, P0);
+			dtemp = GETLEN(P0Loc);
+		}
+		else if (Pcut.x < P1.x)
+		{
+			cl_double2 P1Loc = Subtract2(nLoc, P1);
+			dtemp = GETLEN(P1Loc);
+		}
+		dmin = MIN(dmin, dtemp);
+	}
+
+	return dmin;
 }
 
 
 
 void kOmega::freeHostArrays()
 {
+	Sxy_array.FreeHost();
+	Nut_array.FreeHost();
+	Diff_Omega.FreeHost();
+	Diff_K.FreeHost();
+	Fval_array.FreeHost();
+	dKdO_array.FreeHost();
 }
 
 
@@ -190,21 +210,21 @@ void kOmega::ini()
 		Kappa_array.fill(kIniVal);
 	}
 
-	KappaInds.ini(p.nX, p.XsizeFull, p.nY, p.nY, &vls.M);
+	KappaInds.ini(p.nX, p.XsizeFull, p.nY, p.nY, &vls.nType);
 	Kappa.CreateSolver(&Kappa_array, &KappaInds, LBQUEUE_REF,
 		kappaMaxIters, kappaMaxRelTol, kappaMaxAbsTol);
 
-	OmegaInds.ini(p.nX, p.XsizeFull, p.nY, p.nY, &vls.M);
+	OmegaInds.ini(p.nX, p.XsizeFull, p.nY, p.nY, &vls.nType);
 	Omega.CreateSolver(&Omega_array, &OmegaInds, LBQUEUE_REF,
 		omegaMaxIters, omegaMaxRelTol, omegaMaxAbsTol);
 
 	int i = 0;
-	while (vls.M(0, i) & M_SOLID_NODE)
+	while (vls.nType(0, i) & M_SOLID_NODE)
 	{
 		i++;
 	}
 	int wallindlow = i;
-	while (vls.M(0, i) & M_FLUID_NODE)
+	while (vls.nType(0, i) & M_FLUID_NODE)
 	{
 		i++;
 	}
@@ -213,13 +233,12 @@ void kOmega::ini()
 	Kappa.setInitialValueRows(kappaWallVal, wallinds); // set to inlet val
 	Omega.setInitialValueRows(omegaWallVal, wallinds); // set to inlet val
 
-	sumOmega.ini(*Omega.getMacroArray(), "redOmega");
-	sumKappa.ini(*Kappa.getMacroArray(), "redKappa");
-	minOmega.ini(*Omega.getMacroArray(), "minOmega");
-	minKappa.ini(*Kappa.getMacroArray(), "minKappa");
+	sumOmega.ini(*Omega.getMacroArray(), vlb.restartRunFlag, "redOmega");
+	sumKappa.ini(*Kappa.getMacroArray(), vlb.restartRunFlag, "redKappa");
+	minOmega.ini(*Omega.getMacroArray(), vlb.restartRunFlag, "minOmega");
+	minKappa.ini(*Kappa.getMacroArray(), vlb.restartRunFlag, "minKappa");
 
 	iniWallD();
-	calcDxTerms();
 
 	/////////////////////////  Parameters for kOmegaModel/////////////////////////
 	/// Note, these do not have the necessary padding for reductions
@@ -234,42 +253,28 @@ void kOmega::ini()
 }
 
 
-// TODO: Set this up to work with wavy geometry, and create kernel
-//		to do this on device.
+
+// Fills WallD with distance to nearest wall
 void kOmega::iniWallD()
 {
-	double ystart = 0.;
-	int j = 0;
-	while (vls.M(0, j) & M_SOLID_NODE)
-	{
-		j++;
-	}
-
-	ystart = vls.dXArr(0, j, 3);
-	int botind = j;
-	double ycenter = (double)j + p.Pipe_radius - ystart;
-	WallD.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
+	WallD.fill(0.);
 
 	for (int i = 0; i < p.nX; i++)
 	{
-		for (j = 0; j < p.nY; j++)
+		cl_int2 botSearchInds = { { MAX((vls.lsMap(i,0) - wallDSearchRar), 0),
+			MIN((vls.lsMap(i,0) + wallDSearchRar), vls.nBL / 2)} };
+		cl_int2 topSearchInds = { { MAX((vls.lsMap(i,1) - wallDSearchRar), vls.nBL / 2),
+			MIN((vls.lsMap(i,1) + wallDSearchRar), vls.nBL) } };
+
+		for (int j = 0; j < p.nY; j++)
 		{
-			if (vls.M(0, j) & M_SOLID_NODE)
+			if (vls.nType(i, j) & M_SOLID_NODE)
 				continue;
-
-			double ytemp = (double)(j - botind) + ystart;
-
-			if (ytemp > p.Pipe_radius)
-			{
-				ytemp = 2. * p.Pipe_radius - ytemp;
-			}
-
-			WallD(i, j) = ytemp;
+			cl_double2 nLoc = { {(double)i, (double)j} };
+			WallD(i,j) = findMinDist(botSearchInds, topSearchInds, nLoc);
 		}
 	}
 
-
-	WallD.allocate_buffer_w_copy();
 #ifdef DEBUG_TURBARR
 	WallD.savetxt("WallD");
 #endif
@@ -297,6 +302,14 @@ void kOmega::loadParams()
 	omegaMaxAbsTol = p.getParameter<double>("Omega Max Abs Tol", kappaMaxAbsTol);
 	omegaMaxIters = p.getParameter<int>("Omega Max Iterations", kappaMaxIters);
 
+	wallDSearchRar = p.getParameter<int>("Wall D Search Rad", WALLD_SEARCH_RADIUS);
+}
+
+
+void kOmega::renameSaveFiles()
+{
+	Kappa.xVec->RenameTxtFile();
+	Omega.xVec->RenameTxtFile();
 }
 
 
@@ -365,8 +378,8 @@ void kOmega::saveDebug(int saveFl)
 
 void kOmega::saveRestartFiles()
 {
-	Kappa.saveCheckPoint("lbkappa");
-	Omega.saveCheckPoint("lbomega");
+	Kappa.saveCheckPoint();
+	Omega.saveCheckPoint();
 }
 
 
@@ -389,6 +402,8 @@ void kOmega::saveParams()
 	p.setParameter("Sigma Perturb Multiplier", perturbSigma);
 	p.setParameter("Wall Roughness Factor", roughnessFactor);
 
+	p.setParameter("Wall D Search Rad", wallDSearchRar);
+
 	// These do not need to be save since they relate to initialization
 	//p.setParameter("Ini Turb Velocity", false);
 	//p.setParameter("Perturb Vel Field", false);
@@ -401,7 +416,7 @@ void kOmega::setKernelArgs()
 	cl_int ind = 0;
 	int zer = 0;
 
-	kOmegaUpdateDiffCoeffs.set_argument(ind++, vlb.NodeType.get_buf_add());
+	kOmegaUpdateDiffCoeffs.set_argument(ind++, vls.nType.get_buf_add());
 	kOmegaUpdateDiffCoeffs.set_argument(ind++, Kappa.get_add_Macro());
 	kOmegaUpdateDiffCoeffs.set_argument(ind++, Omega.get_add_Macro());
 	kOmegaUpdateDiffCoeffs.set_argument(ind++, Nut_array.get_buf_add());
@@ -413,9 +428,9 @@ void kOmega::setKernelArgs()
 	kOmegaUpdateDiffCoeffs.set_argument(ind++, vlb.Ro_array.get_buf_add());
 	if (vfd.thermalSolverFlag)
 		kOmegaUpdateDiffCoeffs.set_argument(ind++, vfd.Alphat.get_buf_add());
-	kOmegaUpdateDiffCoeffs.set_argument(ind++, dXCoeffs.get_buf_add());
+	kOmegaUpdateDiffCoeffs.set_argument(ind++, vls.dXCoeffs.get_buf_add());
 #ifdef DEBUG_TURBARR
-	kOmegaUpdateDiffCoeffs.set_argument(ind++, kOmegaClass.koDbgArr1.get_buf_add());
+	kOmegaUpdateDiffCoeffs.set_argument(ind++, koDbgArr1.get_buf_add());
 #endif
 
 
@@ -436,16 +451,24 @@ void kOmega::setKernelArgs()
 	kOmegaUpdateCoeffs.set_argument(ind++, Omega.get_add_A());
 	kOmegaUpdateCoeffs.set_argument(ind++, Kappa.get_add_b());
 	kOmegaUpdateCoeffs.set_argument(ind++, Omega.get_add_b());
-	kOmegaUpdateCoeffs.set_argument(ind++, dXCoeffs.get_buf_add());
+	kOmegaUpdateCoeffs.set_argument(ind++, vls.dXCoeffs.get_buf_add());
 	kOmegaUpdateCoeffs.set_argument(ind++, WallD.get_buf_add());
 	kOmegaUpdateCoeffs.set_argument(ind++, &p.dTlb);
 	kOmegaUpdateCoeffs.set_argument(ind++, &TurbIntensity);
 	kOmegaUpdateCoeffs.set_argument(ind++, &TurbLScale_inv);
 #ifdef DEBUG_TURBARR
-	kOmegaUpdateCoeffs.set_argument(ind++, kOmegaClass.koDbgArr2.get_buf_add());
+	kOmegaUpdateCoeffs.set_argument(ind++, koDbgArr2.get_buf_add());
 #endif
 
+	ind = 0;
+	updateWallDKernel.set_argument(ind++, WallD.get_buf_add());
+	updateWallDKernel.set_argument(ind++, vls.lsMap.get_buf_add());
+	updateWallDKernel.set_argument(ind++, vls.C.get_buf_add());
+	updateWallDKernel.set_argument(ind++, vls.nType.get_buf_add());
+
 }
+
+
 void kOmega::saveTimeData()
 {
 
@@ -468,6 +491,8 @@ void kOmega::setSourceDefines()
 	SETSOURCEDEFINE, "K_WALL_VALUE", kappaWallVal);
 	SETSOURCEDEFINE, "NUT_WALL_VALUE", nutWallVal);
 	SETSOURCEDEFINE, "OMEGA_WALL_VALUE", omegaWallVal);
+	SETSOURCEDEFINE, "WALLD_SEARCH_RADIUS", wallDSearchRar);
+
 }
 
 #undef SETSOURCEDEFINE

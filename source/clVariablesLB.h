@@ -26,18 +26,19 @@ public:
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 	
-	// Func Pointer for calling loadParams
+	// Func Pointer for calling loadParams(bool dynamicFlag) 
 	std::function<void(void)> loadParamsPtr;
 
 	// kOmega data/functions/kernels
 	kOmega kOmegaClass;
 	
-	clVariablesLB() : FA("FA"), FB("FB"), NodeType("nodeType"),
-		Ro_array("lbro"), Ux_array("lbux"), Uy_array("lbuy"),
-		Inlet_Vel("inletVels")
+	clVariablesLB() : FA("FA"), FB("FB"), Ro_array("lbro"),
+		Ux_array("lbux"), Uy_array("lbuy"), Inlet_Vel("inletVels"),
+		lbOut("lbOut")//, NodeType("nodeType")
 	{
 		loadParamsPtr = std::bind(&clVariablesLB::loadParams, this);
 	};
+
 	virtual ~clVariablesLB()
 	{ 
 	};
@@ -52,10 +53,14 @@ public:
 ////////////////////////////////////////////////////////////////////////////
 
 	DualKernel collisionKernel;	// Kernel performs collision and propogation
-	DualKernel ibbKernel;	// Kernel applies IBB BC's
-	DualKernel lbOutflow;			// Applies Outflow BC, if inflow/outflow is used
-	Kernel calcRoJKernel;			// calculates rho, Ux, Uy from Distribution
-									// used when restarting run
+
+#ifndef IN_KERNEL_IBB
+	DualKernel ibbKernel;		// Kernel applies IBB BC's
+#endif
+
+	DualKernel lbOutflow;		// Applies Outflow BC, if inflow/outflow is used
+	Kernel calcRoJKernel;		// calculates rho, Ux, Uy from Distribution
+								// used when restarting run
 
 	Reducer<double> sumUx, sumUy, sumRo;
 	
@@ -82,7 +87,7 @@ public:
 //////////////                   Method Arrays               ///////////////
 ////////////////////////////////////////////////////////////////////////////
 	
-	Array2Di NodeType; // indicator for node type (solid, fluid, fouling layer)
+	//Array2Di NodeType; // indicator for node type (solid, fluid, fouling layer)
 					   // and whether or not a distribution will bounce back from
 					   // a given direction
 
@@ -96,7 +101,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                   Output Arrays               ///////////////
 ////////////////////////////////////////////////////////////////////////////	
-	Array2Dd lbOut; // stores time data (i.e. umean, total density, etc)
+	TimeData<double> lbOut; // stores time data (i.e. umean, total density, etc)
 
 
 
@@ -148,6 +153,16 @@ public:
 	// a checkpoint
 	bool fLoadedFlag, restartRunFlag;
 
+	// Flag indicating whether or not to use turbulent velocity BC's
+	// at boundary nodes
+	bool turbVelBCFlag;
+
+	// Flag indicating if averages for flow variables should be saved
+	bool saveAvgInfo;
+
+	// y-Size of lbOut (max number of save points before needing to output)
+	int lbOutSize;
+
 	// Times for pre-particle release LBM/kOmega/Temp solvers
 	unsigned int tlbmIniDumpStep, tlbmNumIniSteps_LB, tlbmNumIniSteps_TLBM;
 
@@ -164,7 +179,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////	
 	
 	int alter;			// used to alternate between two collision kernels
-	int Save_loc;		// Tracks location to save data in lbOut array
 	int IBB_array_len;	// length of IBB array
 
 	
@@ -188,9 +202,10 @@ public:
 
 	// Boundary flags
 	const static int boundsArr[9];
+#ifdef IN_KERNEL_IBB
 	const static int boundsArrT1[9];
 	const static int boundsArrT2[9];
-
+#endif
 
 	
 ////////////////////////////////////////////////////////////////////////////
@@ -218,9 +233,17 @@ public:
 	// Inititialization function
 	void ini();
 
-	// Loads parameters passed in yaml parameter file, (also reads in 
-	// restart variables when a run is restarted)
+	// initialization function for time data array
+	void iniTimeData();
+
+	// Loads parameters passed in yaml parameter files, (also reads in 
+	// restart variables when a run is restarted). 
 	void loadParams();
+
+
+	// Copies saved files from main folder into results folder to ensure
+	// that next files do not save 
+	void renameSaveFiles();
 
 	// Writes output data to file(specific arrays, not all of them)
 	void save2file();
@@ -291,7 +314,7 @@ public:
 	void iniInletVels();
 
 	// Initializes and nodeType Array
-	void iniNodeType();
+	//void iniNodeType();
 
 
 
@@ -300,7 +323,7 @@ public:
 ////////////////////////////////////////////////////////////////////////////
 
 	//Updates IBB arrays
-	void updateIBBArrays();
+	void updateIBBArrays(bool reSizeFlag);
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////              Solving Functions                ///////////////

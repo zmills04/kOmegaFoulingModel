@@ -17,7 +17,10 @@ class ReducerBase
 protected:
 	ReduceGenerator::reduceType redType;
 	RedKernelList redKer;
-	Array1D<T> redVals, redOneVal;
+	Array1D<T> redOneVal;
+	TimeData<T> redVals;
+
+
 	int arrSize;
 	int cur_ind, next_ind;
 	cl_mem *intermedBuf;
@@ -43,10 +46,13 @@ protected:
 		redMemSet ^= 1;
 	}
 
-	void iniArrays()
+	void iniArrays(bool restartFlag)
 	{
-		redVals.zeros(arrSize);
+		redVals.iniFile(restartFlag);
+		redVals.zeros(arrSize, arrSize, 1, 1);
+		redVals.createTimeArray();
 		redVals.allocate_buffer_w_copy();
+
 		redOneVal.zeros(1);
 		redOneVal.allocate_buffer_w_copy();
 	}
@@ -75,12 +81,12 @@ public:
 	}
 
 	// Outname will be used for debugging and will also be the output filename
-	void ini(ArrayBase<T> &memloc_, std::string outname_ = "")
+	void ini(ArrayBase<T> &memloc_, bool restartFlag, std::string outname_ = "")
 	{
 		if (outname_.length() == 0)
 			outname_ = memloc_.getName() + "Red" + ReduceGenerator::getGenericName(redType);
 		Name = outname_;
-		iniArrays();
+		iniArrays(restartFlag);
 		// TODO: make it to where I can pass in the string directly without needing to initialize it
 		// ahead of time.
 
@@ -93,8 +99,7 @@ public:
 
 		redVals.setName(Name);
 		redOneVal.setName(Name + "Single");
-		redVals.append2file(-2); // initializes file to be appended to
-
+		
 		// need to make sure buffer is correctly padded,
 		// and reallocate if necessary
 		int fsize = ReduceGenerator::ReduceInstance()->getPaddedSize(memloc_.getBufferFullSize());
@@ -119,12 +124,12 @@ public:
 		intermedBufFl = true;
 	}
 
-	void ini(ArrayBase<T> &mem1loc_, ArrayBase<T> &mem2loc_, std::string outname_ = "")
+	void ini(ArrayBase<T> &mem1loc_, ArrayBase<T> &mem2loc_, bool restartFlag, std::string outname_ = "")
 	{
 		if (outname_.length() == 0)
 			outname_ = mem1loc_.getName() + "Dot" + mem2loc_.getName();
 		Name = outname_;
-		iniArrays();
+		iniArrays(restartFlag);
 		ERROR_CHECKING((redType != ReduceGenerator::Dot), "Provided two buffers to non dot prod reduce kernel " + \
 			Name + ". Maybe want to create a non-generic reduce kernel set?", ERROR_IN_REDUCE_KERNEL);
 
@@ -132,8 +137,9 @@ public:
 			" after its already been initialized", ERROR_IN_REDUCE_KERNEL);
 
 		redVals.setName(Name);
-		if (clEnv::instance()->getRestartFlag() == false)
-			redVals.append2file(-2); // initializes file to be appended to if not a restart
+		redOneVal.setName(Name + "Single");
+		//if (clEnv::instance()->getRestartFlag() == false)
+		//	redVals.append2file(-2); // initializes file to be appended to if not a restart
 
 		// need to make sure buffer is correctly padded,
 		// and reallocate if necessary
@@ -183,7 +189,7 @@ public:
 		next_ind = 0;
 	}
 
-	bool reduce(cl_command_queue *que_ = NULL, int num_wait = 0, cl_event *wait = NULL, cl_event *evt = NULL)
+	bool reduce(int time_, cl_command_queue *que_ = NULL, int num_wait = 0, cl_event *wait = NULL, cl_event *evt = NULL)
 	{
 		if (que_ == NULL)
 		{
@@ -200,16 +206,28 @@ public:
 			ERROR_CHECKING(status, "Error returned running"\
 				" reduce kernels of " + Name, status);
 		}
-		next_ind++;
-
-		if (next_ind == arrSize)
-		{
-			redVals.append2file_from_device();
+		bool retval = redVals.setTimeAndIncrement(p.Time, que_);
+		if (retval)
 			next_ind = 0;
-			return true;
-		}
-		return false;
+		
 	}
+
+
+	void appendToFileFromDevice(cl_command_queue* que_ = NULL, cl_bool block_flag = CL_TRUE, 
+		int num_wait = 0, cl_event* wait = NULL, cl_event* evt = NULL)
+	{
+		if (cur_ind == 0)
+			return;
+		
+		if (que_ == NULL)
+		{
+			que_ = clEnv::instance()->getIOqueue();
+		}
+		
+		redVals.appendData_from_device(que_, block_flag, num_wait, wait, evt);
+		next_ind = 0;
+	}
+
 
 	T reduceSingle(cl_command_queue *que_ = NULL, int num_wait = 0, cl_event *wait = NULL, cl_event *evt = NULL)
 	{ // this will not increment the counter so that value will be overwritten next time it is called

@@ -206,9 +206,6 @@
     <None Include="source\Kernels\outputKernels.cl">
       <Filter>OpenCL\Kernels</Filter>
     </None>
-    <None Include="source\Kernels\sortKernels.cl">
-      <Filter>OpenCL\Kernels</Filter>
-    </None>
     <None Include="source\Kernels\tfdKernels.cl">
       <Filter>OpenCL\Kernels</Filter>
     </None>
@@ -230,5 +227,8 @@
     <None Include="source\Kernels\trKernelsDisplay.cl">
       <Filter>OpenCL\Kernels</Filter>
     </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="source\MethodClassLayout.txt" />
   </ItemGroup>
 </Project>

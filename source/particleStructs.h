@@ -205,6 +205,24 @@ public:
 
 	bool saveFromDevice(bool saveAll = false, saveFlags saveFlag_ = saveFl,
 		cl_command_queue* que_ = nullptr);
+
+	void reallocate_host(int newsize)
+	{// this should only be used by vtr.saveBox function as it
+	// has not been checked to ensure errors dont occur
+	// by calling this function when using device buffers
+		xSize = newsize;
+		xSizeFull = newsize;
+		fullSize = newsize;
+
+		pos.reallocate_host_only(newsize);
+		Num_rep.reallocate_host_only(newsize);
+		type.reallocate_host_only(newsize);
+		Dep_Flag.reallocate_host_only(newsize);
+		Dep_timer.reallocate_host_only(newsize);
+		timer.reallocate_host_only(newsize);
+		loc.reallocate_host_only(newsize);
+	}
+
 };
 
 
@@ -359,51 +377,15 @@ public:
 
 	~Neighs() {}
 
-void setStruct(legacyNeighs& struct_, const int i, const int j)
-{
-	ii00(i, j) = struct_.ii00;
-	ii10(i, j) = struct_.ii10;
-	ii01(i, j) = struct_.ii01;
-	ii11(i, j) = struct_.ii11;
-}
+	void setStruct(legacyNeighs& struct_, const int i, const int j);
 
-legacyNeighs getStruct(const int i, const int j)
-{
-	legacyNeighs struct_;
-	struct_.ii00 = ii00(i, j);
-	struct_.ii10 = ii10(i, j);
-	struct_.ii01 = ii01(i, j);
-	struct_.ii11 = ii11(i, j);
-	return struct_;
-}
+	legacyNeighs getStruct(const int i, const int j);
 
 
-	void allocateArrays()
-	{
-		ii00.setName("Neighs_ii00");
-		ii10.setName("Neighs_ii10");
-		ii01.setName("Neighs_ii01");
-		ii11.setName("Neighs_ii11");
+	void allocateArrays();
 
-		ii00.zeros(xSize, xSizeFull, ySize, ySize);
-		ii01.zeros(xSize, xSizeFull, ySize, ySize);
-		ii10.zeros(xSize, xSizeFull, ySize, ySize);
-		ii11.zeros(xSize, xSizeFull, ySize, ySize);
-	}
 
-	void allocateBuffers(int bufSize = -1)
-	{
-		if (bufSize == -1)
-			bufSize = fullSize;
-
-		bufFullSize = bufSize;
-
-		ii00.allocate_buffer_size(bufFullSize);
-		ii10.allocate_buffer_size(bufFullSize);
-		ii01.allocate_buffer_size(bufFullSize);
-		ii11.allocate_buffer_size(bufFullSize);
-
-	}
+	void allocateBuffers(int bufSize = -1);
 
 	void copyToDevice(int writeSize = -1, cl_command_queue* que_ = nullptr,
 		cl_bool bFlag_ = CL_TRUE);
@@ -539,10 +521,7 @@ public:
 	void copyToHost(int readSize = -1, cl_command_queue* que_ = nullptr,
 		cl_bool bFlag_ = CL_TRUE);
 
-	void ini()
-	{
-		//initialization functions specific to class
-	}
+	void ini();
 
 	// can re-construct without saving data
 	bool load()	{ return true; }
@@ -671,6 +650,25 @@ public:
 
 	bool saveFromDevice(bool saveAll = false, saveFlags saveFlag_ = saveFl,
 		cl_command_queue* que_ = nullptr);
+
+	void reallocate_host(int newsize)
+	{// this should only be used by vtr.saveBox function as it
+	// has not been checked to ensure errors dont occur
+	// by calling this function when using device buffers
+		xSize = newsize;
+		xSizeFull = newsize;
+		fullSize = newsize;
+
+		vNvec.reallocate_host_only(newsize);
+		Tau.reallocate_host_only(newsize);
+		blLen.reallocate_host_only(newsize);
+		Node_loc.reallocate_host_only(newsize);
+		P01ind.reallocate_host_only(newsize);
+		int_type.reallocate_host_only(newsize);
+		if(glFlag)
+			colorInds.reallocate_host_only(newsize);
+	}
+
 };
 
 

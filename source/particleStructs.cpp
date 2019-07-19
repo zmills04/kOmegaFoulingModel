@@ -100,8 +100,7 @@ void Par::copyToHost(int readSize, cl_command_queue * que_,
 	loc.read_from_buffer_size(readSize, que_, bFlag_);
 }
 
-void Par::writeParToBuffer(Par& Ptemp, int writeSize, cl_command_queue* que_ = nullptr,
-	cl_bool bFlag_)
+void Par::writeParToBuffer(Par& Ptemp, int writeSize, cl_command_queue* que_, cl_bool bFlag_)
 {
 	pos.write_array_to_buffer(Ptemp.pos.get_array(), bFlag_, writeSize, que_);
 	Num_rep.write_array_to_buffer(Ptemp.Num_rep.get_array(), bFlag_, writeSize, que_);
@@ -310,7 +309,7 @@ void Par::ini()
 
 bool Par::load()
 {
-	int ret = true;
+	bool ret = true;
 	ret &= pos.load("load" SLASH + pos.getName());
 	ret &= Num_rep.load("load" SLASH + Num_rep.getName());
 	ret &= type.load("load" SLASH + type.getName());
