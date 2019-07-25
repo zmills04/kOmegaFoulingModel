@@ -93,7 +93,7 @@ public:
 
 	enum reduceType {
 		Sum = 0x1, Max = 0x2, Min = 0x4, Abs = 0x8, 
-		Sqr = 0x10, Norm = 0x20, Dot = 0x40, AbsMin = 0x80, AbsMax = 0x100,
+		Sqr = 0x10, Norm = 0x20, Dot = 0x40, AbsMin = 0x80, AbsMax = 0x100, SumNType = 0x200,
 		AbsMM = AbsMin | AbsMax, MinAS = AbsMin | Min, MaxAS = AbsMax | Max,
 		SignMM = Min | Max, MMAS = AbsMin | AbsMax | Min | Max, Norm1 = Abs | Norm };
 

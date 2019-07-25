@@ -261,7 +261,7 @@ void shearStress::setKernelArgs()
 	trShearRemovalKernel.set_argument(ind++, &zer2);
 
 	updateSSKernel[0].set_argument(ind++, vls.ssArr.get_buf_add());
-	updateSSKernel[0].set_argument(ind++, vlb.NodeType.get_buf_add());
+	updateSSKernel[0].set_argument(ind++, vls.nType.get_buf_add());
 	updateSSKernel[0].set_argument(ind++, shearCoeffs.get_buf_add());
 	updateSSKernel[0].setOptionInd(ind);
 	updateSSKernel[0].set_argument(ind++, vls.ssArr.curSizeAdd());

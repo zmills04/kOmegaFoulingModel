@@ -752,6 +752,11 @@ public:
 /////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////
 
+	//void copyHostMem(ArrayBase* other)
+	//{
+	//	memcpy(Array, other.get_array(), FullSize * sizeof(T));
+	//}
+
 /////////////////////////////////////////////////////////////////////////////////
 ///////////////////    Filling memory with a single value    ////////////////////
 /////////////////////////////////////////////////////////////////////////////////
@@ -781,7 +786,6 @@ public:
 	void fill(const T val)
 	{
 		zeros();
-		T *p = Array;
 		for (int i = 0; i < SizeX; i++)
 		{
 			for (int j = 0; j < SizeY; j++)
@@ -798,7 +802,6 @@ public:
 	// TODO: test to see if this is faster than fillAll (it probably isnt)
 	void fastfill(const T val)
 	{
-		T *p = Array;
 		for (int i = 0; i < SizeX; i++)
 		{
 			for (int j = 0; j < SizeY; j++)
@@ -817,6 +820,25 @@ public:
 		T *p = Array;
 		for (int i = 0; i < FullSize; i++) 
 			*(p++) = val;
+	}
+
+
+
+	void fillByNodeType(const T val, Array2D<NTYPE_TYPE>& Map, NTYPE_TYPE nodeVal = M_FLUID_NODE)
+	{
+		for (int i = 0; i < SizeX; i++)
+		{
+			for (int j = 0; j < SizeY; j++)
+			{
+				if ((Map(i, j) & nodeVal) == 0)
+					continue;
+
+				for (int k = 0; k < SizeZ; k++)
+				{
+					Array[i + FullSizeX * (j + k * FullSizeZ)] = val;
+				}
+			}
+		}
 	}
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -1934,21 +1956,21 @@ public:
 		Array1D<T>::zeros(inisize);
 	}
 
-	int append(const T val_)
+	bool append(const T val_)
 	{
 		Array1D<T>::operator()(curEl) = val_;
 
 		curEl++;
 		if (curEl < FullSize)
-			return 0;
+			return false;
 
-		int newSize = FullSize * resizeMult*wgSize;
+		int newSize = FullSize + resizeMult*wgSize;
 		reallocate_host(newSize);
 
 		SizeX = newSize;
 		FullSize = newSize;
 		FullSizeX = newSize;
-		return 1;
+		return true;
 	}
 
 	void zeros()
@@ -1975,6 +1997,14 @@ public:
 	{
 		FreeDevice();
 		allocate_buffer_size(FullSize);
+	}
+
+	// memory reallocation on device, does not save existing data
+	// on device to copy over after reallocation
+	void resize_device_dynamic()
+	{
+		FreeDevice();
+		allocate_buffer_size(BufferFullSize + resizeMult * wgSize);
 	}
 
 	// memory reallocation on device, which copies current host
@@ -2496,23 +2526,24 @@ private:
 	// values to the file.
 	void (*saveDataFunc)(TimeData<T>*, std::fstream&, int);
 
-	// This should not be called, so it is set to private.
-	TimeData()
-	{
-		// just in case this is somehow able to be called, it will
-		// exit with an error message at the beginning of execution.
-		CHECK_ARRAY_ERROR(true, "TimeData arrays must be constructed "
-			"with name string to allow for files to be initialized",
-			ERROR_IN_TIMEDATA_ARRAY);
-	}
+
 
 public:
+
+	TimeData()
+	{
+		// If this constructor is called, the name must be set separately before
+		// the file can be initialized or an error will be thrown.
+		ArrayBase<T>::ini("defaultName");
+		fileCreated = false;
+		saveDataFunc = &TimeData::genericSaveFunc;
+
+	}
 
 	TimeData(std::string name_)
 	{
 		ArrayBase<T>::ini(name_);
 		fileCreated = false;
-		//iniFile();
 		saveDataFunc = &TimeData::genericSaveFunc;
 	}
 
@@ -2527,6 +2558,13 @@ public:
 
 	void iniFile(bool restartRun_)
 	{
+		bool testName = Name.compare("defaultName") == 0;
+
+		CHECK_ARRAY_ERROR(testName, "TimeData arrays must be constructed with a\n"\
+			"string containing a name, or have the name set separately before\n"\
+			"iniFile can be called", ERROR_IN_TIMEDATA_ARRAY);
+
+
 		std::string FileName = Name + ".txt";
 		
 

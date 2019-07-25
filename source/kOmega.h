@@ -31,7 +31,9 @@ public:
 	kOmega() : WallD("wallD"),
 		Diff_Omega("diffOmega"), Diff_K("diffK"), Fval_array("Fvals"),
 		Nut_array("lbnut"), dKdO_array("dKdO"), Sxy_array("lbsxy"),
-		Kappa_array("lbkappa"), Omega_array("lbomega")
+		Kappa_array("lbkappa"), Omega_array("lbomega"),
+		KappaInds(M_SOLID_NODE, M_FLUID_NODE, SOLID_BOUNDARY_NODE),
+		OmegaInds(M_SOLID_NODE, M_FLUID_NODE, SOLID_BOUNDARY_NODE)
 	{}
 
 	~kOmega() {}
@@ -161,6 +163,10 @@ public:
 	// Parameters used by kOmega Solver
 	double roughnessFactor, UtauVal, ReTurbVal;
 
+	// Initial Values to fill k and Omega Arrays with
+	double kIniVal, omegaIniVal;
+ 
+
 
 	// Solver parameters for Kappa and Omega eqns
 	double kappaMaxRelTol, kappaMaxAbsTol, omegaMaxRelTol, omegaMaxAbsTol;
@@ -209,6 +215,9 @@ public:
 
 	// Inititialization function
 	void ini();
+
+	// initialization function for time data array
+	void iniTimeData();
 
 	// Loads parameters passed in yaml parameter file, (also reads in 
 	// restart variables when a run is restarted)
@@ -276,13 +285,16 @@ public:
 //////////////            Initialization Functions           ///////////////
 ////////////////////////////////////////////////////////////////////////////
 
-	// Calculates turbulent viscosity array from values in kappa and omega
-	void calcNutArray();
+	// initializes k and omega arrays, solvers and reduce classes
+	void iniKOmegaArrays();
 
 	// Initializes wall distances array
 	void iniWallD();
 
-
+	// Calculates initial values for k and omega if not provided in yaml
+	// params file, calculates nut from these values and fills arrays
+	// with these values
+	void setInitialValues();
 ////////////////////////////////////////////////////////////////////////////	
 //////////////              Updating Functions               ///////////////
 ////////////////////////////////////////////////////////////////////////////

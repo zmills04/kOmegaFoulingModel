@@ -19,6 +19,17 @@
 // TODO: Make sure that all uses of nType in kernels use NTYPE_TYPE rather than int
 //		or short. This is crucial because it will not throw any build errors,
 //		but will screw everything up if NTYPE_TYPE isnt used.
+// TODO: make sure that since Ro remains 1 throughout simulation, that this
+//		wont create any issues by assuming that Ro = 0 in the fouling layer.
+// TODO: set something up to update vls.lsMap every so often. Doesnt need to be
+//		frequent since the nodes wont move much during the simulation (maybe every
+//		clump step)
+// TODO: Go ahead and implement own types for variables utilizing short and ushort
+//		in order to reduce cost if domains require values larger than what they can represent.
+//		specifically anything associated with BL and vls.C as this is where it most often was
+//		used
+
+
 #include "StdAfx.h"
 #include "oclEnvironment.h"
 #include "Reducer.h"

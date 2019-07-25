@@ -11,7 +11,11 @@
 #include "StdAfx.h"
 #include "ReduceGenerator.h"
 
-template <typename T>
+// T is the variable type that Array will be reduced to.
+// T2 is the variable type of the Array being reduced 
+// This is to allow vls.nType (which may be a short)
+// to be reduced to an int.
+template <typename T, typename T2>
 class ReducerBase
 {
 protected:
@@ -22,7 +26,7 @@ protected:
 
 
 	int arrSize;
-	int cur_ind, next_ind;
+	int curInd, next_ind;
 	cl_mem *intermedBuf;
 	bool intermedBufFl;
 	ReduceGenerator::varType vType;
@@ -62,7 +66,7 @@ public:
 	static int redMemSet;
 	ReduceGenerator::varType getVarType();
 
-	ReducerBase() : cur_ind(0), next_ind(0)
+	ReducerBase() : curInd(0), next_ind(0)
 	{
 		intermedBufFl = false;
 		vType = getVarType();
@@ -81,11 +85,14 @@ public:
 	}
 
 	// Outname will be used for debugging and will also be the output filename
-	void ini(ArrayBase<T> &memloc_, bool restartFlag, std::string outname_ = "")
+	void ini(ArrayBase<T2> &memloc_, bool restartFlag, std::string outname_ = "")
 	{
 		if (outname_.length() == 0)
 			outname_ = memloc_.getName() + "Red" + ReduceGenerator::getGenericName(redType);
 		Name = outname_;
+		redVals.setName(Name);
+		redOneVal.setName(Name + "Single");
+		
 		iniArrays(restartFlag);
 		// TODO: make it to where I can pass in the string directly without needing to initialize it
 		// ahead of time.
@@ -97,8 +104,7 @@ public:
 		ERROR_CHECKING((redKer.isInitialized()), "Trying to initialize " + Name + \
 			" after its already been initialized", ERROR_IN_REDUCE_KERNEL);
 
-		redVals.setName(Name);
-		redOneVal.setName(Name + "Single");
+
 		
 		// need to make sure buffer is correctly padded,
 		// and reallocate if necessary
@@ -124,11 +130,14 @@ public:
 		intermedBufFl = true;
 	}
 
-	void ini(ArrayBase<T> &mem1loc_, ArrayBase<T> &mem2loc_, bool restartFlag, std::string outname_ = "")
+	void ini(ArrayBase<T2> &mem1loc_, ArrayBase<T2> &mem2loc_, bool restartFlag, std::string outname_ = "")
 	{
 		if (outname_.length() == 0)
 			outname_ = mem1loc_.getName() + "Dot" + mem2loc_.getName();
 		Name = outname_;
+		redVals.setName(Name);
+		redOneVal.setName(Name + "Single");
+
 		iniArrays(restartFlag);
 		ERROR_CHECKING((redType != ReduceGenerator::Dot), "Provided two buffers to non dot prod reduce kernel " + \
 			Name + ". Maybe want to create a non-generic reduce kernel set?", ERROR_IN_REDUCE_KERNEL);
@@ -136,8 +145,7 @@ public:
 		ERROR_CHECKING((redKer.isInitialized()), "Trying to initialize " + Name + \
 			" after its already been initialized", ERROR_IN_REDUCE_KERNEL);
 
-		redVals.setName(Name);
-		redOneVal.setName(Name + "Single");
+
 		//if (clEnv::instance()->getRestartFlag() == false)
 		//	redVals.append2file(-2); // initializes file to be appended to if not a restart
 
@@ -185,7 +193,7 @@ public:
 
 	void reset_counter()
 	{
-		cur_ind = 0;
+		curInd = 0;
 		next_ind = 0;
 	}
 
@@ -196,8 +204,8 @@ public:
 			que_ = clEnv::instance()->getIOqueue();
 		}
 
-		cur_ind = next_ind;
-		int status = redKer.setOutputIndex(cur_ind);
+		curInd = next_ind;
+		int status = redKer.setOutputIndex(curInd);
 		ERROR_CHECKING(status, "Error returned setting output index of "\
 			+ Name, status);
 		for (thinKerWrapper *rk = redKer.begin(); rk != redKer.end(); ++rk)
@@ -209,14 +217,14 @@ public:
 		bool retval = redVals.setTimeAndIncrement(p.Time, que_);
 		if (retval)
 			next_ind = 0;
-		
+		return retval;
 	}
 
 
 	void appendToFileFromDevice(cl_command_queue* que_ = NULL, cl_bool block_flag = CL_TRUE, 
 		int num_wait = 0, cl_event* wait = NULL, cl_event* evt = NULL)
 	{
-		if (cur_ind == 0)
+		if (curInd == 0)
 			return;
 		
 		if (que_ == NULL)
@@ -252,8 +260,8 @@ public:
 				" reduce kernels of " + Name, status);
 		}
 
-		/////////// Reset Kernel to write to ReduceVals at position cur_ind/////////////
-		redKer.setOutputIndex(cur_ind);
+		/////////// Reset Kernel to write to ReduceVals at position curInd/////////////
+		redKer.setOutputIndex(curInd);
 		ERROR_CHECKING(status, "Error returned setting output index of "\
 			+ Name, status);
 		redKer.setOutputArray(redVals.get_buf_add());
@@ -266,12 +274,12 @@ public:
 
 	T getLastRead()
 	{
-		return redVals(cur_ind);
+		return redVals(curInd);
 	}
 
 	void transferUpToLast(cl_command_queue *que_ = NULL)
 	{
-		redVals.read_from_buffer_size(cur_ind, que_);
+		redVals.read_from_buffer_size(curInd, que_);
 	}
 
 	T readAndGetLast(cl_command_queue *que_ = NULL)
@@ -281,7 +289,7 @@ public:
 	}
 };
 
-template <typename T> int ReducerBase<T>::redMemSet = 0;
+template <typename T, typename T2> int ReducerBase<T, T2>::redMemSet = 0;
 
 
 // This is to allow for passing reducer without instantiating multiple functions
@@ -290,8 +298,9 @@ template <typename T> int ReducerBase<T>::redMemSet = 0;
 // For domain variables, which use the same intermediate buffers, only variable types which have sizes
 // less than or equal to doubles can be used (opencl buffers are type agnostic (addressing based on the 
 // type declared in the kernel, so a buffer for 100 doubles can store 100 ints with only have the buffer being used)
-template <typename T, ReduceGenerator::reduceType redT_ = ReduceGenerator::Sum, int ArrSize_ = REDUCE_RESULTS_SIZE>
-class Reducer : public ReducerBase<T>
+template <typename T, ReduceGenerator::reduceType redT_ = ReduceGenerator::Sum, 
+	int ArrSize_ = REDUCE_RESULTS_SIZE, typename T2 = T>
+class Reducer : public ReducerBase<T,T2>
 {
 public:
 	Reducer()

@@ -3,6 +3,19 @@
 #include "clVariablesFD.h"
 
 
+// Currently, code uses blending function to calculate omega and U at nodes
+// positioned beside the boundary while k is solved for like in other fluid nodes.
+// k is set to 0 at boundary nodes inside the solid region (represent the value at the
+// solid wall surface. This is correct according to theory (and suggested as a bc for k
+// in https://turbmodels.larc.nasa.gov/sst.html). Literature is unclear about value of
+// at wall surface, but this is not needed as omega is calculated with blending function
+// at all nodes positioned beside wall (these nodes are the only ones that would need 
+// value of omega at wall if solving with system of eqns.
+// Turbulent viscosity is set to zero at wall (as expected from theory) and calculated from
+// k and omega (and other flow parameters as well) at all fluid nodes during collision step.
+
+
+
 void kOmega::allocateArrays()
 {
 	if (kOmegaSolverFlag)
@@ -35,21 +48,11 @@ void kOmega::allocateBuffers()
 	WallD.allocate_buffer_w_copy();
 }
 
-void kOmega::calcNutArray()
-{
-	for (int i = 0; i < p.nX; i++)
-	{
-		for (int j = 0; j < p.nY; j++)
-		{
-			if (vls.nType(i, j) & M_SOLID_NODE)
-				Nut_array(i, j) = Kappa(i, j) / Omega(i, j);
-		}
-	}
-}
-
-
 void kOmega::createKernels()
 {
+	if (!kOmegaSolverFlag)
+		return;
+
 	int GlobalX = p.XsizeFull;
 	int GlobalY = p.nY;
 
@@ -142,74 +145,41 @@ void kOmega::freeHostArrays()
 	dKdO_array.FreeHost();
 }
 
-
-
 // TODO: implement wall function values for non-parallel channels
 //			this will most likely require a calculation of wall function values
 //			which can be done in the kernel
+
+// TODO: Figure out why using the same CSR_Inds instance for both k and omega 
+//		solvers is causing error, and see if possible to fix it. 
+//		there is no need to have two identical instances instead of a single one.
 void kOmega::ini()
 {
+	if (!kOmegaSolverFlag)
+		return;
+
 	sourceGenerator::SourceInstance()->addFile2Kernel("kOmegaKernels.cl");
-	/// Calc initial Re_dh
+	
 
-	// calculation of yplus_lam
-	double ypl = 11.;
-	for (int i = 0; i < 11; i++)
-	{
-		ypl = log(max(ROUGHNESS_FACTOR * ypl, 1)) / 0.41;
-	}
-	// specific to flow in straight channel
-	// based on openfoam's implementation
-	// see http://www.tfd.chalmers.se/~hani/kurser/OS_CFD_2016/FangqingLiu/openfoamFinal.pdf
-	// and openfoam documentation
 
-	ReTurbVal = sqrt(vlb.Re * 3.);
-	yPlusWallVal = ReTurbVal / p.Pipe_radius / 2.;
-	UtauVal = ReTurbVal * vlb.MuVal / p.Pipe_radius;
-	if (yPlusWallVal < ypl)
-	{
-		double Cf = (1. / ((yPlusWallVal + 11.) * (yPlusWallVal + 11.)) +
-			2. * yPlusWallVal / 11. / 11. / 11. - 1. / 11. / 11.);
-		kappaWallVal = UtauVal * UtauVal * (2400. / 1.9 / 1.9 * Cf);
-	}
-	else
-	{
-		// Nothing implemented for yPlus < yPlus_laminar
-		exit(ERROR_INITIALIZING_KOMEGA);
-	}
-	nutWallVal = vlb.MuVal * (0.41 * yPlusWallVal / log(roughnessFactor * yPlusWallVal) - 1.);
-	double omega_vis = 6. * vlb.MuVal / (0.075 * yPlusWallVal * yPlusWallVal);
-	double omega_log = UtauVal / (0.3 * yPlusWallVal * 0.41);
-	omegaWallVal = sqrt(omega_vis * omega_vis + omega_log * omega_log);
-	omegaWallVal = MAX(omegaWallVal, 0.);
-	double umean_ini = vlb.Ux_array.reduce() / vlb.Ro_array.reduce();
-	if (umean_ini == 0.)
-	{
-		umean_ini = vlb.Re * vlb.MuVal / p.Pipe_radius / 4.;
-	}
+	// initialize WallD array
+	iniWallD();
 
-	double Reini = p.Pipe_radius * vlb.Re / vlb.MuVal * 4.;
-	TurbIntensity = 0.16 * pow(Reini, -1. / 8.);
-	TurbLScale_inv = 1. / (0.036 * p.Pipe_radius);
+	// initialize k and omega arrays, solvers and reduction classes
+	iniKOmegaArrays();
 
-	double kIniVal = 1.5 * (TurbIntensity * umean_ini) * (TurbIntensity * umean_ini);
+	// fill with visc since these are f(mu) just in case
+	Diff_Omega.fillByNodeType(vlb.MuVal, vls.nType, M_FLUID_NODE);
+	Diff_K.fillByNodeType(vlb.MuVal, vls.nType, M_FLUID_NODE);
 
-	double omegaIniVal = sqrt(kIniVal) / KO_C_MU_0_25 * TurbLScale_inv;
-	double turbViscIniVal = kIniVal / omegaIniVal;
+	allocateBuffers();
+}
 
-	if (turbViscIniVal > 1.)
-	{
-		printf("Initial Turbulent viscosity too high\n");
-		exit(ERROR_INITIALIZING_KOMEGA);
-	}
+void kOmega::iniKOmegaArrays()
+{
+	// set initial values of k, omega and nut
+	setInitialValues();
 
-	// Fill with initial values if not loaded from bin
-	if (!kOmegaLoadedFlag)
-	{
-		Omega_array.fill(omegaIniVal);
-		Kappa_array.fill(kIniVal);
-	}
-
+	// Initialize solver classes for k and omega
 	KappaInds.ini(p.nX, p.XsizeFull, p.nY, p.nY, &vls.nType);
 	Kappa.CreateSolver(&Kappa_array, &KappaInds, LBQUEUE_REF,
 		kappaMaxIters, kappaMaxRelTol, kappaMaxAbsTol);
@@ -218,40 +188,19 @@ void kOmega::ini()
 	Omega.CreateSolver(&Omega_array, &OmegaInds, LBQUEUE_REF,
 		omegaMaxIters, omegaMaxRelTol, omegaMaxAbsTol);
 
-	int i = 0;
-	while (vls.nType(0, i) & M_SOLID_NODE)
-	{
-		i++;
-	}
-	int wallindlow = i;
-	while (vls.nType(0, i) & M_FLUID_NODE)
-	{
-		i++;
-	}
-
-	std::vector<int> wallinds = { wallindlow, i - 1 };
-	Kappa.setInitialValueRows(kappaWallVal, wallinds); // set to inlet val
-	Omega.setInitialValueRows(omegaWallVal, wallinds); // set to inlet val
-
+	// initialize reduce classes for k and omega
 	sumOmega.ini(*Omega.getMacroArray(), vlb.restartRunFlag, "redOmega");
 	sumKappa.ini(*Kappa.getMacroArray(), vlb.restartRunFlag, "redKappa");
 	minOmega.ini(*Omega.getMacroArray(), vlb.restartRunFlag, "minOmega");
 	minKappa.ini(*Kappa.getMacroArray(), vlb.restartRunFlag, "minKappa");
-
-	iniWallD();
-
-	/////////////////////////  Parameters for kOmegaModel/////////////////////////
-	/// Note, these do not have the necessary padding for reductions
-
-	calcNutArray();
-	Diff_Omega.fill(vlb.MuVal);
-	Diff_K.fill(vlb.MuVal);
-
-	allocateBuffers();
-
-	setSourceDefines();
 }
 
+void kOmega::iniTimeData()
+{
+	// no need to initialize anything here, since
+	// reduce kernels are used elsewhere and therefore
+	// will be initialized in the ini function
+}
 
 
 // Fills WallD with distance to nearest wall
@@ -303,6 +252,9 @@ void kOmega::loadParams()
 	omegaMaxIters = p.getParameter<int>("Omega Max Iterations", kappaMaxIters);
 
 	wallDSearchRar = p.getParameter<int>("Wall D Search Rad", WALLD_SEARCH_RADIUS);
+
+	kIniVal = p.getParameter<double>("K Initial Val", -1.);
+	omegaIniVal = p.getParameter<double>("K Initial Val", -1.);
 }
 
 
@@ -404,6 +356,9 @@ void kOmega::saveParams()
 
 	p.setParameter("Wall D Search Rad", wallDSearchRar);
 
+	p.setParameter("K Initial Val", kIniVal);
+	p.setParameter("Omega Initial Val", omegaIniVal);
+
 	// These do not need to be save since they relate to initialization
 	//p.setParameter("Ini Turb Velocity", false);
 	//p.setParameter("Perturb Vel Field", false);
@@ -411,8 +366,54 @@ void kOmega::saveParams()
 }
 
 
+void kOmega::setInitialValues()
+{
+	// Initial values are calculated from turbulent intensity and length scales assuming that
+	// velocity is f(Re, geomPenaltyFactor).
+
+	// Calculate actual mean velocity from Ux and rho (in case it is a restart
+	// after getting initial values only). If it is zero, Umean is calculated
+	// from set Re and modified by geomPenaltyFactor.
+	double umean_ini = vlb.Ux_array.reduce() / vlb.Ro_array.reduce();
+	if (umean_ini == 0.)
+	{
+		umean_ini = vlb.Re * vlb.MuVal / p.Pipe_radius / 4. * vlb.geomPenaltyFactor;
+	}
+
+
+	double Reini = p.Pipe_radius * 4. * umean_ini / vlb.MuVal;
+	TurbIntensity = 0.16 * pow(Reini, -1. / 8.);
+	TurbLScale_inv = 1. / (0.036 * p.Pipe_radius);
+
+	if (kIniVal <= 0.)
+		kIniVal = 1.5 * (TurbIntensity * umean_ini) * (TurbIntensity * umean_ini);
+
+	if (omegaIniVal <= 0.)
+		omegaIniVal = sqrt(kIniVal) / KO_C_MU_0_25 * TurbLScale_inv;
+
+	ERROR_CHECKING((kIniVal <= 0.), "Initial value for initial tKE <= 0.\n", \
+		ERROR_INITIALIZING_KOMEGA);
+
+	ERROR_CHECKING((omegaIniVal <= 0.), "Initial value for initial omega <= 0.\n", \
+		ERROR_INITIALIZING_KOMEGA);
+
+	double turbViscIniVal = kIniVal / omegaIniVal;
+
+	ERROR_CHECKING((turbViscIniVal > MAX_TURB_VISC_VALUE), "Initial Turbulent viscosity greater "\
+		"than set maximum value\n", ERROR_INITIALIZING_KOMEGA);
+
+	// Fill with initial values if not loaded from bin
+	Omega_array.fillByNodeType(omegaIniVal, vls.nType, M_FLUID_NODE);
+	Kappa_array.fillByNodeType(kIniVal, vls.nType, M_FLUID_NODE);
+	Nut_array.fillByNodeType(turbViscIniVal, vls.nType, M_FLUID_NODE);
+}
+
+
 void kOmega::setKernelArgs()
 {
+	if (!kOmegaSolverFlag)
+		return;
+	
 	cl_int ind = 0;
 	int zer = 0;
 
@@ -426,9 +427,7 @@ void kOmega::setKernelArgs()
 	kOmegaUpdateDiffCoeffs.set_argument(ind++, Fval_array.get_buf_add());
 	kOmegaUpdateDiffCoeffs.set_argument(ind++, dKdO_array.get_buf_add());
 	kOmegaUpdateDiffCoeffs.set_argument(ind++, vlb.Ro_array.get_buf_add());
-	if (vfd.thermalSolverFlag)
-		kOmegaUpdateDiffCoeffs.set_argument(ind++, vfd.Alphat.get_buf_add());
-	kOmegaUpdateDiffCoeffs.set_argument(ind++, vls.dXCoeffs.get_buf_add());
+	kOmegaUpdateDiffCoeffs.set_argument(ind++, vls.dXArr.get_buf_add());
 #ifdef DEBUG_TURBARR
 	kOmegaUpdateDiffCoeffs.set_argument(ind++, koDbgArr1.get_buf_add());
 #endif
@@ -451,14 +450,16 @@ void kOmega::setKernelArgs()
 	kOmegaUpdateCoeffs.set_argument(ind++, Omega.get_add_A());
 	kOmegaUpdateCoeffs.set_argument(ind++, Kappa.get_add_b());
 	kOmegaUpdateCoeffs.set_argument(ind++, Omega.get_add_b());
-	kOmegaUpdateCoeffs.set_argument(ind++, vls.dXCoeffs.get_buf_add());
+	kOmegaUpdateCoeffs.set_argument(ind++, vls.dXArr.get_buf_add());
 	kOmegaUpdateCoeffs.set_argument(ind++, WallD.get_buf_add());
+	kOmegaUpdateCoeffs.set_argument(ind++, vls.lsMap.get_buf_add());
+	kOmegaUpdateCoeffs.set_argument(ind++, vtr.wallShear.Tau.get_buf_add());
+	kOmegaUpdateCoeffs.set_argument(ind++, vls.nType.get_buf_add());
 	kOmegaUpdateCoeffs.set_argument(ind++, &p.dTlb);
-	kOmegaUpdateCoeffs.set_argument(ind++, &TurbIntensity);
-	kOmegaUpdateCoeffs.set_argument(ind++, &TurbLScale_inv);
 #ifdef DEBUG_TURBARR
 	kOmegaUpdateCoeffs.set_argument(ind++, koDbgArr2.get_buf_add());
 #endif
+
 
 	ind = 0;
 	updateWallDKernel.set_argument(ind++, WallD.get_buf_add());
@@ -492,6 +493,8 @@ void kOmega::setSourceDefines()
 	SETSOURCEDEFINE, "NUT_WALL_VALUE", nutWallVal);
 	SETSOURCEDEFINE, "OMEGA_WALL_VALUE", omegaWallVal);
 	SETSOURCEDEFINE, "WALLD_SEARCH_RADIUS", wallDSearchRar);
+	if(kOmegaSolverFlag)
+		SETSOURCEDEFINE, "USING_KOMEGA_SOLVER");
 
 }
 
@@ -531,3 +534,75 @@ bool kOmega::testRestartRun()
 void kOmega::updateTimeData()
 {
 }
+
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////
+//////////                                                                  ///////////
+//////////   Calculation of wall values used for straight channel tests.    ///////////
+//////////                                                                  ///////////
+///////////////////////////////////////////////////////////////////////////////////////
+
+//// calculation of yplus_lam
+//// specific to flow in straight channel
+//// based on openfoam's implementation
+//// see http://www.tfd.chalmers.se/~hani/kurser/OS_CFD_2016/FangqingLiu/openfoamFinal.pdf
+//// and openfoam documentation
+//
+//double ypl = 11.;
+//for (int i = 0; i < 11; i++)
+//{
+//	ypl = log(MAX(roughnessFactor * ypl, 1)) / 0.41;
+//}
+//
+//ReTurbVal = sqrt(vlb.Re * 3.);
+//yPlusWallVal = ReTurbVal / p.Pipe_radius / 2.;
+//UtauVal = ReTurbVal * vlb.MuVal / p.Pipe_radius;
+//if (yPlusWallVal <= ypl)
+//{
+//	double Cf = (1. / ((yPlusWallVal + 11.) * (yPlusWallVal + 11.)) +
+//		2. * yPlusWallVal / 11. / 11. / 11. - 1. / 11. / 11.);
+//	kappaWallVal = UtauVal * UtauVal * (2400. / 1.9 / 1.9 * Cf);
+//}
+//else
+//{
+//	// Nothing implemented for yPlus < yPlus_laminar
+//	exit(ERROR_INITIALIZING_KOMEGA);
+//}
+//
+//nutWallVal = vlb.MuVal * (0.41 * yPlusWallVal / log(roughnessFactor * yPlusWallVal) - 1.);
+//double omega_vis = 6. * vlb.MuVal / (0.075 * yPlusWallVal * yPlusWallVal);
+//double omega_log = UtauVal / (0.3 * yPlusWallVal * 0.41);
+//omegaWallVal = sqrt(omega_vis * omega_vis + omega_log * omega_log);
+//omegaWallVal = MAX(omegaWallVal, 0.);
+//double umean_ini = vlb.Ux_array.reduce() / vlb.Ro_array.reduce();
+//if (umean_ini == 0.)
+//{
+//	umean_ini = vlb.Re * vlb.MuVal / p.Pipe_radius / 4.;
+//}
+//
+//double Reini = p.Pipe_radius * vlb.Re / vlb.MuVal * 4.;
+//TurbIntensity = 0.16 * pow(Reini, -1. / 8.);
+//TurbLScale_inv = 1. / (0.036 * p.Pipe_radius);
+//
+//double kIniVal = 1.5 * (TurbIntensity * umean_ini) * (TurbIntensity * umean_ini);
+//
+//double omegaIniVal = sqrt(kIniVal) / KO_C_MU_0_25 * TurbLScale_inv;
+//double turbViscIniVal = kIniVal / omegaIniVal;
+//
+//int i = 0;
+//while (vls.nType(0, i) & M_SOLID_NODE)
+//{
+//	i++;
+//}
+//int wallindlow = i;
+//while (vls.nType(0, i) & M_FLUID_NODE)
+//{
+//	i++;
+//}
+//
+//std::vector<int> wallinds = { wallindlow, i - 1 };
+//Kappa.setInitialValueRows(kappaWallVal, wallinds); // set to inlet val
+//Omega.setInitialValueRows(omegaWallVal, wallinds); // set to inlet val

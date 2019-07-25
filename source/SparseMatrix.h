@@ -26,7 +26,6 @@
 #define BIN_SAVE_DIR	""
 #endif //BIN_SAVE_DIR
 
-
 class CSR_Inds
 {
 public:
@@ -36,6 +35,7 @@ public:
 	Array1Di JA; // column information (i.e. the location in the domain that the element corresponds to (in 1D i.e. i+XsizeFull*j))
 	Array1Di RA; // RA(i) gives the full matrix row index of element i in CSR matrix (provides easier access to info, mainly used for saving files)
 
+	NTYPE_TYPE solidFlag, fluidFlag, solidBoundFlag;
 
 	int nnz_, rows, cols; //number of nonzeros, rows in full matrix, cols in full matrix. (rows=cols=vlb.XsizeFull*vlb.nY)
 	int XsizeFull, YsizeFull; // size of macro variable arrays
@@ -55,15 +55,19 @@ public:
 #endif
 
 
-	CSR_Inds() {}; // only using default constructor and destructor
-	~CSR_Inds() {};
+	CSR_Inds(NTYPE_TYPE solidflag_, NTYPE_TYPE fluidflag_,
+		NTYPE_TYPE solidboundflag_) : solidFlag(solidflag_), 
+	fluidFlag(fluidflag_), solidBoundFlag(solidboundflag_)
+	{}
 
-#ifdef IN_KERNEL_IBB
-	void ini(const int nx_, const int fx_, const int ny_, const int fy_, Array2Di *map_)
-#else
-	void ini(const int nx_, const int fx_, const int ny_, const int fy_, Array2D<cl_short>* map_)
-#endif
+	~CSR_Inds() {}
+
+	void ini(const int nx_, const int fx_, const int ny_, const int fy_, Array2D<NTYPE_TYPE> *map_)
 	{
+		ERROR_CHECKING((solidFlag == 0x0), "solidFlag in CSR_Inds is set to 0x0, indicating "\
+			"that the nType flags were not set using the class constructor",\
+			ERROR_INITIALIZING_CSR_CLASS);
+
 		cols = fx_*fy_;
 		Xsize = nx_;
 		Ysize = ny_;
@@ -75,11 +79,8 @@ public:
 		IndArray.zeros(cols, 5);
 		Map = map_;
 
-		if (Map == NULL)
-		{
-			printf("NULL value passed to Map in CSR_Inds\n");
-			exit(0);
-		}
+		ERROR_CHECKING((Map == nullptr), "NULL value passed for Map in CSR_Inds", \
+			ERROR_INITIALIZING_CSR_CLASS);
 
 		fill_IA();
 		fill_JA();
@@ -114,7 +115,7 @@ public:
 
 
 	/// Fills Loc with the location in the sparse matrix, 
-	virtual void fill_IA()
+	void fill_IA()
 	{
 		//Array2Di countarr;
 		//countarr.zeros(XsizeFull, YsizeFull);
@@ -135,33 +136,129 @@ public:
 		RA.zeros(nnz_);
 	}
 
+	//virtual int testRow(const int i, const int j)
+	//{
+	//	int localcount = 0;
+	//	if (i >= Xsize || j >= Ysize)
+	//		return 0;
+
+	//	// If node is solid and not a (solid) boundary node, return 0
+	//	if ((Map->operator()(i, j) & solidFlag) & !(Map->operator()(i, j) & solidFlag))
+	//		return 0;
+	//	
+	//	int ind = i + j*XsizeFull;
+	//	
+	//	if (testNeigh(i, j, S) == true)
+	//	{
+	//		IndArray(ind, S) = nnz_++;
+	//		localcount++;
+	//	}
+	//	if (testNeigh(i, j, W) == true)
+	//	{
+	//		IndArray(ind, W) = nnz_++;
+	//		localcount++;
+	//	}
+	//	localcount++;
+	//	IndArray(ind, C) = nnz_++;
+	//	if (testNeigh(i, j, E) == true)
+	//	{
+	//		IndArray(ind, E) = nnz_++;
+	//		localcount++;
+	//	}
+	//	if (testNeigh(i, j, N) == true)
+	//	{
+	//		IndArray(ind, N) = nnz_++;
+	//		localcount++;
+	//	}
+	//	return localcount;
+	//}
+
+	virtual int getEastIndex(int i)
+	{
+		return i+1;
+	}
+
+	virtual int getWestIndex(int i)
+	{
+		return i-1;
+	}
+
 	virtual int testRow(const int i, const int j)
 	{
 		int localcount = 0;
 		if (i >= Xsize || j >= Ysize)
 			return 0;
-		if (Map->operator()(i, j) & M0_SOLID_NODE)
+
+		// If node is solid and not a (solid) boundary node, return 0
+		if ((Map->operator()(i, j) & solidFlag) & !(Map->operator()(i, j) & solidFlag))
 			return 0;
-		
-		int ind = i + j*XsizeFull;
-		
+
+		int ind = i + j * XsizeFull;
+
 		if (testNeigh(i, j, S) == true)
 		{
 			IndArray(ind, S) = nnz_++;
 			localcount++;
 		}
-		if (testNeigh(i, j, W) == true)
+
+		// This is done to correctly order the indicies in ascending order when using periodic
+		// boundaries (an inherited class)
+		int ie = getEastIndex(i);
+		int iw = getWestIndex(i);
+
+		if (iw < i && i < ie)
 		{
-			IndArray(ind, W) = nnz_++;
+			if (testNeigh(i, j, W) == true)
+			{
+				IndArray(ind, W) = nnz_++;
+				localcount++;
+			}
+
 			localcount++;
+			IndArray(ind, C) = nnz_++;
+
+			if (testNeigh(i, j, E) == true)
+			{
+				IndArray(ind, E) = nnz_++;
+				localcount++;
+			}
 		}
-		localcount++;
-		IndArray(ind, C) = nnz_++;
-		if (testNeigh(i, j, E) == true)
+		else if (ie < iw && iw < i)
 		{
-			IndArray(ind, E) = nnz_++;
+			if (testNeigh(i, j, E) == true)
+			{
+				IndArray(ind, E) = nnz_++;
+				localcount++;
+			}
+
+			if (testNeigh(i, j, W) == true)
+			{
+				IndArray(ind, W) = nnz_++;
+				localcount++;
+			}
+
 			localcount++;
+			IndArray(ind, C) = nnz_++;
 		}
+		else
+		{
+			localcount++;
+			IndArray(ind, C) = nnz_++;
+
+			if (testNeigh(i, j, E) == true)
+			{
+				IndArray(ind, E) = nnz_++;
+				localcount++;
+			}
+
+			if (testNeigh(i, j, W) == true)
+			{
+				IndArray(ind, W) = nnz_++;
+				localcount++;
+			}
+
+		}
+
 		if (testNeigh(i, j, N) == true)
 		{
 			IndArray(ind, N) = nnz_++;
@@ -172,10 +269,16 @@ public:
 
 	bool testNeigh(int i, int j, const int dir)
 	{
+		// if the center node is a solid boundary node,
+		// nothing but the c coefficient is necessary,
+		// so testNeigh should always return false.
+		if (Map->operator()(i, j) & solidBoundFlag)
+			return false;
+
 		if (dir == E)
-			i++;
+			getEastIndex(i);
 		else if (dir == W)
-			i--;
+			getWestIndex(i);
 		else if (dir == N)
 			j++;
 		else if (dir == S)
@@ -186,7 +289,8 @@ public:
 		if (i < 0 || i >= Xsize || j < 0 || j >= Ysize)
 			return false;
 
-		if (Map->operator()(i, j) & M0_FLUID_NODE)
+		// if neighbor is a fluid node or solid boundary, return true
+		if (Map->operator()(i, j) & (solidBoundFlag | fluidFlag))
 		{
 			return true;
 		}
@@ -232,6 +336,8 @@ public:
 				}
 			}
 		}
+
+
 
 		if (curel != nnz_)
 			printf("Error in initialization of CSR indicies");
@@ -355,118 +461,29 @@ public:
 };
 
 
-
 class CSR_Inds_Periodic : public CSR_Inds
 {
 public:
 
-	CSR_Inds_Periodic() {}; // only using default constructor and destructor
+
+	CSR_Inds_Periodic(NTYPE_TYPE solidflag_, NTYPE_TYPE fluidflag_,
+		NTYPE_TYPE solidboundflag_) :
+		CSR_Inds(solidflag_, fluidflag_, solidboundflag_)
+	{};
+
+
 	~CSR_Inds_Periodic() {};
 
-	/// Fills Loc with the location in the sparse matrix, 
-	virtual void fill_IA()
+
+
+	int getEastIndex(int i)
 	{
-		IndArray.fill(-1);
-		nnz_ = 0;
-		int row_num = 1;
-		for (int j = 0; j < YsizeFull; j++)
-		{
-			for (int i = 0; i < XsizeFull; i++)
-			{
-				int localcount = testRow(i, j);
-				IA(i + j*XsizeFull + 1) = nnz_;
-			}
-		}
-		JA.zeros(nnz_);
-		RA.zeros(nnz_);
+		return (i < Xsize - 1) ? (i + 1) : (0);
 	}
 
-	virtual int testRow(const int i, const int j)
+	int getWestIndex(int i)
 	{
-		int localcount = 0;
-		if (i >= Xsize || j >= Ysize)
-			return 0;
-		if (Map->operator()(i, j) & M0_SOLID_NODE)
-			return 0;
-
-
-		int ind = i + j*XsizeFull;
-		int ie = (i < Xsize - 1) ? (i + 1) : (0);
-		int iw = (i > 0) ? (i - 1) : (Xsize - 1);
-		int jn = j + 1;
-		int js = j - 1;
-
-		if (js >= 0)
-		{
-			if (Map->operator()(i, js) & M0_FLUID_NODE)
-			{
-				IndArray(ind, S) = nnz_++;
-				localcount++;
-			}
-		}
-		
-		if (iw < i && i < ie)
-		{
-			if (Map->operator()(iw, j) & M0_FLUID_NODE)
-			{
-				IndArray(ind, W) = nnz_++;
-				localcount++;
-			}
-
-			localcount++;
-			IndArray(ind, C) = nnz_++;
-
-			if (Map->operator()(ie, j) & M0_FLUID_NODE)
-			{
-				IndArray(ind, E) = nnz_++;
-				localcount++;
-			}
-		}
-		else if (ie < iw && iw < i)
-		{
-			if (Map->operator()(ie, j) & M0_FLUID_NODE)
-			{
-				IndArray(ind, E) = nnz_++;
-				localcount++;
-			}
-
-			if (Map->operator()(iw, j) & M0_FLUID_NODE)
-			{
-				IndArray(ind, W) = nnz_++;
-				localcount++;
-			}
-
-			localcount++;
-			IndArray(ind, C) = nnz_++;
-		}
-		else
-		{
-			localcount++;
-			IndArray(ind, C) = nnz_++;
-
-			if (Map->operator()(ie, j) & M0_FLUID_NODE)
-			{
-				IndArray(ind, E) = nnz_++;
-				localcount++;
-			}
-
-			if (Map->operator()(iw, j) & M0_FLUID_NODE)
-			{
-				IndArray(ind, W) = nnz_++;
-				localcount++;
-			}
-		}
-
-		if (jn < Ysize - 1)
-		{
-			if (Map->operator()(i, jn) & M0_FLUID_NODE)
-			{
-				IndArray(ind, N) = nnz_++;
-				localcount++;
-			}
-		}
-	
-		return localcount;
+		return (i > 0) ? (i - 1) : (Xsize - 1);
 	}
 
 	void fill_JA()
@@ -554,212 +571,213 @@ public:
 };
 
 
-
-
-
-class CSR_Inds_Periodic_BL : public CSR_Inds_Periodic
-{
-public:
-
-	CSR_Inds_Periodic_BL() {}; // only using default constructor and destructor
-	~CSR_Inds_Periodic_BL() {};
-
-	/// Fills Loc with the location in the sparse matrix, 
-	void fill_IA()
-	{
-		IndArray.fill(-1);
-		nnz_ = 0;
-		int row_num = 1;
-		for (int j = 1; j < YsizeFull-1; j++)
-		{
-			for (int i = 0; i < XsizeFull; i++)
-			{
-				int localcount = testRow(i, j);
-				IA(i + j*XsizeFull + 1) = nnz_;
-			}
-		}
-		JA.zeros(nnz_);
-		RA.zeros(nnz_);
-	}
-
-	int testRow(const int i, const int j)
-	{
-		int localcount = 0;
-		if (i >= Xsize || j >= Ysize)
-			return 0;
-
-		if (Map->operator()(i, j) & M0_SOLID_NODE)
-			return 0;
-		int ind = i + j*XsizeFull;
-		if ((Map->operator()(i, j - 1) & M0_SOLID_NODE) || (Map->operator()(i, j + 1) & M0_SOLID_NODE))
-		{
-			localcount++;
-			IndArray(ind, C) = nnz_++;
-			return localcount;
-		}
-		
-		
-		int ie = (i < Xsize - 1) ? (i + 1) : (i);
-		int iw = (i > 0) ? (i - 1) : (Xsize - 1);
-		int jn = j + 1;
-		int js = j - 1;
-
-		if (js >= 0)
-		{
-			if (Map->operator()(i, js) & M0_FLUID_NODE)
-			{
-				IndArray(ind, S) = nnz_++;
-				localcount++;
-			}
-		}
-
-		if (iw < i && i < ie)
-		{
-			if (Map->operator()(iw, j) & M0_FLUID_NODE)
-			{
-				IndArray(ind, W) = nnz_++;
-				localcount++;
-			}
-
-			localcount++;
-			IndArray(ind, C) = nnz_++;
-
-			if (Map->operator()(ie, j) & M0_FLUID_NODE)
-			{
-				IndArray(ind, E) = nnz_++;
-				localcount++;
-			}
-		}
-		else if (ie < iw && iw < i)
-		{
-			if (Map->operator()(ie, j) & M0_FLUID_NODE)
-			{
-				IndArray(ind, E) = nnz_++;
-				localcount++;
-			}
-
-			if (Map->operator()(iw, j) & M0_FLUID_NODE)
-			{
-				IndArray(ind, W) = nnz_++;
-				localcount++;
-			}
-
-			localcount++;
-			IndArray(ind, C) = nnz_++;
-		}
-		else
-		{
-			localcount++;
-			IndArray(ind, C) = nnz_++;
-
-			if (Map->operator()(ie, j) & M0_FLUID_NODE)
-			{
-				IndArray(ind, E) = nnz_++;
-				localcount++;
-			}
-
-			if (Map->operator()(iw, j) & M0_FLUID_NODE)
-			{
-				IndArray(ind, W) = nnz_++;
-				localcount++;
-			}
-		}
-
-		if (jn < Ysize - 1)
-		{
-			if (Map->operator()(i, jn) & M0_FLUID_NODE)
-			{
-				IndArray(ind, N) = nnz_++;
-				localcount++;
-			}
-		}
-
-		return localcount;
-	}
-
-	void fill_JA()
-	{
-		int curel = 0;
-		for (int j = 0; j < YsizeFull; j++)
-		{
-			for (int i = 0; i < XsizeFull; i++)
-			{
-				int ind = i + j*XsizeFull;
-				if (IndArray(ind, C) == -1)
-					continue;
-
-
-				if (IndArray(ind, S) >= 0)
-				{
-					RA(curel) = ind;
-					JA(curel++) = i + (j - 1)*XsizeFull;
-				}
-
-				if (i == 0)
-				{
-					RA(curel) = ind;
-					JA(curel++) = ind;
-
-					if (IndArray(ind, E) >= 0)
-					{
-						RA(curel) = ind;
-						JA(curel++) = i + 1 + j*XsizeFull;
-					}
-
-					if (IndArray(ind, W) >= 0)
-					{
-						RA(curel) = ind;
-						JA(curel++) = Xsize - 1 + j*XsizeFull;;
-					}
-				}
-				else if (i == Xsize - 1)
-				{
-					if (IndArray(ind, E) >= 0)
-					{
-						RA(curel) = ind;
-						JA(curel++) = j*XsizeFull;
-					}
-
-					if (IndArray(ind, W) >= 0)
-					{
-						RA(curel) = ind;
-						JA(curel++) = i - 1 + j*XsizeFull;;
-					}
-
-					RA(curel) = ind;
-					JA(curel++) = ind;
-				}
-				else
-				{
-					if (IndArray(ind, W) >= 0)
-					{
-						RA(curel) = ind;
-						JA(curel++) = i - 1 + j*XsizeFull;;
-					}
-
-					RA(curel) = ind;
-					JA(curel++) = ind;
-
-					if (IndArray(ind, E) >= 0)
-					{
-						RA(curel) = ind;
-						JA(curel++) = i + 1 + j*XsizeFull;
-					}
-				}
-
-				if (IndArray(ind, N) >= 0)
-				{
-					RA(curel) = ind;
-					JA(curel++) = i + (j + 1)*XsizeFull;
-				}
-			}
-		}
-
-		if (curel != nnz_)
-			printf("Error in initialization of CSR indicies");
-	}
-
-};
+//
+//
+//template <NTYPE_TYPE solidFlag = M0_SOLID_NODE, NTYPE_TYPE fluidFlag = M0_FLUID_NODE,
+//	NTYPE_TYPE solidBoundFlag = SOLID_BOUNDARY_NODE0, NTYPE_TYPE neswBoundFlag = NESW_BOUNDARY_NODE0>
+//class CSR_Inds_Periodic_BL : public CSR_Inds_Periodic<solidFlag, fluidFlag, solidBoundFlag, neswBoundFlag>
+//{
+//public:
+//
+//	CSR_Inds_Periodic_BL() {}; // only using default constructor and destructor
+//	~CSR_Inds_Periodic_BL() {};
+//
+//	/// Fills Loc with the location in the sparse matrix, 
+//	void fill_IA()
+//	{
+//		IndArray.fill(-1);
+//		nnz_ = 0;
+//		int row_num = 1;
+//		for (int j = 1; j < YsizeFull-1; j++)
+//		{
+//			for (int i = 0; i < XsizeFull; i++)
+//			{
+//				int localcount = testRow(i, j);
+//				IA(i + j*XsizeFull + 1) = nnz_;
+//			}
+//		}
+//		JA.zeros(nnz_);
+//		RA.zeros(nnz_);
+//	}
+//
+//	int testRow(const int i, const int j)
+//	{
+//		int localcount = 0;
+//		if (i >= Xsize || j >= Ysize)
+//			return 0;
+//
+//		if (Map->operator()(i, j) & solidFlag)
+//			return 0;
+//		int ind = i + j*XsizeFull;
+//		if ((Map->operator()(i, j - 1) & solidFlag) || (Map->operator()(i, j + 1) & solidFlag))
+//		{
+//			localcount++;
+//			IndArray(ind, C) = nnz_++;
+//			return localcount;
+//		}
+//		
+//		
+//		int ie = (i < Xsize - 1) ? (i + 1) : (i);
+//		int iw = (i > 0) ? (i - 1) : (Xsize - 1);
+//		int jn = j + 1;
+//		int js = j - 1;
+//
+//		if (js >= 0)
+//		{
+//			if (Map->operator()(i, js) & fluidFlag)
+//			{
+//				IndArray(ind, S) = nnz_++;
+//				localcount++;
+//			}
+//		}
+//
+//		if (iw < i && i < ie)
+//		{
+//			if (Map->operator()(iw, j) & fluidFlag)
+//			{
+//				IndArray(ind, W) = nnz_++;
+//				localcount++;
+//			}
+//
+//			localcount++;
+//			IndArray(ind, C) = nnz_++;
+//
+//			if (Map->operator()(ie, j) & fluidFlag)
+//			{
+//				IndArray(ind, E) = nnz_++;
+//				localcount++;
+//			}
+//		}
+//		else if (ie < iw && iw < i)
+//		{
+//			if (Map->operator()(ie, j) & fluidFlag)
+//			{
+//				IndArray(ind, E) = nnz_++;
+//				localcount++;
+//			}
+//
+//			if (Map->operator()(iw, j) & fluidFlag)
+//			{
+//				IndArray(ind, W) = nnz_++;
+//				localcount++;
+//			}
+//
+//			localcount++;
+//			IndArray(ind, C) = nnz_++;
+//		}
+//		else
+//		{
+//			localcount++;
+//			IndArray(ind, C) = nnz_++;
+//
+//			if (Map->operator()(ie, j) & fluidFlag)
+//			{
+//				IndArray(ind, E) = nnz_++;
+//				localcount++;
+//			}
+//
+//			if (Map->operator()(iw, j) & fluidFlag)
+//			{
+//				IndArray(ind, W) = nnz_++;
+//				localcount++;
+//			}
+//		}
+//
+//		if (jn < Ysize - 1)
+//		{
+//			if (Map->operator()(i, jn) & fluidFlag)
+//			{
+//				IndArray(ind, N) = nnz_++;
+//				localcount++;
+//			}
+//		}
+//
+//		return localcount;
+//	}
+//
+//	void fill_JA()
+//	{
+//		int curel = 0;
+//		for (int j = 0; j < YsizeFull; j++)
+//		{
+//			for (int i = 0; i < XsizeFull; i++)
+//			{
+//				int ind = i + j*XsizeFull;
+//				if (IndArray(ind, C) == -1)
+//					continue;
+//
+//
+//				if (IndArray(ind, S) >= 0)
+//				{
+//					RA(curel) = ind;
+//					JA(curel++) = i + (j - 1)*XsizeFull;
+//				}
+//
+//				if (i == 0)
+//				{
+//					RA(curel) = ind;
+//					JA(curel++) = ind;
+//
+//					if (IndArray(ind, E) >= 0)
+//					{
+//						RA(curel) = ind;
+//						JA(curel++) = i + 1 + j*XsizeFull;
+//					}
+//
+//					if (IndArray(ind, W) >= 0)
+//					{
+//						RA(curel) = ind;
+//						JA(curel++) = Xsize - 1 + j*XsizeFull;;
+//					}
+//				}
+//				else if (i == Xsize - 1)
+//				{
+//					if (IndArray(ind, E) >= 0)
+//					{
+//						RA(curel) = ind;
+//						JA(curel++) = j*XsizeFull;
+//					}
+//
+//					if (IndArray(ind, W) >= 0)
+//					{
+//						RA(curel) = ind;
+//						JA(curel++) = i - 1 + j*XsizeFull;;
+//					}
+//
+//					RA(curel) = ind;
+//					JA(curel++) = ind;
+//				}
+//				else
+//				{
+//					if (IndArray(ind, W) >= 0)
+//					{
+//						RA(curel) = ind;
+//						JA(curel++) = i - 1 + j*XsizeFull;;
+//					}
+//
+//					RA(curel) = ind;
+//					JA(curel++) = ind;
+//
+//					if (IndArray(ind, E) >= 0)
+//					{
+//						RA(curel) = ind;
+//						JA(curel++) = i + 1 + j*XsizeFull;
+//					}
+//				}
+//
+//				if (IndArray(ind, N) >= 0)
+//				{
+//					RA(curel) = ind;
+//					JA(curel++) = i + (j + 1)*XsizeFull;
+//				}
+//			}
+//		}
+//
+//		if (curel != nnz_)
+//			printf("Error in initialization of CSR indicies");
+//	}
+//
+//};
 
 //
 //

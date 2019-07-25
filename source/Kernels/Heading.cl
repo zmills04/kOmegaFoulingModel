@@ -27,7 +27,7 @@
 #define CXY_DEFF	(float4)(1.f,1.f,-1.f,-1.f)
 
 #define PI_NUMBER				3.1415926535897931
-
+	
 
 enum{ MWC64X_A = 4294883355U };
 enum{ MWC64X_M = 18446383549859758079UL };
@@ -189,53 +189,88 @@ uint2 MWC64X_NextUint2(uint2 s, double2* resd)
 //Type 1 Boundaries are IBB boundaries applied before collision step (q < 0.5)
 //Type 2 Boundaries are IBB boundaries applied after collision step (q >= 0.5)
 
-#define C_BOUND			0x0 //just a placeholder. Not actually used
-#define M_SOLID_NODE	0x1
-#define M_FLUID_NODE	0x2
-#define M0_SOLID_NODE	0x4
-#define M0_FLUID_NODE	0x8
-#define M_FOUL_NODE		0x9  // M0_FLUID_NODE | M_SOLID_NODE
-
 #ifndef IN_KERNEL_IBB
-	#define E_BOUND		0x100
-	#define W_BOUND		0x200
-	#define N_BOUND		0x400
-	#define S_BOUND		0x800
-	#define NE_BOUND	0x1000
-	#define SW_BOUND	0x2000
-	#define SE_BOUND	0x4000
-	#define NW_BOUND	0x8000
-	#define BOUNDARY_NODE 0xFF00  // E_BOUND | W_BOUND | ... | NW_BOUND
-	#define NESW_BOUNDARY_NODE 0x0F00
+#define C_BOUND					0x0000 //just a placeholder. Not actually used
+#define M_SOLID_NODE			0x0001
+#define M_FLUID_NODE			0x0002
+#define M0_SOLID_NODE			0x0004
+#define M0_FLUID_NODE			0x0008
+#define SOLID_BOUNDARY_NODE		0x0010
+#define SOLID_BOUNDARY_NODE0	0x0020	// Solid boundary node in unfouled domain
+#define NESW_BOUNDARY_NODE0		0x0040  // NESW_BOUNDARY_NODE in unfouled domain
+#define BOUNDARY_NODE0			0x0080  // BOUNDARY_NODE in unfouled domain
+
+#define E_BOUND					0x0100
+#define W_BOUND					0x0200
+#define N_BOUND					0x0400
+#define S_BOUND					0x0800
+#define NE_BOUND				0x1000
+#define SW_BOUND				0x2000
+#define SE_BOUND				0x4000
+#define NW_BOUND				0x8000
+
+#define M_FOUL_NODE				0x0009  // M0_FLUID_NODE | M_SOLID_NODE
+#define NESW_BOUNDARY_NODE		0x0F00  // E_BOUND | W_BOUND | N_BOUND | S_BOUND
+#define FD_BOUNDARY_NODE		0x0F10	//SOLID_BOUNDARY_NODE | NESW_BOUNDARY_NODE
+#define BOUNDARY_NODE			0xFF00  // E_BOUND | W_BOUND | ... | NW_BOUND
+#define FD_BOUNDARY_NODE0		0x0060	//SOLID_BOUNDARY_NODE0 | NESW_BOUNDARY_NODE0
+
+
 #else
-	#define E_BOUND		0x100
-	#define W_BOUND		0x200
-	#define N_BOUND		0x400
-	#define S_BOUND		0x800
-	#define NE_BOUND	0x1000
-	#define SW_BOUND	0x2000
-	#define SE_BOUND	0x4000
-	#define NW_BOUND	0x8000
-	#define E_BOUND_T1	0x10000
-	#define W_BOUND_T1	0x20000
-	#define N_BOUND_T1	0x40000
-	#define S_BOUND_T1	0x80000
-	#define NE_BOUND_T1 0x100000
-	#define SW_BOUND_T1 0x200000
-	#define SE_BOUND_T1 0x400000
-	#define NW_BOUND_T1 0x800000
-	#define E_BOUND_T2	0x1000000
-	#define W_BOUND_T2	0x2000000
-	#define N_BOUND_T2	0x4000000
-	#define S_BOUND_T2	0x8000000
-	#define NE_BOUND_T2 0x10000000
-	#define SW_BOUND_T2 0x20000000
-	#define SE_BOUND_T2 0x40000000
-	#define NW_BOUND_T2 0x80000000
-	#define BOUNDARY_NODE 0xFFFFFF00
-	#define NESW_BOUNDARY_NODE 0x00000F00
+#define C_BOUND					0x00000000 //just a placeholder. Not actually used
+#define M_SOLID_NODE			0x00000001
+#define M_FLUID_NODE			0x00000002
+#define M0_SOLID_NODE			0x00000004
+#define M0_FLUID_NODE			0x00000008
+#define SOLID_BOUNDARY_NODE		0x00000010	
+#define SOLID_BOUNDARY_NODE0	0x00000020	// Solid boundary node in unfouled domain
+#define NESW_BOUNDARY_NODE0		0x00000040  // NESW_BOUNDARY_NODE in unfouled domain
+#define BOUNDARY_NODE0			0x00000080  // BOUNDARY_NODE in unfouled domain
+
+#define E_BOUND					0x00000100
+#define W_BOUND					0x00000200
+#define N_BOUND					0x00000400
+#define S_BOUND					0x00000800
+#define NE_BOUND				0x00001000
+#define SW_BOUND				0x00002000
+#define SE_BOUND				0x00004000
+#define NW_BOUND				0x00008000
+#define E_BOUND_T1				0x00010000
+#define W_BOUND_T1				0x00020000
+#define N_BOUND_T1				0x00040000
+#define S_BOUND_T1				0x00080000
+#define NE_BOUND_T1				0x00100000
+#define SW_BOUND_T1				0x00200000
+#define SE_BOUND_T1				0x00400000
+#define NW_BOUND_T1				0x00800000
+#define E_BOUND_T2				0x01000000
+#define W_BOUND_T2				0x02000000
+#define N_BOUND_T2				0x04000000
+#define S_BOUND_T2				0x08000000
+#define NE_BOUND_T2				0x10000000
+#define SW_BOUND_T2				0x20000000
+#define SE_BOUND_T2				0x40000000
+#define NW_BOUND_T2				0x80000000
+
+#define M_FOUL_NODE				0x00000009  // M0_FLUID_NODE | M_SOLID_NODE
+#define NESW_BOUNDARY_NODE		0x00000F00  // E_BOUND | W_BOUND | N_BOUND | S_BOUND
+#define FD_BOUNDARY_NODE		0x00000F10	//SOLID_BOUNDARY_NODE | NESW_BOUNDARY_NODE
+#define BOUNDARY_NODE			0xFFFFFF00
+#define FD_BOUNDARY_NODE0		0x00000060	//SOLID_BOUNDARY_NODE0 | NESW_BOUNDARY_NODE0
 #endif
 
+// Resets node originally set as M0_FLUID_NODE to M0_SOLID_NODE
+// These are mutually exclusive, so the M0_FLUID_NODE bit must be set
+// to zero along with M0_SOLID_NODE bit being set to 1.
+#define RESET_NODE_TO_M0_SOLID(nodeVal)		nodeVal &= !M0_FLUID_NODE;\
+											nodeVal |= M0_SOLID_NODE;
+
+// Converts node that is currently tagged as M_FLUID_NODE
+// to a M_SOLID_NODE. These are mutually exclusive, so the
+// M_FLUID_NODE bit must be set to zero along with 
+// M_SOLID_NODE bit being set to 1.
+#define RESET_NODE_TO_M_SOLID(nodeVal)		nodeVal &= !M_FLUID_NODE;\
+											nodeVal |= M_SOLID_NODE;
 
 #define OPTION_SAVE_MACRO_FIELDS			0x2
 #define OPTION_LOCAL_UPDATE					0x8
@@ -393,6 +428,46 @@ bool convertLSBL2TRBL(int lsbl_, int *trbl_)
 		return false;
 	}
 	return (trbl_ < BL_BOT_STOP) ? trbl_ - BL_BOT_START : trbl_ - BL_TOP_START + NUM_BL_BOT;
+}
+
+
+int2 min2(double2 v0, double2 v1)
+{
+	if (v1.x < v0.x) v0.x = v1.x;
+	if (v1.y < v0.y) v0.y = v1.y;
+	return convert_int2(v0);
+}
+
+int2 max2(double2 v0, double2 v1)
+{
+	if (v1.x > v0.x) v0.x = v1.x;
+	if (v1.y > v0.y) v0.y = v1.y;
+
+	return convert_int2(ceil(v0));
+}
+
+int2 min4(double2 v0, double2 v1, double2 v2, double2 v3)
+{
+	if (v1.x < v0.x) v0.x = v1.x;
+	if (v2.x < v0.x) v0.x = v2.x;
+	if (v3.x < v0.x) v0.x = v3.x;
+	if (v1.y < v0.y) v0.y = v1.y;
+	if (v2.y < v0.y) v0.y = v2.y;
+	if (v3.y < v0.y) v0.y = v3.y;
+
+	return convert_int2(v0);
+}
+
+int2 max4(double2 v0, double2 v1, double2 v2, double2 v3)
+{
+	if (v1.x > v0.x) v0.x = v1.x;
+	if (v2.x > v0.x) v0.x = v2.x;
+	if (v3.x > v0.x) v0.x = v3.x;
+	if (v1.y > v0.y) v0.y = v1.y;
+	if (v2.y > v0.y) v0.y = v2.y;
+	if (v3.y > v0.y) v0.y = v3.y;
+
+	return convert_int2(ceil(v0));
 }
 
 

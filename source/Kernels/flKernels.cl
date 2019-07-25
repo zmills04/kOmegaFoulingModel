@@ -293,61 +293,6 @@ nodeC calc_tr_coeffs(nodeC NodC, int tnum, double dXcx, double dXcy, double dXx,
 	return NodC;
 }
 
-int bcFindIntersectionFD(int2 *vCcut0, int2 *vCcut1, double2 *vCcut, double *dist, 
-	double2 vL0, double2 vLd, double2 vC0, double2 vC1, __global char *M_s, int tb_flag)
-{
-	double2 vP10 = vC1 - vC0;
-	double2 vN = (double2)(-vP10.y,vP10.x);
-
-	double den = dot(vN, vLd);
-	if(den == 0.)
-		return 0;
-
-	*dist = dot(vN,(vC0 - vL0)) / den;
-	*vCcut = vL0 + vLd * (*dist);
-	double2 vd0 = *vCcut - vC0, vd1 = *vCcut - vC1;
-	if(fabs(length(vP10) - length(vd0) - length(vd1)) >= CEPS)
-		return 0;
-		
-	double distF = (*dist);
-	int n_cut_0 = (int)ceil(distF);
-	int n_cut = (int)ceil(distF);
-	double dist_0 = 1. - (convert_double(n_cut) - distF);
-	*dist = 1. - (convert_double(n_cut) - distF);
-
-	*vCcut1 = convert_int2(vL0) + convert_int2(vLd) * n_cut;
-	*vCcut0 = *vCcut1 - convert_int2(vLd);
-
-	int2 ii0 = (int2)(MODFAST((*vCcut0).x, FULLSIZEX), MODFAST((*vCcut0).y, DOMAIN_SIZE_Y));
-
-	if(ii0.x != (*vCcut0).x)
-		return 0; 
-
-	if(ii0.y != (*vCcut0).y)
-		return 0;
-
-	if(M_s[ii0.x * DOMAIN_SIZE_Y + ii0.y] == 1)
-	{
-		if(*dist < CEPS)
-		{
-			*dist = 1.;
-			n_cut--;
-			(*vCcut1) = convert_int2(vL0) + convert_int2(vLd) * n_cut;
-			*vCcut0 = *vCcut1 - convert_int2(vLd);
-
-			if(ii0.x != (*vCcut0).x)
-				return 0;
-
-			if(ii0.y != (*vCcut0).y)
-				return 0;
-		}
-		else
-			return 0;
-	}
-
-	return 1;
-}
-
 
 //Alpha: C,E,W,N,S        dX:E,W,N,S
 void bcSetInterfaceNode(int2 ii0, int2 ii1, int dir, double dist,
@@ -428,44 +373,6 @@ int test_inside(double2 P0, double2 P1, double2 P2, double2 L0)
 	return 0;
 }
 
-int2 min2(double2 v0, double2 v1)
-{
-	if(v1.x < v0.x) v0.x = v1.x;
-	if(v1.y < v0.y) v0.y = v1.y;
-	return convert_int2(v0);
-}
-				
-int2 max2(double2 v0, double2 v1)
-{
-	if(v1.x > v0.x) v0.x = v1.x;
-	if(v1.y > v0.y) v0.y = v1.y;
-	
-	return convert_int2(ceil(v0));
-}
-
-int2 min4(double2 v0, double2 v1, double2 v2, double2 v3)
-{
-	if(v1.x < v0.x) v0.x = v1.x;
-	if(v2.x < v0.x) v0.x = v2.x;
-	if(v3.x < v0.x) v0.x = v3.x;
-	if(v1.y < v0.y) v0.y = v1.y;
-	if(v2.y < v0.y) v0.y = v2.y;
-	if(v3.y < v0.y) v0.y = v3.y;
-
-	return convert_int2(v0);
-}
-				
-int2 max4(double2 v0, double2 v1, double2 v2, double2 v3)
-{
-	if(v1.x > v0.x) v0.x = v1.x;
-	if(v2.x > v0.x) v0.x = v2.x;
-	if(v3.x > v0.x) v0.x = v3.x;
-	if(v1.y > v0.y) v0.y = v1.y;
-	if(v2.y > v0.y) v0.y = v2.y;
-	if(v3.y > v0.y) v0.y = v3.y;
-
-	return convert_int2(ceil(v0));
-}
 
 __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_FL_SHIFT, 1, 1)))
 void Shift_walls(__global uint *BLdep,
@@ -669,98 +576,7 @@ __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_UPDATEM, 1, 1)))
 	}
 }
 
-__kernel __attribute__((reqd_work_group_size(WORKGROUPSIZEX_LB, WORKGROUPSIZEY_LB, 1)))
-	void Fill_Sf_kernel(__global char *M,
-	__global char *M_o,
-	__global char *s,
-	__global char *sf)
-{
-	int i = get_global_id(0);
-	int j = get_global_id(1);
-	
-	if(i >= FULLSIZEX || j >= DOMAIN_SIZE_Y)
-		return;
-		
-	int ind = i*DOMAIN_SIZE_Y + j;	
-	if(M[ind] == 0)
-	{
-		s[ind] = 1;
-		if(M_o[ind] == 1)
-		{
-			sf[ind] = 1;
-		}
-	}	
-}
 
-__kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_RED, 1, 1)))
-	void Sum_M_arrays1(__global char *M,
-	__global char *sf,
-	__global double *output,
-	__local double *sdata)
-{
-	// load shared mem
-	unsigned int tid = get_local_id(0);
-	unsigned int bid = get_group_id(0);
-	unsigned int gid = get_global_id(0);
-
-	unsigned int localSize = get_local_size(0);
-	unsigned int stride = gid * 2;
-	
-	sdata[tid * 2] = convert_double(M[stride] + M[stride + 1]);
-	sdata[tid*2+1] = convert_double( sf[stride] + sf[stride + 1] );
-
-	barrier(CLK_LOCAL_MEM_FENCE);
-	// do reduction in shared mem
-	for (unsigned int s = localSize >> 1; s > 0; s >>= 1)
-	{
-		if (tid < s)
-		{
-			sdata[tid*2] += sdata[(tid + s)*2];
-			sdata[tid*2+1] += sdata[(tid + s)*2+1];
-		}
-		barrier(CLK_LOCAL_MEM_FENCE);
-	}
-
-	// write result for this block to global mem
-	if (tid == 0)
-	{
-		output[bid*2] = sdata[0];
-		output[bid*2+1] = sdata[1];
-	}
-
-}
-
-__kernel __attribute__((reqd_work_group_size(1, 1, 1)))
-	void Sum_M_arrays2(__global double *input,
-	__global double *output,
-	int nBlocksMred)//Fluid mass, fouling layer mass
-{
-	int gid = get_global_id(0);
-	
-	double temp = input[gid];
-	for (unsigned int s = 1; s < nBlocksMred; s++)
-	{
-		temp += input[s * 2 + gid];
-	}
-
-	output[gid] = temp;
-
-}
-
-__kernel __attribute__((reqd_work_group_size(WORKGROUPSIZEX_LB, WORKGROUPSIZEY_LB, 1)))
-	void Reduce_M_array(__global char *M,
-	__global char *Mred,
-	__global int *Act)
-{
-	int ix = get_global_id(0);
-	int iy = get_global_id(1);
-	if (ix >= FULLSIZEX || iy >= FULLSIZEY)
-		return;
-	
-	int red_ind = ix*FULLSIZEY + iy;
-	int yact = Act[ix*FULLSIZEY + iy];
-	Mred[red_ind] = M[ix * DOMAIN_SIZE_Y + yact]; 
-}
 
 __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZEX_LB, WORKGROUPSIZEY_LB, 1)))
 	void update_LB_pos(__global char *M,

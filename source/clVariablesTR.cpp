@@ -22,7 +22,8 @@
 //		entering and leaving domain for each diameter for the time period defined by the
 //		save step. THere will not be a kernel to calculate anything, but the update function
 //		will increment the row index.
-
+// TODO: Make sure that re-ordering of BL indicies (both top and bottom go from left to right)
+//		doesnt create any issues by assuming that the x location of the right node is < left node
 
 #include "StdAfx.h"
 #include "clVariablesLS.h"
@@ -409,7 +410,7 @@ void clVariablesTR::iniBLandNodI()
 	NodI.BLind.fill(-1);
 
 	//Fill NodI array with BL info from bottom wall
-	for (int i = Bounds.MIN_BL_BOT; i < Bounds.MIN_BL_BOT; i++)
+	for (int i = Bounds.MIN_BL_BOT; i < Bounds.MAX_BL_BOT; i++)
 	{
 		fillNodeI(i, dist2Center);
 		fillNodeI(i + vls.nBL / 2, dist2Center);
@@ -528,7 +529,7 @@ void clVariablesTR::iniBLinksTop()
 		else
 			bltemp.Node_loc = -1;
 
-		BL.setStruct(bltemp, i);
+		BL.setStruct(bltemp, ii);
 	}
 }
 
@@ -865,13 +866,13 @@ void clVariablesTR::iniNodI()
 			// test all 4 LB nodes to see if they are
 			// solid or fluid and set appropriate
 			// flags
-			if (vls.M(ii, j) & M_SOLID_NODE)
+			if (vls.nType(ii, j) & M_SOLID_NODE)
 				NodI.wallFlag(i, j) |= WF_00_SOLID;
-			if (vls.M(ii + 1, j) & M_SOLID_NODE)
+			if (vls.nType(ii + 1, j) & M_SOLID_NODE)
 				NodI.wallFlag(i, j) |= WF_10_SOLID;
-			if (vls.M(ii, j + 1) & M_SOLID_NODE)
+			if (vls.nType(ii, j + 1) & M_SOLID_NODE)
 				NodI.wallFlag(i, j) |= WF_01_SOLID;
-			if (vls.M(ii + 1, j + 1) & M_SOLID_NODE)
+			if (vls.nType(ii + 1, j + 1) & M_SOLID_NODE)
 				NodI.wallFlag(i, j) |= WF_11_SOLID;
 
 			// if all are solid, set node as solid
@@ -924,13 +925,13 @@ void clVariablesTR::iniNode()
 
 			int tnum = 0;
 
-			if (vls.M(ii00.x, ii00.y) & M_FLUID_NODE)
+			if (vls.nType(ii00.x, ii00.y) & M_FLUID_NODE)
 				tnum += 1;
-			if (vls.M(ii10.x, ii10.y) & M_FLUID_NODE)
+			if (vls.nType(ii10.x, ii10.y) & M_FLUID_NODE)
 				tnum += 2;
-			if (vls.M(ii01.x, ii01.y) & M_FLUID_NODE)
+			if (vls.nType(ii01.x, ii01.y) & M_FLUID_NODE)
 				tnum += 4;
-			if (vls.M(ii11.x, ii11.y) & M_FLUID_NODE)
+			if (vls.nType(ii11.x, ii11.y) & M_FLUID_NODE)
 				tnum += 8;
 
 			// all are solid

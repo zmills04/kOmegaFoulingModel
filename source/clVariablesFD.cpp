@@ -12,11 +12,15 @@
 
 void clVariablesFD::allocateArrays()
 {
-	Alphat.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
+	rhoCpDer.allocate(p.nX, p.XsizeFull, p.nY, p.nY);
+	rhoCpDer.fill({ {0.,0.} });
 	tempArray.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
-	alphaDer.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
 
-
+	if (chtCorrectionFlag)
+	{
+		alphaDer.allocate(p.nX, p.XsizeFull, p.nY, p.nY);
+		alphaDer.fill({ {0.,0.} });
+	}
 	// Nu intialized in separate function (need to calculate
 	// number of nodes before initializing)
 	//dX_cur.allocate_buffer_w_copy(p.context, p.IOqueue);
@@ -26,9 +30,101 @@ void clVariablesFD::allocateArrays()
 
 void clVariablesFD::allocateBuffers()
 {
-	Alphat.allocate_buffer_w_copy();
+	if (chtCorrectionFlag)
+		rhoCpDer.allocate_buffer_w_copy();
 	alphaDer.allocate_buffer_w_copy();
 	//tempArray buffer allocated by BiCGStab class
+}
+
+double clVariablesFD::calcAlphaDirection(const int i1, const int j1, const int i2, const int j2, const int dirInd)
+{
+	double k_c, ro_c, cp_c, k_n, ro_n, cp_n;
+
+	if ((vls.nType(i1, j1) & M_FLUID_NODE))
+	{
+		k_c = kAirLB;
+		cp_c = cpAirLB;
+		ro_c = rhoAirLB;
+	}
+	else
+	{
+		k_c = kSootLB;
+		cp_c = cpSootLB;
+		ro_c = rhoSootLB;
+	}
+
+	if (vls.nType(i2, j2) & M_FLUID_NODE)
+	{
+		k_n = kAirLB;
+		cp_n = cpAirLB;
+		ro_n = rhoAirLB;
+	}
+	else
+	{
+		k_n = kSootLB;
+		cp_n = cpSootLB;
+		ro_n = rhoSootLB;
+	}
+
+	double del = vls.dXArr(i1, j1, dirInd) / vls.dXArr(i1, j1, dirInd);
+
+	double coeffA = k_n * ro_c * cp_c;
+	double coeffB = k_n * ro_c * cp_n + k_n * ro_n * cp_c + k_c * ro_c * cp_c;
+	double coeffC = k_n * ro_n * cp_n + k_c * ro_c * cp_n + k_c * ro_n * cp_c;
+	double coeffD = k_c * ro_n * cp_n;
+
+	return k_c * k_n / (coeffA * del * del * del + coeffB * del * del * (1.0 - del) +
+		coeffC * del * (1.0 - del) * (1.0 - del) + coeffD * (1.0 - del) * (1.0 - del) * (1.0 - del));
+
+
+}
+
+cl_double2 clVariablesFD::calcAlphaRhoCpDirection(const int i1, const int j1, const int i2, const int j2, const int dirInd)
+{
+	double k_c, ro_c, cp_c, k_n, ro_n, cp_n;
+
+	if ((vls.nType(i1, j1) & M_FLUID_NODE))
+	{
+		k_c = kAirLB;
+		cp_c = cpAirLB;
+		ro_c = rhoAirLB;
+	}
+	else
+	{
+		k_c = kSootLB;
+		cp_c = cpSootLB;
+		ro_c = rhoSootLB;
+	}
+
+	if (vls.nType(i2, j2) & M_FLUID_NODE)
+	{
+		k_n = kAirLB;
+		cp_n = cpAirLB;
+		ro_n = rhoAirLB;
+	}
+	else
+	{
+		k_n = kSootLB;
+		cp_n = cpSootLB;
+		ro_n = rhoSootLB;
+	}
+
+	double del = vls.dXArr(i1, j1, dirInd) / vls.dXArr0(i1, j1, dirInd);
+
+	double coeffA = k_n * ro_c * cp_c;
+	double coeffB = k_n * ro_c * cp_n + k_n * ro_n * cp_c + k_c * ro_c * cp_c;
+	double coeffC = k_n * ro_n * cp_n + k_c * ro_c * cp_n + k_c * ro_n * cp_c;
+	double coeffD = k_c * ro_n * cp_n;
+
+	cl_double2 retVal;
+
+	// calculate alpha based on harmonic mean interpolation
+	retVal.x = k_c * k_n / (coeffA * del * del * del + coeffB * del * del * (1.0 - del) +
+		coeffC * del * (1.0 - del) * (1.0 - del) + coeffD * (1.0 - del) * (1.0 - del) * (1.0 - del));
+
+	// calculate alpha based on linear interp of rho*cp
+	retVal.y = ro_c * cp_c * (1. - del) + ro_n * cp_n * del;
+	return retVal;
 }
 
 
@@ -40,21 +136,18 @@ double clVariablesFD::calcAverageT()
 
 void clVariablesFD::createKernels()
 {
-	SetSSCoeffs.create_kernel(GetSourceProgram, FDQUEUE_REF, "steady_State_T_Coeffs");
+	SetSSCoeffs.create_kernel(GetSourceProgram, FDQUEUE_REF, "Steady_State_T_Coeffs");
 	SetSSCoeffs.set_size(p.XsizeFull, WORKGROUPSIZEX_LB, p.nY, WORKGROUPSIZEY_LB);
 
-	if (vlb.kOmegaClass.kOmegaSolverFlag)
-	{
-		TempUpdateCoeffs.create_kernel(GetSourceProgram, FDQUEUE_REF, "Update_T_Coeffs_Implicit_Turbulent");
-		TempUpdateCoeffs.set_size(p.XsizeFull, WORKGROUPSIZEX_LB, p.nY, WORKGROUPSIZEY_LB);
-	}
-	else
-	{
-		TempUpdateCoeffs.create_kernel(GetSourceProgram, FDQUEUE_REF,
-			"Update_T_Coeffs_Implicit");
-		TempUpdateCoeffs.set_size(p.XsizeFull, WORKGROUPSIZEX_LB, p.nY,
+	TempUpdateCoeffs.create_kernel(GetSourceProgram, FDQUEUE_REF,
+		"Update_T_Coeffs_Implicit");
+	TempUpdateCoeffs.set_size(p.XsizeFull, WORKGROUPSIZEX_LB, p.nY,
 			WORKGROUPSIZEY_LB);
-	}
+
+	updateDAlphaKernel.create_kernel(GetSourceProgram, FDQUEUE_REF,
+		"updateDerivativeArrays");
+	updateDAlphaKernel.set_size(p.XsizeFull, WORKGROUPSIZEX_LB, p.nY,
+		WORKGROUPSIZEY_LB);
 
 	// Make sure that this can be located here
 	calcNuKernel.create_kernel(GetSourceProgram, FDQUEUE_REF, "FD_calc_Nu");
@@ -94,7 +187,7 @@ bool clVariablesFD::bcFindIntersectionNormal(cl_double2& vC, double& dist, cl_do
 
 void clVariablesFD::freeHostArrays()
 {
-	Alphat.FreeHost();
+	rhoCpDer.FreeHost();
 	alphaDer.FreeHost();
 }
 
@@ -111,10 +204,11 @@ void clVariablesFD::ini()
 	// Add source file to string containing source to be compiled
 	sourceGenerator::SourceInstance()->addFile2Kernel("tfdKernels.cl");
 	
+	// initialize CSR storage arrays
 	TempInds.ini(p.nX, p.XsizeFull, p.nY, p.nY, &vls.nType);
 
-	// allocate device buffers
-	allocateBuffers();
+	// initialize alpha and rhoCp derivative arrays
+	iniDerivativeArrays();
 
 	// Create BiCGStab Solver for temperature
 	Temp.CreateSolver(&tempArray, &TempInds, FDQUEUE_REF,
@@ -133,37 +227,84 @@ void clVariablesFD::ini()
 	// Pass function pointers to sourceGenerator
 	sourceGenerator::SourceInstance()->addIniFunction(createKerPtr, setArgsPtr);
 
-
-
-//	if (!Restart_Run())
-//	{
-//		Restart_Run_Flag = 0;
-//
-//		ini_bounds();
-//		for (int i = 0; i < p.nX; i++)
-//		{
-//			for (int j = 0; j < p.nY; j++)
-//			{
-//				for (int k = 0; k < 4; k++)
-//				{
-//					dX_cur_full(i, j, k) = dX_full(i, j, k);
-//				}
-//			}
-//		}
-//		Create_Coeffs();
-//	}
-//
-//	Find_Neighbors();
-
-
+	// allocate device buffers
+	allocateBuffers();
 
 	if (saveMacroStart)
 		save2file();
 }
 
-void clVariablesFD::iniAlpha()
+void clVariablesFD::iniDerivativeArrays()
 {
+	for (int i = 0; i < p.nX; i++)
+	{
+		int ie = MODFAST(i + 1, p.nX);
+		int iw = MODFAST(i - 1, p.nX);
 
+		// no fluid nodes should be found on y = 0 or nY-1
+		for (int j = 1; i < p.nY - 1; j++)
+		{
+			if (vls.nType(i, j) & M0_SOLID_NODE)
+				continue;
+
+			int jn = j + 1;
+			int js = j - 1;
+
+			double alpha_e, alpha_w, alpha_n, alpha_s;
+
+			// Based on distances between actual nodes, so using dXArr0
+			// instead of dXArr
+			double dxe = vls.dXArr0(i, j, 0), dxw = vls.dXArr0(i, j, 1);
+			double dyn = vls.dXArr0(i, j, 2), dys = vls.dXArr0(i, j, 3);
+
+			// Need to get ro*Cp values between node and its neigh along with 
+			// Nu when using turbulence model
+			if (chtCorrectionFlag)
+			{
+
+				cl_double2 alphaRoCp_e = calcAlphaRhoCpDirection(i, j, ie, j, 0);
+				cl_double2 alphaRoCp_w = calcAlphaRhoCpDirection(i, j, iw, j, 1);
+				cl_double2 alphaRoCp_n = calcAlphaRhoCpDirection(i, j, i, jn, 2);
+				cl_double2 alphaRoCp_s = calcAlphaRhoCpDirection(i, j, i, js, 3);
+
+				double roCp_c = 0.25 * (alphaRoCp_e.y + alphaRoCp_w.y + alphaRoCp_n.y + alphaRoCp_s.y);
+
+				double dRoCpdX = 2. * dxw * alphaRoCp_e.y / (dxe * (dxe + dxw)) - 2. * dxe * alphaRoCp_w.y / (dxw * (dxe + dxw))
+					+ 2. * (dxe - dxw) * roCp_c / (dxe * dxw);
+
+				double dRoCpdY = 2. * dys * alphaRoCp_n.y / (dyn * (dyn + dys)) - 2. * dyn * alphaRoCp_s.y / (dys * (dyn + dys))
+					+ 2. * (dyn - dys) * roCp_c / (dyn * dys);
+
+				dRoCpdX /= roCp_c;
+				dRoCpdY /= roCp_c;
+
+				rhoCpDer(i, j) = { {dRoCpdX, dRoCpdY} };
+
+				alpha_e = alphaRoCp_e.x;
+				alpha_w = alphaRoCp_w.x;
+				alpha_n = alphaRoCp_n.x;
+				alpha_s = alphaRoCp_s.x;
+
+			}
+			else
+			{
+				alpha_e = calcAlphaDirection(i, j, ie, j, 0);
+				alpha_w = calcAlphaDirection(i, j, iw, j, 1);
+				alpha_n = calcAlphaDirection(i, j, i, jn, 2);
+				alpha_s = calcAlphaDirection(i, j, i, js, 3);
+			}
+
+			double alpha_c = 0.25 * (alpha_e + alpha_w + alpha_n + alpha_s);
+
+			double dAlphadX = 2. * dxw * alpha_e / (dxe * (dxe + dxw)) - 2. * dxe * alpha_w / (dxw * (dxe + dxw))
+				+ 2. * (dxe - dxw) * alpha_c / (dxe * dxw);
+
+			double dAlphadY = 2. * dys * alpha_n / (dyn * (dyn + dys)) - 2. * dyn * alpha_s / (dys * (dyn + dys))
+				+ 2. * (dyn - dys) * alpha_c / (dyn * dys);
+
+			alphaDer(i, j) = { {dAlphadX, dAlphadY} };
+		}
+	}
 }
 
 
@@ -261,6 +402,7 @@ void clVariablesFD::loadParams()
 	calcNuFlag = p.getParameter<bool>("Calculate Nu", CALC_NUSSELT);
 	saveMacroStart = p.getParameter<bool>("Save Macros On Start", THERMAL_SAVE_MACROS_ON_START);
 	calcSSTempFlag = p.getParameter<bool>("Solve Steady Temp", SOLVE_SS_TEMP);
+	chtCorrectionFlag = p.getParameter<bool>("Use CHT Correction", CHT_SOURCE_CORRECTION);
 	
 	testRestartRun();
 	
@@ -271,14 +413,16 @@ void clVariablesFD::loadParams()
 	kAir = p.getParameter<double>("K air", THERMAL_CONDUCTIVITY_AIR);
 	rhoSoot = p.getParameter<double>("Rho Soot", DENSITY_SOOT);
 	cpSoot = p.getParameter<double>("Cp Soot", HEAT_CAPACITY_SOOT);
+	
+	
 	Alpha_foul = (kSoot / rhoSoot / cpSoot)*(p.DELTA_L*p.DELTA_L / p.DELTA_T);
 
 	kSootLB = kSoot * p.DELTA_F / p.DELTA_T;
 	kAirLB = kAir * p.DELTA_F / p.DELTA_T;
-	cpSootLB = cpSoot * p.DELTA_L * p.DELTA_L / p.DELTA_T / p.DELTA_T;
 	rhoSootLB = rhoSoot * p.DELTA_M / p.DELTA_L / p.DELTA_L / p.DELTA_L;
-	cpAirLB = cpSoot * p.DELTA_L * p.DELTA_L / p.DELTA_T / p.DELTA_T;
-	rhoAirLB = rhoSoot * p.DELTA_M / p.DELTA_L / p.DELTA_L / p.DELTA_L;
+	rhoAirLB = vlb.RhoVal;
+	cpSootLB = cpSoot * p.DELTA_L * p.DELTA_L / p.DELTA_T / p.DELTA_T;
+	cpAirLB = kAirLB / rhoAirLB / Alpha_fluid;
 
 	T_Actual_Max = p.getParameter<double>("Tinlet Actual", LBT_ACTUAL_TEMP_MAX);
 	T_Actual_Min = p.getParameter<double>("Twalls Actual", LBT_ACTUAL_TEMP_MIN);
@@ -362,7 +506,7 @@ void clVariablesFD::saveRestartFiles()
 void clVariablesFD::saveDebug()
 {
 	alphaDer.save_txt_from_device();
-	Alphat.save_txt_from_device();
+	rhoCpDer.save_txt_from_device();
 }
 
 // Saves time output data (i.e. avg velocity, shear, Nu, etc)
@@ -379,32 +523,57 @@ void clVariablesFD::saveTimeData()
 void clVariablesFD::setKernelArgs()
 {
 	cl_int ind = 0;
-	TempUpdateCoeffs.set_argument(ind++, Temp.get_add_Macro());
-	TempUpdateCoeffs.set_argument(ind++, vlb.Ux_array.get_buf_add());
-	TempUpdateCoeffs.set_argument(ind++, vlb.Uy_array.get_buf_add());
+
+	TempUpdateCoeffs.set_argument(ind++, Temp.get_add_IndArr());
+	TempUpdateCoeffs.set_argument(ind++, vls.nType.get_buf_add());
+	TempUpdateCoeffs.set_argument(ind++, vls.dXArr.get_buf_add());
 	TempUpdateCoeffs.set_argument(ind++, Temp.get_add_A());
 	TempUpdateCoeffs.set_argument(ind++, Temp.get_add_b());
-	//TempUpdateCoeffs.set_argument(ind++, vls.dXArr.get_buf_add());
-	TempUpdateCoeffs.set_argument(ind++, vls.dXCoeffs.get_buf_add());
-	TempUpdateCoeffs.set_argument(ind++, Temp.get_add_IndArr());
+	TempUpdateCoeffs.set_argument(ind++, Temp.get_add_Macro());
+	TempUpdateCoeffs.set_argument(ind++, alphaDer.get_buf_add());
+	TempUpdateCoeffs.set_argument(ind++, vlb.Ux_array.get_buf_add());
+	TempUpdateCoeffs.set_argument(ind++, vlb.Uy_array.get_buf_add());
 	if (vlb.kOmegaClass.kOmegaSolverFlag)
-		TempUpdateCoeffs.set_argument(ind++, Alphat.get_buf_add());
-	TempUpdateCoeffs.set_argument(ind++, &Alpha_fluid);
+	{
+		TempUpdateCoeffs.set_argument(ind++, vlb.kOmegaClass.Nut_array.get_buf_add());
+	}
+	if(chtCorrectionFlag)
+	{
+		TempUpdateCoeffs.set_argument(ind++, rhoCpDer.get_buf_add());
+	}
 	TempUpdateCoeffs.set_argument(ind++, &p.dTtfd);
 
-
+	
 	ind = 0;
-	SetSSCoeffs.set_argument(ind++, Temp.get_add_Macro());
-	SetSSCoeffs.set_argument(ind++, vlb.Ux_array.get_buf_add());
-	SetSSCoeffs.set_argument(ind++, vlb.Uy_array.get_buf_add());
+	SetSSCoeffs.set_argument(ind++, Temp.get_add_IndArr());
+	SetSSCoeffs.set_argument(ind++, vls.nType.get_buf_add());
+	SetSSCoeffs.set_argument(ind++, vls.dXArr.get_buf_add());
 	SetSSCoeffs.set_argument(ind++, Temp.get_add_A());
 	SetSSCoeffs.set_argument(ind++, Temp.get_add_b());
-	SetSSCoeffs.set_argument(ind++, vls.dXCoeffs.get_buf_add());
-	SetSSCoeffs.set_argument(ind++, Temp.get_add_IndArr());
-	SetSSCoeffs.set_argument(ind++, Alphat.get_buf_add());
-	SetSSCoeffs.set_argument(ind++, &Alpha_fluid);
-	int komegaFlag_ = (vlb.kOmegaClass.kOmegaSolverFlag) ? 1 : 0;
-	SetSSCoeffs.set_argument(ind++, &komegaFlag_);
+	SetSSCoeffs.set_argument(ind++, Temp.get_add_Macro());
+	SetSSCoeffs.set_argument(ind++, alphaDer.get_buf_add());
+	if (vlb.kOmegaClass.kOmegaSolverFlag)
+	{
+		SetSSCoeffs.set_argument(ind++, vlb.kOmegaClass.Nut_array.get_buf_add());
+	}
+	if (chtCorrectionFlag)
+	{
+		SetSSCoeffs.set_argument(ind++, rhoCpDer.get_buf_add());
+	}
+	SetSSCoeffs.set_argument(ind++, vlb.Ux_array.get_buf_add());
+	SetSSCoeffs.set_argument(ind++, vlb.Uy_array.get_buf_add());
+
+	ind = 0;
+
+	updateDAlphaKernel.set_argument(ind++, vls.nType.get_buf_add());
+	updateDAlphaKernel.set_argument(ind++, vls.dXArr.get_buf_add());
+	updateDAlphaKernel.set_argument(ind++, vls.dXArr0.get_buf_add());
+	if(chtCorrectionFlag)
+		updateDAlphaKernel.set_argument(ind++, rhoCpDer.get_buf_add());
+	updateDAlphaKernel.set_argument(ind++, alphaDer.get_buf_add());
+
+
+
 	
 	ind = 0;
 	calcNuKernel.set_argument(ind++, Temp.get_add_Macro());
@@ -462,10 +631,25 @@ void clVariablesFD::setSourceDefines()
 	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "LOCAL_SOLVE_SIZE_FD", 
 		WORKGROUPSIZEX_FD*WORKGROUPSIZEY_FD);
 	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "PR_TURB_NUMBER", PrTurbNum);
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "PR_TURB_NUMBER_INV", 1./PrTurbNum);
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "LB_ALPHA_FLUID", Alpha_fluid);
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "LB_ALPHA_FOUL", Alpha_foul);
+
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "K_SOOT_LB", kSootLB);
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "K_AIR_LB", kAirLB);
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "RHO_SOOT_LB", rhoSootLB);
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "RHO_AIR_LB", rhoAirLB);
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "CP_SOOT_LB", cpSootLB);
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "CP_AIR_LB", cpAirLB);
+
+
 	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "PR_NUMBER", PrNum);
 	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "TFD_X_IN_VAL", TFD_X_IN);
 	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "NU_CUTOFF_RADIUS", nuCutoffRadius);
-
+	if (chtCorrectionFlag)
+	{
+		SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "USING_CHT_SOURCE_CORRECTION");
+	}
 	if (calcNuFlag)
 	{
 		SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "WAVY_SECTION_START", p.xWavyStart);
@@ -509,6 +693,7 @@ void clVariablesFD::saveParams()
 	p.setParameter("Calculate Nu", calcNuFlag);
 	p.setParameter("Save Macros On Start", saveMacroStart);
 	p.setParameter("Solve Steady Temp", calcSSTempFlag);
+	p.setParameter("Use CHT Correction", chtCorrectionFlag);
 
 	p.setParameter("Pr Number", PrNum);
 	p.setParameter("Pr Number", PrTurbNum);
@@ -552,91 +737,9 @@ bool clVariablesFD::testRestartRun()
 	return restartRunFlag;
 }
 
-#define TEST_BOTH_FOUL(i1, j1, i2, j2)	\
-	((vls.nType(i1,j1) & M_SOLID_NODE) == (vls.nType(i2,j2) & M_SOLID_NODE))
-#define TEST_BOTH_FLUID(i1, j1, i2, j2)	\
-	((vls.nType(i1,j1) & M_FLUID_NODE) == (vls.nType(i2,j2) & M_FLUID_NODE))
-
-double clVariablesFD::calcAlphaDirection(const int i1, const int j1, const int i2, const int j2, const int dirInd)
+void clVariablesFD::updateDerivativeArrays()
 {
-	double k_c, ro_c, cp_c, k_n, ro_n, cp_n;
-
-	if ((vls.nType(i1, j1) & M_FLUID_NODE))
-	{
-		k_c = kAirLB;
-		cp_c = cpAirLB;
-		ro_c = rhoAirLB;
-	}
-	else
-	{
-		k_c = kSootLB;
-		cp_c = cpSootLB;
-		ro_c = rhoSootLB;
-	}
-
-	if (vls.nType(i2, j2) & M_FLUID_NODE)
-	{
-		k_n = kAirLB;
-		cp_n = cpAirLB;
-		ro_n = rhoAirLB;
-	}
-	else
-	{
-		k_n = kSootLB;
-		cp_n = cpSootLB;
-		ro_n = rhoSootLB;
-	}
-
-	double del = vls.dXArr(i1, j1, dirInd) / vls.dXArr(i1, j1, dirInd);
-
-	double coeffA = k_n * ro_c * cp_c;
-	double coeffB = k_n * ro_c * cp_n + k_n * ro_n * cp_c + k_c * ro_c * cp_c;
-	double coeffC = k_n * ro_n * cp_n + k_c * ro_c * cp_n + k_c * ro_n * cp_c;
-	double coeffD = k_c * ro_n * cp_n;
-
-	return k_c * k_n / (coeffA*del*del*del + coeffB*del*del*(1.0 - del) + 
-		coeffC*del*(1.0-del)*(1.0-del) + coeffD * (1.0 - del) * (1.0 - del) * (1.0 - del));
-
-
-}
-
-
-
-void clVariablesFD::updateAlphaArray()
-{
-	for (int i = 0; i < p.nX; i++)
-	{
-		int ie = MODFAST(i + 1, p.nX);
-		int iw = MODFAST(i - 1, p.nX);
-
-		// no fluid nodes should be found on y = 0 or nY-1
-		for (int j = 1; i < p.nY-1; j++)
-		{
-			if (vls.nType(i, j) & M0_SOLID_NODE)
-				continue;
-
-			int jn = j + 1;
-			int js = j - 1;
-
-			double alpha_e = calcAlphaDirection(i, j, ie, j, 0);
-			double alpha_w = calcAlphaDirection(i, j, iw, j, 1);
-			double alpha_n = calcAlphaDirection(i, j, i, jn, 2);
-			double alpha_s = calcAlphaDirection(i, j, i, js, 3);
-
-			double alpha_c = 0.25 * (alpha_e + alpha_w + alpha_n + alpha_s);
-			
-			double dxe = vls.dXArr(i, j, 0), dxw = vls.dXArr(i, j, 1);
-			double dyn = vls.dXArr(i, j, 2), dys = vls.dXArr(i, j, 4);
-
-			double dAlphadX = 2. * dxw * alpha_e / (dxe * (dxe + dxw)) - 2. * dxe * alpha_w / (dxw * (dxe + dxw))
-				+ 2. * (dxe - dxw) * alpha_c / (dxe * dxw);
-
-			double dAlphadY = 2. * dys * alpha_n / (dyn * (dyn + dys)) - 2. * dyn * alpha_s / (dys * (dyn + dys))
-				+ 2. * (dyn - dys) * alpha_c / (dyn * dys);
-
-			alphaDer(i, j) = { {dAlphadX, dAlphadY} };
-		}
-	}
+	updateDAlphaKernel.call_kernel();
 }
 
 void clVariablesFD::updateNuCoeffs()

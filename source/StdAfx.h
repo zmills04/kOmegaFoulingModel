@@ -99,7 +99,17 @@
 
 typedef unsigned int localSize_t;
 typedef cl_uint globalSize_t;
-typedef cl_uint2 cl_bool2;
+
+typedef struct cl_bool2
+{
+	cl_bool2(bool b1_, bool b2_)
+	{
+		x = b1_;
+		y = b2_;
+	}
+	bool x;
+	bool y;
+}cl_bool2;
 
 #pragma OPENCL_EXTENSION cl_amd_fp64: enable
 #pragma OPENCL EXTENSION cl_amd_printf : enable

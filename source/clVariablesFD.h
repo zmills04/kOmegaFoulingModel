@@ -31,9 +31,10 @@ public:
 	// Func Pointer for calling loadParams
 	std::function<void(void)> loadParamsPtr;
 
-	clVariablesFD() : tempArray("temp"), Alphat("alphat"), 
+	clVariablesFD() : tempArray("temp"), rhoCpDer("rhoCpDer"), 
 		alphaDer("alpha"), Nu("Nu"), nuDist("nuDist"), 
-		nuDistVec("nuNodCInds"), nuYInds("nuYinds"), NuMean("NuMean")
+		nuDistVec("nuNodCInds"), nuYInds("nuYinds"), NuMean("NuMean"),
+		TempInds(M0_SOLID_NODE, M0_FLUID_NODE, SOLID_BOUNDARY_NODE0)
 	{
 		loadParamsPtr = std::bind(&clVariablesFD::loadParams, this);
 	};
@@ -55,6 +56,9 @@ public:
 	Kernel TempUpdateCoeffs;	// Updates Temperature coefficients from SS
 								// to transient
 	Kernel SetSSCoeffs;			// Sets SS coefficients for thermal solver
+
+	Kernel updateDAlphaKernel; // Calculates derivatives of Alpha (and rho*Cp if
+							   // CHT correction flag is set
 	
 	Reducer<double> sumTemp;	
 
@@ -75,14 +79,18 @@ public:
 //////////////                   Data Arrays                 ///////////////
 ////////////////////////////////////////////////////////////////////////////
 
-	Array2Dd Alphat;		// turbulent_alpha (updated with turbulent
-							// diffusion coefficients)
+	//Array2Dd Alphat;		// turbulent_alpha (updated with turbulent
+	//						// diffusion coefficients)
 
 	Array2Dd tempArray;		// Temp array, the pointer of which is passed
 							// to the thermal BiCGStab solver
 
 	Array2Dv2d alphaDer;	// dAlpha/dx and dAlpha/dy
 							// Updated at each vfl update step 
+
+	Array2Dv2d rhoCpDer;	// d(rho*Cp)/dx * 1/(rho*Cp)
+							// Updated at each vfl update step 
+
 
 	//dX arrays, which were previously implemented in this function moved
 	//to clVariablesLS, since they will also be used for turb parameters
@@ -146,6 +154,9 @@ public:
 							//initialization
 	bool calcSSTempFlag;	//Flag indicating if steady state temp should be
 							//solved during intialization.
+	bool chtCorrectionFlag; // flag indicating if the source term to correct for
+							// varying density in cht simulation should be used.
+
 	double PrTurbNum, PrNum;//Turbulent Pr and Pr
 	double Alpha_fluid;		//Thermal diffusivity of fluid in LB units
 	double Alpha_foul;		//Thermal diff of fouling layer in LB units
@@ -278,12 +289,17 @@ public:
 
 	// calculates alpha between two nodes
 	double calcAlphaDirection(const int i1, const int j1, const int i2, const int j2, const int dirInd);
+
+	// calculates alpha and rho*Cp between two nodes
+	cl_double2 calcAlphaRhoCpDirection(const int i1, const int j1, const int i2, const int j2, const int dirInd);
+
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////            Initialization Functions           ///////////////
 	////////////////////////////////////////////////////////////////////////////
 
-	//Initializes alpha array by filling it with air thermal diffusivity
-	void iniAlpha();
+	//Initializes arrays containing derivatives of alpha, and rhoCp if cht
+	// chtCorrectionFlag is set
+	void iniDerivativeArrays();
 
 	// Initializes Nu Coefficients
 	void iniNuCoeffs();
@@ -293,8 +309,9 @@ public:
 	//////////////              Updating Functions               ///////////////
 	////////////////////////////////////////////////////////////////////////////
 
-	//Fills Alpha Array with Values based on interface thickness
-	void updateAlphaArray();
+	// calls kernel to update arrays containing derivatives of alpha, and rhoCp if cht
+	// chtCorrectionFlag is set
+	void updateDerivativeArrays();
 
 	// Updates Nu Coefficients
 	void updateNuCoeffs();

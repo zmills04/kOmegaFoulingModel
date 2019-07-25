@@ -331,16 +331,7 @@ void particleSort::iniTrp()
 		}
 	}
 		
-	int y0 = 0;
-	int x0 = (int)vtr.xReleaseVal - 1;
-	while (vls.M(x0, y0) == LB_SOLID)
-		y0++;
-	
-	while (vls.M(x0, y0) != LB_SOLID)
-		y0++;
-	
 
-	
 	trP[TRP_UMAX_VAL_IND] = 3. / 2. * vlb.Re * vlb.MuVal / p.Pipe_radius;
 	double Xtop_val = vls.C[vls.BL(BL_rel_top, 1)].y + (vtr.xReleaseVal - vls.C[vls.BL(BL_rel_top, 1)].x) *
 		(vls.C[vls.BL(BL_rel_top, 0)].y - vls.C[vls.BL(BL_rel_top, 1)].y) /
@@ -578,7 +569,7 @@ void particleSort::setSourceDefines()
 
 	int y0 = 0;
 	int x0 = (int)vtr.xReleaseVal - 1;
-	while (vls.M(x0, y0) == LB_SOLID)
+	while (vls.nType(x0, y0) & M0_SOLID_NODE)
 		y0++;
 
 	int Uvals_start = x0 + y0 * p.XsizeFull;
@@ -625,15 +616,7 @@ void particleSort::updateTrp()
 	trP[TRP_BOT_LOC_IND] = ceil(trP[TRP_OFFSET_Y_IND]) - trP[TRP_OFFSET_Y_IND];
 	trP[TRP_TOP_LOC_IND] = floor(Xtop_val) - trP[TRP_OFFSET_Y_IND];
 		
-	int y0 = 0;
-	int x0 = (int)vtr.xReleaseVal - 1;
-	while (vls.M(x0, y0) == LB_SOLID)
-		y0++;
-	
-	while (vls.M(x0, y0) != LB_SOLID)
-	{
-		y0++;
-	}
+
 	trP.copyToDevice();
 }
 

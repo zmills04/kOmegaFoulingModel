@@ -227,6 +227,9 @@
     <None Include="source\Kernels\trKernelsDisplay.cl">
       <Filter>OpenCL\Kernels</Filter>
     </None>
+    <None Include="source\Kernels\lsKernels.cl">
+      <Filter>OpenCL\Kernels</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Text Include="source\MethodClassLayout.txt" />

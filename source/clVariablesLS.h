@@ -25,13 +25,22 @@ public:
 	////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////
 
+	typedef NTYPE_TYPE			nTypeType;
+	typedef Array2D<nTypeType>	nTypeArrayType;	// needs to be into to store all bitfields
+
+
+
+
 		// Func Pointer for calling loadParams
 	std::function<void(void)> loadParamsPtr;
 
-	clVariablesLS() : dXCoeffs("dXCoeffs"), BL("lsbl"), Masses("lsmasses"), C0("lsc0"), C("lsc"),
-		ibbArr(WORKGROUPSIZE_IBB*2,"ibbArr", WORKGROUPSIZE_IBB, 1), nType("nType"),
-		ssArr(WORKGROUPSIZE_TR_SHEAR * 2, "ssArr", WORKGROUPSIZE_TR_SHEAR, 1),
-		dXArr("dXArr"), dXArr0("dXArr0"), bFlag("bFlag"), ssArrIndMap("ssIndMap"), lsMap("lsMap")
+	clVariablesLS() : BL("lsbl"), Masses("lsmasses"), C0("lsc0"), C("lsc"),
+		ibbArr(WORKGROUPSIZE_IBB*2,"ibbArr", WORKGROUPSIZE_IBB, 3), nType("nType"),
+		ssArr(WORKGROUPSIZE_TR_SHEAR * 2, "ssArr", WORKGROUPSIZE_TR_SHEAR, 3),
+		dXArr("dXArr"), dXArr0("dXArr0"), bFlag("bFlag"), ssArrIndMap("ssIndMap"),
+		lsMap("lsMap"),	ibbDistArr(WORKGROUPSIZE_IBB * 16, "ibbArr", WORKGROUPSIZE_IBB, 3),
+		nTypePrev("nTypePrev")
+
 
 	{
 		loadParamsPtr = std::bind(&clVariablesLS::loadParams, this);
@@ -57,6 +66,14 @@ public:
 	//////////////                                               ///////////////
 	////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////
+
+	Kernel updateNType;
+	Kernel updateBoundArr;
+	Kernel updateIBBOnly;
+
+
+
+	Reducer<int, ReduceGenerator::SumNType, REDUCE_RESULTS_SIZE, NTYPE_TYPE> sumFluid;
 
 
 	////////////////////////////////////////////////////////////////////////////
@@ -84,11 +101,21 @@ public:
 
 	// Array defining the type of each node. Bit flags defined in 
 	// constDef are used to set information about node. 
-#ifdef IN_KERNEL_IBB
-	Array2Di nType;	// needs to be into to store all bitfields
-#else
-	Array2D<cl_short> nType;
-#endif
+	Array2D<nTypeType> nType;	// needs to be into to store all bitfields
+	
+	Array2D<nTypeType> nTypePrev; // stores the previous values for M0_SOLID_NODE,
+							// M0_FLUID_NODE, M_SOLID_NODE, M_FLUID_NODE, 	
+							// SOLID_BOUNDARY_NODE0, NESW_BOUNDARY_NODE0,
+							// and BOUNDARY_NODE0 for each node
+							// Will be generated from nType after it is
+							// created and initialized. Before calling 
+							// updateM kernel during vlf update step,
+							// contents of nTypePrev will be copied over
+							// to nType. updateM will be called, and the updated
+							// nType contents will be copied back over to nTypePrev
+							// followed by updateBoundaryNodes kernel. This will ensure
+							// that information about node types is tracked correctly.
+							// THis array can remain on host only.
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                   Method Arrays               ///////////////
@@ -99,13 +126,36 @@ public:
 						// spacing
 
 	// Coefficients for calculation of derivatives
-	Array3Dd dXCoeffs; // distances between nodes
+	// no longer being used as it is a large amount of memory and 
+	// reading in 12 elements instead of 4 w/ some calculations is 
+	// likely much slower
+	//Array3Dd dXCoeffs; // distances between nodes
 
+	// Originally planning on updating ibbArr and ibbDistArr on host, which
+	// is why DynArrays were used, but switched to kernel on device to update.
+	// Because of this, still have them as DynArrays even though its not necessary
+	// (not even keeping host memory allocated, and just reallocating buffer memory)
 
 	DynArray1Di ibbArr;	// Array containing location of distributions bouncing back 
 						// (within fluid). 
 						// Use decodeGlobalIdx(ii0_array[ind], &xval, &yval, &distval)
 						// to get node location in x,y,dist coordinates.
+
+	DynArray1Dd ibbDistArr; // distances from bounce back node to wall;
+	
+	
+	Array1Di ibbArrCurIndex;	// Tracks current index of ibb array on device.
+							// When updating ibbArr, this is incremented 
+							// atomically to track where the next ibbArr info
+							// should be place. Also, since memory cannot be
+							// reallocated inside kernel, the min function is 
+							// used to ensure that the arrays are not indexed out
+							// of bounds. After kernel to update boundary nodes
+							// is called, the value of this must be compared to 
+							// the current size of the dynamic array, and if its >=
+							// the size, the ibb arrays must be reallocated, and
+							// the updateBoundary node function must be called again
+
 
 	DynArray1Di ssArr;	// Array containing location of nodes at which shear is calculated 
 						// Use vls.nType to get directions pointing into wall 
@@ -326,13 +376,9 @@ public:
 	//void bcSetBoundaryNode(cl_int2 ii0, cl_int2 ii1, int dir, double dist,
 	//	int bl, cl_double2 vCc, cl_double2 vC0, cl_double2 vC1, cl_double2 vCn);
 
-	// Fills ibb and ss arrays based on dXArr values (if not = 1.0 and a fluid node)
-	// called by both ini and updateBoundaryArray
-#ifndef IN_KERNEL_IBB
-	cl_bool2 fillBoundaryArray();
-#else
-	bool fillBoundaryArray();
-#endif
+	// Fills ss arrays based on nType values (if not = 1.0 and a fluid node)
+	// called by both ini and updateShearArray
+	bool fillShearArray();
 
 
 	//Determines if intersection (vd) is located between v0 and v1
@@ -353,7 +399,7 @@ public:
 
 	// Calculates coefficients for calculation of derivatives used by thermal and 
 	// kOmega solvers
-	void calcDxTerms();
+	//void calcDxTerms();
 
 	// Compares M but flags in M array to count number of solid, fluid and fouling
 	// layer nodes
@@ -368,6 +414,9 @@ public:
 	// Fills M0 array
 	void iniFillMap0();
 
+	// Calls kernel to fill ibb array
+	void iniIBBArrays();
+
 	// fills lsmMap array
 	void iniLSMap();
 
@@ -375,7 +424,7 @@ public:
 	void iniNodeBoundaryInfo();
 
 	//Initializes IBB arrays and calls update_IBB_arrays
-	//void iniIBBArray();
+	void iniShearArray();
 
 
 	////////////////////////////////////////////////////////////////////////////	
@@ -390,8 +439,17 @@ public:
 	// on device)
 	void updatedXArr();
 
-	//Fills Arrays used to update IBB arrays
+	// updates ls arrays by calling necessary functions on host and device.
+	void updateLS();
+
+	// Updates dXArr, IBB arrays and finalizes update of nType array by
+	// calling necessary kernels
 	void updateBoundaryArrays();
+
+	// Fills arrays used for IBB in vlb
+	void updateIBBArrays();
+
+	void updateShearArrays();
 
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////               Solving Functions               ///////////////

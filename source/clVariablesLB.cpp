@@ -147,6 +147,8 @@ void clVariablesLB::createKernels()
 	calcRoJKernel.create_kernel(GetSourceProgram, LBQUEUE_REF, "Calc_Ro_J");
 	calcRoJKernel.set_size(GlobalX, WORKGROUPSIZEX_LB, GlobalY, WORKGROUPSIZEY_LB);
 
+	kOmegaClass.createKernels();
+
 #ifndef IN_KERNEL_IBB
 	ibbKernel.create_kernel(GetSourceProgram, LBQUEUE_REF,
 		"lbIBB", "lbIBB");
@@ -304,13 +306,17 @@ void clVariablesLB::ini()
 	{
 		if (iniPoiseuille)
 		{
-			double Umaxxx = Re * MuVal / p.Pipe_radius * 3. / 2.;
+			double Umaxxx = Re * MuVal / p.Pipe_radius * 3. / 2. * geomPenaltyFactor;
 			iniDists(Umaxxx);
 		}
 		else
 		{
 			iniDists();
 		}
+	}
+	else
+	{
+		iniRhoUFromDists();
 	}
 
 	allocateBuffers();
@@ -319,10 +325,12 @@ void clVariablesLB::ini()
 	sumUy.ini(Uy_array, restartRunFlag, "redUy");
 	sumRo.ini(Ro_array, restartRunFlag, "redRo");
 
+
+	kOmegaClass.ini();
+
+
 	setSourceDefines();
 	
-	if (kOmegaClass.kOmegaSolverFlag)
-		kOmegaClass.ini();
 
 	std::function<void(void)> createKerPtr = std::bind(&clVariablesLB::createKernels, this);
 	std::function<void(void)> setArgsPtr = std::bind(&clVariablesLB::setKernelArgs, this);
@@ -446,6 +454,38 @@ void clVariablesLB::iniInletVels()
 	}
 }
 
+void clVariablesLB::iniRhoUFromDists()
+{
+	for (int i = 0; i < p.nX; i++)
+	{
+		for (int j = 0; j < p.nY; j++)
+		{
+			if (vls.nType(i, j) & M_SOLID_NODE)
+			{
+				Ux_array(i, j) = 0.;
+				Uy_array(i, j) = 0.;
+				Ro_array(i, j) = 0.;
+				continue;
+			}
+
+			Ux_array(i, j) = FA(i, j, 1) - FA(i, j, 2) + FA(i, j, 5) -
+				FA(i, j, 6) + FA(i, j, 7) - FA(i, j, 8);
+			Uy_array(i, j) = FA(i, j, 3) - FA(i, j, 4) + FA(i, j, 5) -
+				FA(i, j, 6) - FA(i, j, 7) + FA(i, j, 8);
+			Ro_array(i, j) = FA(i,j,0) + FA(i, j, 1) + FA(i, j, 2) + FA(i, j, 3) +
+				FA(i, j, 4) + FA(i, j, 5) + FA(i, j, 6) + FA(i, j, 7) + FA(i, j, 8);
+
+			ERROR_CHECKING((Ro_array(i, j) < 0.9), "Rho value calculated from loaded "\
+				"distibutions < 0.9, which\nmeans there either is error in saved distribution\n"\
+				"or the file was read in incorrectly (possibly due to error\nin set domain size.", \
+				ERROR_INITIALIZING_VLB);
+		}
+
+	}
+
+
+
+}
 
 void clVariablesLB::iniTimeData()
 {
@@ -527,6 +567,8 @@ void clVariablesLB::loadParams()
 	flowrateMaxPercentDiff = p.getParameter("Flowrate Max Percent Diff", MAX_FLOWRATE_PERCENT_DIFF);
 
 	turbVelBCFlag = p.getParameter("Use Turb Vel BC", USE_TURB_VEL_BC);
+
+	geomPenaltyFactor = p.getParameter("Geometric Penalty Factor", GEOMETRIC_PENALTY_FACTOR);
 
 	kOmegaClass.loadParams();
 
@@ -615,6 +657,7 @@ void clVariablesLB::saveParams()
 	p.setParameter("Flowrate Max Percent Diff", flowrateMaxPercentDiff);
 	p.setParameter("Use Turb Vel BC", turbVelBCFlag);
 
+	p.setParameter("Geometric Penalty Factor", geomPenaltyFactor);
 	// The values of these shouldnt matter during a restart
 	//p.setParameter("Ini Turb Velocity", false);
 	//p.setParameter("Save Macros On Start", false);
@@ -718,12 +761,15 @@ void clVariablesLB::setKernelArgs()
 
 #ifndef IN_KERNEL_IBB
 	ind = 0;
-	ibbKernel.set_argument(ind++, vls.ibbArr.get_buf_add());
-	ibbKernel.set_argument(ind++, vls.dXArr.get_buf_add());
-	ibbKernel.set_separate_arguments(ind++, FB.get_buf_add(),
+	ibbKernel.set_argument(0, vls.ibbArr.get_buf_add());
+	ibbKernel.set_argument(1, vls.ibbDistArr.get_buf_add());
+	ibbKernel.set_separate_arguments(2, FB.get_buf_add(),
 		FA.get_buf_add());
-	ibbKernel.set_argument(ind, vls.ibbArr.curSizeAdd());
-	ibbKernel.setOptionInd(ind);
+
+	vls.ibbArrCurIndex.read_from_buffer();
+	int ibbnumel_ = vls.ibbArrCurIndex(0);
+	ibbKernel.set_argument(3, &ibbnumel_);
+	ibbKernel.setOptionInd(3);
 #endif
 
 	kOmegaClass.setKernelArgs();
@@ -745,7 +791,7 @@ void clVariablesLB::setSourceDefines()
 	{
 		SETSOURCEDEFINE, "USE_TURB_VEL_BC");
 	}
-
+	kOmegaClass.setSourceDefines();
 }
 
 #undef SETSOURCEDEFINE

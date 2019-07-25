@@ -11,24 +11,35 @@
 #include "clVariablesTR.h"
 
 
+
+//////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////
+/////////////                                           //////////////
+/////////////           ALLOCATION FUNCTIONS            //////////////
+/////////////                                           //////////////
+//////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////
+
+
 void clVariablesLS::allocateArrays()
 {
 	ssArrIndMap.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
 	nType.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
+	nTypePrev.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
 	BL.zeros(nBL, 2);
 	C0.zeros(nN);
 	C.zeros(nN);
 	dXArr.zeros(p.nX, p.XsizeFull, p.nY, p.nY, 4, 4);
 	dXArr0.zeros(p.nX, p.XsizeFull, p.nY, p.nY, 4, 4);
 
-	if (vlb.kOmegaClass.kOmegaSolverFlag || vfd.thermalSolverFlag)
-		dXCoeffs.zeros(p.XsizeFull, p.nY, 12);
-
-
 	ssArrInds.zeros(p.nX);
 	lsMap.zeros(p.nX, p.XsizeFull, 2, 2);
 
 	Masses.allocate(2);
+
+#ifndef IN_KERNEL_IBB
+	ibbArrCurIndex.zeros(1);
+#endif
 
 	ERROR_CHECKING(BL.load("load" SLASH "lsbl") == false,
 		"Could not load lsbl.txt", ERROR_INITIALIZING_VLS);
@@ -48,15 +59,28 @@ void clVariablesLS::allocateBuffers()
 	dXArr.allocate_buffer_w_copy();
 	dXArr.allocate_buffer_w_copy(CL_MEM_READ_ONLY);
 	Masses.allocate_buffer_w_copy(2);
-	ibbArr.allocate_buffer(CL_MEM_READ_ONLY);
-	ibbArr.copy_dynamic_to_buffer();
 	ssArrInds.allocate_buffer_w_copy();
 	ssArrIndMap.allocate_buffer_w_copy();
 	lsMap.allocate_buffer_w_copy(CL_MEM_READ_ONLY);
-	if (vlb.kOmegaClass.kOmegaSolverFlag || vfd.thermalSolverFlag)
-		dXCoeffs.allocate_buffer_w_copy();
 
+#ifndef IN_KERNEL_IBB
+	ibbArr.allocate_buffer();
+	ibbArr.copy_dynamic_to_buffer();
+	ibbDistArr.allocate_buffer_w_copy();
+	ibbArrCurIndex.allocate_buffer();
+#endif
 }
+
+
+//////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////
+/////////////                                           //////////////
+/////////////               MISC FUNCTIONS              //////////////
+/////////////                                           //////////////
+//////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////
+
+
 
 void clVariablesLS::bcFindDirection(int dir, int bl, cl_double2 vC0,
 	cl_double2 vC1, cl_double2 vCn, cl_int2 vCmin, cl_int2 vCmax, int findtype)
@@ -249,96 +273,12 @@ void clVariablesLS::bcSetdXArr0(cl_int2 ii0, cl_int2 ii1, int dir, double dist,
 	dXArr0(ii0.x, ii0.y, dir - 1) = MIN(dist, dXArr0(ii0.x, ii0.y, dir - 1));
 }
 
-
-void clVariablesLS::calcDxTerms()
-{
-	/// Doing it this way will allow for more complicated corrections to be made
-	/// without worrying about effects on speed.
-
-	
-
-	for (int i = 0; i < p.nX; i++)
-	{
-		for (int j = 0; j < p.nY; j++)
-		{
-			if (nType(i, j) & M_SOLID_NODE)
-				continue;
-
-
-			double dx_e = dXArr(i, j, 0), dx_w = dXArr(i, j, 1), dx = dx_e + dx_w;
-			double dy_n = dXArr(i, j, 2), dy_s = dXArr(i, j, 3), dy = dy_n + dy_s;
-
-			double Xe_coeff = dx_w / (dx_e * dx), Xw_coeff = -dx_e / (dx_w * dx), Xc_coeff = (dx_e - dx_w) / (dx_e * dx_w);
-			double Yn_coeff = dy_s / (dy_n * dy), Ys_coeff = -dy_n / (dy_s * dy), Yc_coeff = (dy_n - dy_s) / (dy_n * dy_s);
-
-			double Xe2_coeff = 2. / (dx_e * dx), Xw2_coeff = 2. / (dx_w * dx), Xc2_coeff = -2. / (dx_e * dx_w);
-			double Yn2_coeff = 2. / (dy_n * dy), Ys2_coeff = 2. / (dy_s * dy), Yc2_coeff = -2. / (dy_n * dy_s);
-
-
-			dXCoeffs(i, j, dxind_e) = Xe_coeff;
-			dXCoeffs(i, j, dxind_w) = Xw_coeff;
-			dXCoeffs(i, j, dxind_c) = Xc_coeff;
-			dXCoeffs(i, j, dyind_n) = Yn_coeff;
-			dXCoeffs(i, j, dyind_s) = Ys_coeff;
-			dXCoeffs(i, j, dyind_c) = Yc_coeff;
-
-			dXCoeffs(i, j, dx2ind_e) = Xe2_coeff;
-			dXCoeffs(i, j, dx2ind_w) = Xw2_coeff;
-			dXCoeffs(i, j, dx2ind_c) = Xc2_coeff;
-			dXCoeffs(i, j, dy2ind_n) = Yn2_coeff;
-			dXCoeffs(i, j, dy2ind_s) = Ys2_coeff;
-			dXCoeffs(i, j, dy2ind_c) = Yc2_coeff;
-		}
-	}
-}
-
-
-void clVariablesLS::createKernels()
-{
-
-}
-
-#ifndef IN_KERNEL_IBB
-cl_bool2 clVariablesLS::fillBoundaryArray()
-{
-	bFlag.fastfill(0);
-	cl_bool2 resizeFlag = { { CL_FALSE, CL_FALSE} };
-	ssArrIndMap.fastfill(-1);
-	for (int i = 0; i < p.nX; i++)
-	{
-		ssArrInds(i) = ssArr.curSize();
-		for (int j = 0; j < p.nY; j++)
-		{
-			if (nType(i, j) & M_SOLID_NODE)
-				continue;
-
-			for (int k = 0; k < 8; k++)
-			{
-				if (dXArr(i, j, k) != 1. && dXArr(i, j, k) > 0.)
-				{
-					resizeFlag.x |= ibbArr.append(i + j * p.XsizeFull +
-						p.distSize * (k + 1));
-
-					if (k < 4 && (i >= minSSArrNodeX) &&
-						(i <= maxSSArrNodeX) && ((bFlag(i, j) & SHEAR_NODE_EXISTS) == 0))
-					{
-						ssArrIndMap(i, j) = ssArr.curSize();
-						resizeFlag.y |= ssArr.append(i + j * p.XsizeFull);
-						bFlag(i, j) |= SHEAR_NODE_EXISTS;
-					}
-				}
-			}
-		}
-	}
-
-	return resizeFlag;
-}
-#else
-bool clVariablesLS::fillBoundaryArray()
+bool clVariablesLS::fillShearArray()
 {
 	bFlag.fastfill(0);
 	bool resizeFlag = false;
 	ssArrIndMap.fastfill(-1);
+
 	for (int i = 0; i < p.nX; i++)
 	{
 		ssArrInds(i) = ssArr.curSize();
@@ -347,11 +287,14 @@ bool clVariablesLS::fillBoundaryArray()
 			if (nType(i, j) & M_SOLID_NODE)
 				continue;
 
-			for (int k = 0; k < 8; k++)
+			for (int k = 0; k < 4; k++)
 			{
-				if (dXArr(i, j, k) != 1. && dXArr(i, j, k) > 0.)
+				int ii = MODFAST(i + vlb.Cx[k + 1], p.nX);
+				int jj = j + vlb.Cy[k + 1];
+
+				if (nType(ii, jj) & M_SOLID_NODE)
 				{
-					if (k < 4 && (i >= minSSArrNodeX) &&
+					if ((i >= minSSArrNodeX) &&
 						(i <= maxSSArrNodeX) && ((bFlag(i, j) & SHEAR_NODE_EXISTS) == 0))
 					{
 						ssArrIndMap(i, j) = ssArr.curSize();
@@ -365,13 +308,236 @@ bool clVariablesLS::fillBoundaryArray()
 
 	return resizeFlag;
 }
-#endif
 
 //TODO: figure out what arrays can be added here
 void clVariablesLS::freeHostArrays()
 {
 
 }
+
+cl_int2 clVariablesLS::min2(cl_double2 v0, cl_double2 v1)
+{
+	double x = v0.x, y = v0.y;
+	if (v1.x < x) x = v1.x;
+	if (v1.y < y) y = v1.y;
+	return{ { (int)floor(x), (int)floor(y) } };
+}
+
+cl_int2 clVariablesLS::max2(cl_double2 v0, cl_double2 v1)
+{
+	double x = v0.x, y = v0.y;
+	if (v1.x > x) x = v1.x;
+	if (v1.y > y) y = v1.y;
+	return{ { (int)ceil(x), (int)ceil(y) } };
+}
+
+
+bool clVariablesLS::testInside(cl_double2 vd, cl_double2 v0, cl_double2 v1)
+{
+	cl_double2 v10 = Subtract2(v1, v0);
+	cl_double2 vd0 = Subtract2(vd, v0);
+	cl_double2 vd1 = Subtract2(vd, v1);
+
+	if (fabs(GETLEN(v10) - GETLEN(vd0) - GETLEN(vd1)) < p.eps)
+		return true;
+	return false;
+}
+
+bool clVariablesLS::testPeriodicIndex(cl_int2 i0, cl_int2 i1)
+{
+	if (i0.y != i1.y)
+		return false;
+	if (i0.x != i1.x)
+		return false;
+
+	return true;
+}
+
+
+
+//////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////
+/////////////                                           //////////////
+/////////////         KERNEL CREATION FUNCTIONS         //////////////
+/////////////                                           //////////////
+//////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////
+
+
+void clVariablesLS::createKernels()
+{
+	updateNType.create_kernel(GetSourceProgram, LBQUEUE_REF, "updateNType");
+	updateNType.set_size(nN - 1, WORKGROUPSIZE_UPDATEM);
+
+	updateBoundArr.create_kernel(GetSourceProgram, LBQUEUE_REF, "updateBoundaryNodes");
+	updateBoundArr.set_size(nBL, WORKGROUPSIZE_UPDATEM);
+
+#ifndef IN_KERNEL_IBB
+	updateIBBOnly.create_kernel(GetSourceProgram, LBQUEUE_REF, "updateIBBOnly");
+	updateIBBOnly.set_size(nN - 1, WORKGROUPSIZE_UPDATEM);
+#endif
+}
+
+void clVariablesLS::setKernelArgs()
+{
+	updateNType.set_argument(0, nType.get_buf_add());
+	updateNType.set_argument(1, C.get_buf_add());
+	updateNType.set_argument(2, C0.get_buf_add());
+	updateNType.set_argument(3, vlb.Ux_array.get_buf_add());
+	updateNType.set_argument(4, vlb.Uy_array.get_buf_add());
+	updateNType.set_argument(5, vlb.Ro_array.get_buf_add());
+	updateNType.set_argument(6, vlb.kOmegaClass.Kappa.get_add_A());
+	updateNType.set_argument(7, vlb.kOmegaClass.Kappa.get_add_b());
+	updateNType.set_argument(8, vlb.kOmegaClass.Omega.get_add_A());
+	updateNType.set_argument(9, vlb.kOmegaClass.Omega.get_add_b());
+	updateNType.set_argument(10, vlb.kOmegaClass.Omega.get_add_IndArr());
+
+
+	int ind = 0;
+	BLinks::arrName BLArrList[] = { BLinks::P01Arr, BLinks::vNArr,
+		BLinks::lenArr, BLinks::nodLocArr, BLinks::typeArr };
+	vtr.BL.setBuffers(updateBoundArr, ind, BLArrList, 5);
+	updateBoundArr.set_argument(5, C.get_buf_add());
+	updateBoundArr.set_argument(6, C0.get_buf_add());
+	updateBoundArr.set_argument(7, nType.get_buf_add());
+	updateBoundArr.set_argument(8, dXArr.get_buf_add());
+#ifndef IN_KERNEL_IBB
+	updateBoundArr.set_argument(9, ibbArr.get_buf_add());
+	updateBoundArr.set_argument(10, ibbDistArr.get_buf_add());
+	updateBoundArr.set_argument(11, ibbArrCurIndex.get_buf_add());
+	updateBoundArr.setOptionInd(12);
+	int ibbarrsize_ = ibbArr.getBufferFullSize();
+	updateBoundArr.set_argument(12, &ibbarrsize_);
+
+	updateIBBOnly.set_argument(0, C.get_buf_add());
+	updateIBBOnly.set_argument(1, nType.get_buf_add());
+	updateIBBOnly.set_argument(2, ibbArr.get_buf_add());
+	updateIBBOnly.set_argument(3, ibbDistArr.get_buf_add());
+	updateIBBOnly.set_argument(4, ibbArrCurIndex.get_buf_add());
+	updateIBBOnly.setOptionInd(5);
+	updateIBBOnly.set_argument(5, &ibbarrsize_);
+#endif
+
+
+	// Calls kernel, so must go here after kernel has been initialized
+	iniIBBArrays();
+
+}
+
+void clVariablesLS::setSourceDefines()
+{
+	int ind_ = nN / 2 - 10;
+	while (true)
+	{
+		if ((C(ind_).y - C(ind_ - 1).y) > p.Pipe_radius)
+			break;
+		ind_++;
+	}
+
+	minSSArrNodeX = MAX(vtr.xReleasePos - 10, 0);
+	maxSSArrNodeX = vtr.xStopPos + 10;
+
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "MIN_SS_ARR_NODE_X", minSSArrNodeX);
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "MAX_SS_ARR_NODE_X", maxSSArrNodeX);
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "LSC_START_TOP", ind_);
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "LSC_NN", nN);
+
+	// These are used by updateM kernel for indexing
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "LSC_UPDATE_M_NN", nN - 1);
+	int nodeskip = (nN - 1) / 2 - 1;
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "LSC_UPDATE_M_SKIP", nodeskip);
+
+
+
+#ifdef IN_KERNEL_IBB
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "NTYPE_TYPE", "int");
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "IN_KERNEL_IBB");
+#else
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "NTYPE_TYPE", "short");
+#endif
+}
+
+
+//////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////
+/////////////                                           //////////////
+/////////////             PARAMETER FUNCTIONS           //////////////
+/////////////                                           //////////////
+//////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////
+
+void clVariablesLS::loadParams()
+{
+	nN = p.getParameter<int>("nN");
+	nBL = nN - 2;
+
+	restartRunFlag = p.getParameter<bool>("Restart Run", false);
+	lsSpacing = p.getParameter<double>("LS Spacing", LS_SPACING);
+	saveMacroStart = p.getParameter<bool>("Save Macro Start", true);
+	restartRunFlag &= testRestartRun();
+}
+
+void clVariablesLS::saveParams()
+{
+	p.setParameter("nN", nN);
+	p.setParameter("LS Spacing", lsSpacing);
+	if (p.Time > 0)
+		p.setParameter<bool>("Restart Run", true);
+	else
+		p.setParameter<bool>("Restart Run", false);
+	p.getParameter<bool>("Save Macro Start", saveMacroStart);
+}
+
+bool clVariablesLS::testRestartRun()
+{
+	allocateArrays();
+	bool ret = C.load("load" SLASH "lsc");
+	return ret;
+}
+
+
+//////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////
+/////////////                                           //////////////
+/////////////              OUTPUT FUNCTIONS             //////////////
+/////////////                                           //////////////
+//////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////
+
+void clVariablesLS::renameSaveFiles()
+{
+	C.RenameTxtFile();
+	nType.RenameTxtFile();
+
+}
+
+void clVariablesLS::saveRestartFiles()
+{
+	C.save_bin_from_device("lsc");
+}
+
+void clVariablesLS::save2file()
+{
+	C.save_txt_from_device();
+	nType.save_txt_from_device();
+	//M.save_txt_from_device();
+}
+
+void clVariablesLS::saveDebug()
+{
+	ibbArr.savetxt();
+	dXArr.savetxt();
+	dXArr0.savetxt();
+}
+
+
+//////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////
+/////////////                                           //////////////
+/////////////         INITIALIZATION FUNCTIONS          //////////////
+/////////////                                           //////////////
+//////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////
 
 void clVariablesLS::ini()
 {
@@ -382,20 +548,26 @@ void clVariablesLS::ini()
 	}
 	// save C0 (only needs to be done once)
 	C0.savetxt();
-		
-	iniFillMap();
+
 	iniFillMap0();
+	iniFillMap();
+
+	// Copy contents of nType to nTypePrev before calling iniNodeBoundaryInfo
+	memcpy(nTypePrev.get_array(), nType.get_array(), nType.getFullSize() * sizeof(double));
+
 	iniCountSolid();
 	inidXArrays();
-	fillBoundaryArray();
+	iniShearArray();
 	iniNodeBoundaryInfo();
 	iniLSMap();
 
-	if (vlb.kOmegaClass.kOmegaSolverFlag || vfd.thermalSolverFlag)
-		calcDxTerms();
-
-
 	allocateBuffers();
+
+	// This uses a kernel to initialize arrays, so must be called from
+	// setKernelArgs function.
+	//iniIBBArrays();
+
+	sumFluid.ini(nType, restartRunFlag, "redUx");
 
 	setSourceDefines();
 	std::function<void(void)> createKerPtr = std::bind(&clVariablesLS::createKernels, this);
@@ -436,6 +608,41 @@ void clVariablesLS::iniCountSolid()
 }
 
 
+void clVariablesLS::inidXArrays()
+{
+	dXArr0.fill(0.);
+
+	for (int j = 0; j < p.nY; j++)
+	{
+		for (int i = 0; i < p.nX; i++)
+		{
+			if (nType(i, j) & M_FLUID_NODE)
+			{
+				for (int k = 0; k < 4; k++)
+				{
+					dXArr0(i, j, k) = 1.;
+				}
+			}
+		}
+	}
+
+	for (int i = 0; i < nBL; i++)
+	{
+		bcFindNodes(i, find_dx0);
+	}
+
+	// if new run, dXArr = dXArr0 so memory can be copied
+	if (!restartRunFlag)
+	{
+		memcpy(dXArr.get_array(), dXArr0.get_array(), dXArr.getFullSize() * sizeof(double));
+		return;
+	}
+
+	//otherwise, use updatedXArr()
+	updatedXArr();
+}
+
+
 
 void clVariablesLS::iniFillMap()
 {
@@ -444,6 +651,8 @@ void clVariablesLS::iniFillMap()
 	{
 		for (int j = 0; j < p.nY; j++)
 		{
+			// Fills all M0_FLUID_NODES as 
+			// M_FLUID_NODES as well
 			if(nType(i, j) & M0_FLUID_NODE)
 				nType(i, j) |= M_FLUID_NODE;
 			else if (restartRunFlag == false)
@@ -452,7 +661,6 @@ void clVariablesLS::iniFillMap()
 			// dont need to complete rest of function
 				nType(i, j) |= M_SOLID_NODE;
 			}
-
 		}
 	}
 
@@ -503,14 +711,17 @@ void clVariablesLS::iniFillMap()
 				cl_double2 vL0 = Subtract2(L0, c0);
 				//if dot product is less than 0, this node is a solid
 				if (DOT_PROD(vL0, cn) < 0)
-				{	// If solid now, we need to unset M_FLUID_NODE bit,
-					// then set M_SOLID_NODE bit
-					nType(i, j) &= !M_FLUID_NODE;
-					nType(i, j) |= M_SOLID_NODE;
+				{	// If solid, make sure that M_FLUID_NODE bit is set to
+					// zero (will be 1 if M0_FLUID_NODE is 1) then set
+					// M_SOLID_NODE bit to 1
+					RESET_NODE_TO_M_SOLID(nType(i, j));
 				}
 			}
 		}
 	}
+
+	// Now that boundary nodes in solid are set to M_SOLID_NODE, set remaining 
+	// nodes inside the solid to M_SOLID_NODE while unsetting M_FLUID_NODE bit to 0
 
 	for (int i = 0; i < p.nX; i++)
 	{
@@ -527,8 +738,7 @@ void clVariablesLS::iniFillMap()
 			{	// Set all nodes to M_SOLID_NODE until reaching 
 				// first solid node set along wall. again need
 				// to make sure to remove fluid flag
-				nType(i, ind) &= !M_FLUID_NODE;
-				nType(i, ind) |= M_SOLID_NODE;
+				RESET_NODE_TO_M_SOLID(nType(i, ind));
 			}
 
 			ind++;
@@ -539,7 +749,7 @@ void clVariablesLS::iniFillMap()
 		flag = 0;
 		// continue testing nodes until next M_SOLID_NODE is 
 		// found, which will be located on outside of upper wall
-		while (flag == 0 || ind >= p.nY)
+		while (flag == 0 && ind < p.nY)
 		{
 			// Once next M_SOLID_NODE is found, break
 			if (nType(i, ind) & M_SOLID_NODE)
@@ -553,8 +763,7 @@ void clVariablesLS::iniFillMap()
 		// bit
 		for (int j = ind; j < p.nY; j++)
 		{
-			nType(i, j) &= !M_FLUID_NODE;
-			nType(i, j) = M_SOLID_NODE;
+			RESET_NODE_TO_M_SOLID(nType(i, j));
 		}
 	}
 }
@@ -602,7 +811,9 @@ void clVariablesLS::iniFillMap0()
 
 				cl_double2 vL0 = Subtract2(L0, c0);
 				if (DOT_PROD(vL0, cn) < 0)
-					vls.nType(i, j) = M0_SOLID_NODE;
+				{
+					RESET_NODE_TO_M0_SOLID(vls.nType(i, j));
+				}
 			}
 		}
 	}
@@ -613,26 +824,29 @@ void clVariablesLS::iniFillMap0()
 		int ind = 0;
 		while (flag == 0)
 		{
-			if (nType(i, ind) == M0_SOLID_NODE)
+			if (nType(i, ind) & M0_SOLID_NODE)
 				flag = 1;
 			else
-				nType(i, ind) = M0_SOLID_NODE;
-
+			{
+				RESET_NODE_TO_M0_SOLID(vls.nType(i, ind));
+			}
 			ind++;
 		}
 
 		ind += 5;
 		flag = 0;
-		while (flag == 0 || ind >= p.nY)
+		while (flag == 0 && ind < p.nY)
 		{
-			if (nType(i, ind) == M0_SOLID_NODE)
+			if (nType(i, ind) & M0_SOLID_NODE)
 				flag = 1;
 
 			ind++;
 		}
 
 		for (int j = ind; j < p.nY; j++)
-			nType(i, j) = M0_SOLID_NODE;
+		{
+			RESET_NODE_TO_M0_SOLID(vls.nType(i, j));
+		}
 	}
 }
 
@@ -666,6 +880,36 @@ void clVariablesLS::iniLSMap()
 
 void clVariablesLS::iniNodeBoundaryInfo()
 {
+	// fill boundary info for unfouled domain first
+	for (int i = 0; i < p.nX; i++)
+	{
+		for (int j = 0; j < p.nY; j++)
+		{
+			if (nType(i, j) & M0_SOLID_NODE)
+				continue;
+
+			for (int m = 1; m < 9; m++)
+			{
+				int iis = MOD(i + vlb.Cx[m], p.nX);
+				int jjs = j + vlb.Cy[m];
+
+				ERROR_CHECKING((jjs < 0 || jjs >= p.nY), "Fluid node located "\
+					"at either y = 0 or y = nY-1. These two rows must only "\
+					"contain solid nodes", ERROR_INITIALIZING_VLS);
+
+				if (vls.nType(iis, jjs) & M0_SOLID_NODE)
+				{
+					nType(i, j) |= BOUNDARY_NODE0;
+					if (m < 5)
+					{
+						nType(iis, jjs) |= SOLID_BOUNDARY_NODE0;
+						nType(i, j) |= NESW_BOUNDARY_NODE0;
+					}
+				}
+			}
+		}
+	}
+	   	  
 	for (int i = 0; i < p.nX; i++)
 	{
 		for (int j = 0; j < p.nY; j++)
@@ -678,23 +922,21 @@ void clVariablesLS::iniNodeBoundaryInfo()
 				int iis = MOD(i + vlb.Cx[m], p.nX);
 				int jjs = j + vlb.Cy[m];
 
-				if (jjs < 0 || jjs >= p.nY)
-				{// want to avoid indexing out of bounds
-					nType(i, j) |= vlb.boundsArr[m];
-#ifdef IN_KERNEL_IBB
-					// at edge (which should never happen), dy <= 0.5
-					nType(i,j) |= vlb.boundsArrT1[m];
-#endif
-					continue;
-				}
+				ERROR_CHECKING((jjs < 0 || jjs >= p.nY), "Fluid node located "\
+					"at either y = 0 or y = nY-1. These two rows must only "\
+					"contain solid nodes", ERROR_INITIALIZING_VLS);
 
 				if (vls.nType(iis, jjs) & M_SOLID_NODE)
 				{
 					nType(i, j) |= vlb.boundsArr[m];
+					if (m < 5)
+					{
+						nType(iis, jjs) |= SOLID_BOUNDARY_NODE;
+					}
 #ifdef IN_KERNEL_IBB
 					if (vls.dXArr(i, j, m - 1) <= 0.5)
 						nType(i,j) |= vlb.boundsArrT1[m];
-					else if (vls.dXArr(i, j, m - 1) > 0.5)
+					else if (vls.dXArr(i, j, m - 1) > 0.5 && vls.dXArr(i, j, m - 1) < 1.0)
 						nType(i,j) |= vlb.boundsArrT2[m];
 					else
 						printf("dir at (%d,%d) points to solid node, but dx = 1\n", i, j);
@@ -709,130 +951,129 @@ void clVariablesLS::iniNodeBoundaryInfo()
 }
 
 
-void clVariablesLS::loadParams()
+void clVariablesLS::iniShearArray()
 {
-	nN = p.getParameter<int>("nN");
-	nBL = nN - 2;
-
-	restartRunFlag = p.getParameter<bool>("Restart Run", false);
-	lsSpacing = p.getParameter<double>("LS Spacing", LS_SPACING);
-	saveMacroStart = p.getParameter<bool>("Save Macro Start", true);
-	restartRunFlag &= testRestartRun();
+	ssArr.reset();
+	fillShearArray();
 }
 
-cl_int2 clVariablesLS::min2(cl_double2 v0, cl_double2 v1)
+//////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////
+/////////////                                           //////////////
+/////////////              UPDATE FUNCTIONS             //////////////
+/////////////                                           //////////////
+//////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////
+
+void clVariablesLS::updateBoundaryArrays()
 {
-	double x = v0.x, y = v0.y;
-	if (v1.x < x) x = v1.x;
-	if (v1.y < y) y = v1.y;
-	return{ { (int)floor(x), (int)floor(y) } };
-}
+	updateBoundArr.call_kernel();
+	ibbArrCurIndex.read_from_buffer(LBQUEUE_REF);
 
-cl_int2 clVariablesLS::max2(cl_double2 v0, cl_double2 v1)
-{
-	double x = v0.x, y = v0.y;
-	if (v1.x > x) x = v1.x;
-	if (v1.y > y) y = v1.y;
-	return{ { (int)ceil(x), (int)ceil(y) } };
-}
-
-void clVariablesLS::renameSaveFiles()
-{
-	C.RenameTxtFile();
-	nType.RenameTxtFile();
-
-}
-
-void clVariablesLS::saveRestartFiles()
-{
-	C.save_bin_from_device("lsc");
-}
-
-void clVariablesLS::save2file()
-{
-	C.save_txt_from_device();
-	nType.save_txt_from_device();
-	//M.save_txt_from_device();
-}
-
-void clVariablesLS::saveDebug()
-{
-	ibbArr.savetxt();
-	dXArr.savetxt();
-	dXArr0.savetxt();
-}
-
-void clVariablesLS::saveParams()
-{
-	p.setParameter("nN", nN);
-	p.setParameter("LS Spacing", lsSpacing);
-	if (p.Time > 0)
-		p.setParameter<bool>("Restart Run", true);
-	else
-		p.setParameter<bool>("Restart Run", false);
-	p.getParameter<bool>("Save Macro Start", saveMacroStart);
-}
-
-void clVariablesLS::setKernelArgs()
-{
-
-}
-
-
-void clVariablesLS::setSourceDefines()
-{
-	int ind_ = nN / 2 - 10;
-	while (true)
+	bool resizeFlag = false;
+	if (ibbArrCurIndex(0) >= ibbArr.getBufferFullSize())
 	{
-		if ((C(ind_).y - C(ind_ - 1).y) > p.Pipe_radius)
-			break;
-		ind_++;
+		ibbArrCurIndex.FillBuffer(0, LBQUEUE_REF);
+		resizeFlag = true;
+		ibbArr.resize_device_dynamic();
+		ibbDistArr.resize_device_dynamic();
+
+		updateIBBOnly.set_argument(2, ibbArr.get_buf_add());
+		updateIBBOnly.set_argument(3, ibbDistArr.get_buf_add());
+		int ibbarrsize_ = ibbArr.getBufferFullSize();
+		updateIBBOnly.set_argument(5, &ibbarrsize_);
+
+		updateIBBOnly.call_kernel();
+
+		ibbArrCurIndex.read_from_buffer(LBQUEUE_REF);
 	}
 
-	minSSArrNodeX = MAX(vtr.xReleasePos - 10, 0);
-	maxSSArrNodeX = vtr.xStopPos + 10;
 
-	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "MIN_SS_ARR_NODE_X", minSSArrNodeX);
-	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "MAX_SS_ARR_NODE_X", maxSSArrNodeX);
-	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "LSC_START_TOP", ind_);
-	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "LSC_NN", nN);
-#ifdef IN_KERNEL_IBB
-	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "NTYPE_TYPE", "int");
-	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "IN_KERNEL_IBB");
-#else
-	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "NTYPE_TYPE", "short");
-#endif
+	int ibbnumel_ = ibbArrCurIndex(0);
 
+	vlb.ibbKernel.set_argument(3, &ibbnumel_);
+
+	// dont need to update these kernels until after updateIBBOnly
+	// has finished updating ibb arrays since they will not be
+	// called again until next update step.
+	if (resizeFlag)
+	{
+		updateBoundArr.set_argument(9, ibbArr.get_buf_add());
+		updateBoundArr.set_argument(10, ibbDistArr.get_buf_add());
+		int ibbarrsize_ = ibbArr.getBufferFullSize();
+		updateBoundArr.set_argument(12, &ibbarrsize_);
+
+
+		vlb.ibbKernel.set_argument(0, vls.ibbArr.get_buf_add());
+		vlb.ibbKernel.set_argument(1, vls.ibbDistArr.get_buf_add());
+	}
 }
 
-bool clVariablesLS::testInside(cl_double2 vd, cl_double2 v0, cl_double2 v1)
+void clVariablesLS::iniIBBArrays()
 {
-	cl_double2 v10 = Subtract2(v1, v0);
-	cl_double2 vd0 = Subtract2(vd, v0);
-	cl_double2 vd1 = Subtract2(vd, v1);
+	ibbArrCurIndex.FillBuffer(0, LBQUEUE_REF);
 
-	if (fabs(GETLEN(v10) - GETLEN(vd0) - GETLEN(vd1)) < p.eps)
-		return true;
-	return false;
+	updateIBBOnly.call_kernel();
+	
+	ibbArrCurIndex.read_from_buffer(LBQUEUE_REF);
+
+	bool resizeFlag = false;
+	if (ibbArrCurIndex(0) >= ibbArr.getBufferFullSize())
+	{
+		ibbArrCurIndex.FillBuffer(0, LBQUEUE_REF);
+		resizeFlag = true;
+		ibbArr.resize_device_dynamic();
+		ibbDistArr.resize_device_dynamic();
+
+		updateIBBOnly.set_argument(2, ibbArr.get_buf_add());
+		updateIBBOnly.set_argument(3, ibbDistArr.get_buf_add());
+		int ibbarrsize_ = ibbArr.getBufferFullSize();
+		updateIBBOnly.set_argument(5, &ibbarrsize_);
+
+		updateIBBOnly.call_kernel();
+
+		ibbArrCurIndex.read_from_buffer(LBQUEUE_REF);
+	}
+
+	int ibbnumel_ = ibbArrCurIndex(0);
+
+	vlb.ibbKernel.set_argument(3, &ibbnumel_);
+
+	// dont need to update these kernels until after updateIBBOnly
+	// has finished updating ibb arrays since they will not be
+	// called again until next update step.
+	if (resizeFlag)
+	{
+		updateBoundArr.set_argument(9, ibbArr.get_buf_add());
+		updateBoundArr.set_argument(10, ibbDistArr.get_buf_add());
+		int ibbarrsize_ = ibbArr.getBufferFullSize();
+		updateBoundArr.set_argument(12, &ibbarrsize_);
+
+
+		vlb.ibbKernel.set_argument(0, vls.ibbArr.get_buf_add());
+		vlb.ibbKernel.set_argument(1, vls.ibbDistArr.get_buf_add());
+	}
 }
 
-bool clVariablesLS::testPeriodicIndex(cl_int2 i0, cl_int2 i1)
+void clVariablesLS::updateLS()
 {
-	if (i0.y != i1.y)
-		return false;
-	if (i0.x != i1.x)
-		return false;
+	// Prepares dXArr and nType for updating.
+	nType.enqueue_copy_to_buffer(nTypePrev.get_buffer(), -1, LBQUEUE_REF);
+	dXArr.enqueue_copy_to_buffer(dXArr0.get_buffer(), -1, LBQUEUE_REF);
+	ibbArrCurIndex.FillBuffer(0, LBQUEUE_REF);
 
-	return true;
+	// updates nType
+	updateNType.call_kernel();
+
+	// Saves updated nType to nTypePrev to use in next update step
+	nTypePrev.enqueue_copy_to_buffer(nType.get_buffer(), -1, LBQUEUE_REF);
+
+	updateBoundaryArrays();
+
+
 }
 
 
-bool clVariablesLS::testRestartRun()
-{
-	allocateArrays();
-	bool ret = C.load("load" SLASH "lsc");
-	return ret;
-}
 
 // TODO: Replace with kernel based on legacy code
 //		implementation
@@ -858,41 +1099,16 @@ void clVariablesLS::updatedXArr()
 	{
 		bcFindNodes(i, find_dx);
 	}
-	dXArr.copy_to_buffer();
 }
-// TODO: make sure that all kernel arguments do not need to be
-//		reset when reallocating buffer size
-// TODO: find out which kernels need to be updated with size of
-//		ibbArr.
-// TODO: if dXArr is updated on device, can try to update IBBArr
-//		as well. If not, make sure dXArr update kernel is called
-//		before calling this function, and copy dXArr to host.
-void clVariablesLS::updateBoundaryArrays()
+
+void clVariablesLS::updateShearArrays()
 {
-	dXArr.read_from_buffer();
+	nType.read_from_buffer();
+	// TODO: check if it is necessary to set this to zeros, or if
+	// resetting the current index is sufficient
+	ssArr.reset();
 
-	ssArr.zeros();
-
-#ifndef IN_KERNEL_IBB
-	ibbArr.zeros();
-	cl_bool2 reallocFlag = fillBoundaryArray();
-	ssArrIndMap.copy_to_buffer();
-	if (reallocFlag.x)
-	{
-		ibbArr.reallocate_device_dynamic();
-	}
-	if (reallocFlag.y)
-	{
-		ssArr.reallocate_device_dynamic();
-	}
-
-	ibbArr.copy_dynamic_to_buffer();
-	vlb.updateIBBArrays(reallocFlag.x);
-	ssArr.copy_dynamic_to_buffer();
-	ssArrInds.copy_to_buffer();
-	vtr.wallShear.updateShearArrays(reallocFlag.y);
-#else
-	bool reallocFlag = fillBoundaryArray();
+	bool reallocFlag = fillShearArray();
 	ssArrIndMap.copy_to_buffer();
 	if (reallocFlag)
 	{
@@ -901,9 +1117,7 @@ void clVariablesLS::updateBoundaryArrays()
 	ssArr.copy_dynamic_to_buffer();
 	ssArrInds.copy_to_buffer();
 	vtr.wallShear.updateShearArrays(reallocFlag);
-#endif
 }
-
 
 
 const int clVariablesLS::LF[9] = {	LB_NO_BOUNDARY_LINK,

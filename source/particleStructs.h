@@ -603,7 +603,7 @@ public:
 	Array1Dv2d vNvec;   //normal vector pointing into domain
 	Array1Dd Tau;		//Shear stress at location (negative for directed upstream, pos downstream)
 	Array1Dd blLen;		//length of BL
-	Array1Du Node_loc;	//points to location BL is located in (or majority of BL when across two)
+	Array1Di Node_loc;	//points to location BL is located in (or majority of BL when across two)
 						// note: this is the vtr node it is closest to, so it is based on vtr.trDomainSize
 						//			not p.nX and p.nY
 	Array1Dv2us P01ind;	//basically a reduced version of vls.BL with only BLinks indicies

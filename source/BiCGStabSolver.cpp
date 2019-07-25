@@ -525,7 +525,7 @@ void BiCGStabSolver::setInitialValue(double inival, bool fullArrFlag)
 	{
 		for (int j = 0; j < Ysize; j++)
 		{
-			if (vls.M(i, j) == 1)
+			if (vls.nType(i, j) & Inds->fluidFlag)
 			{
 				xVec->operator()(i, j) = inival;
 			}
@@ -543,7 +543,7 @@ void BiCGStabSolver::setInitialValueRows(double inival, std::vector<int> &rowi)
 		for (int jj = 0; jj < rowi.size(); jj++)
 		{
 			int j = rowi[jj];
-			if (vls.M(i, j) == 1)
+			if (vls.nType(i, j) & Inds->fluidFlag)
 			{
 				xVec->operator()(i, j) = inival;
 			}
@@ -560,7 +560,7 @@ void BiCGStabSolver::setInitialValueCols(double inival, std::vector<int> &coli)
 		int i = coli[ii];
 		for (int j = 0; j < Ysize; j++)
 		{
-			if (vls.M(i, j) == 1)
+			if (vls.nType(i, j) & Inds->fluidFlag)
 			{
 				xVec->operator()(i, j) = inival;
 			}

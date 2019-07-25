@@ -166,6 +166,14 @@ public:
 	// Times for pre-particle release LBM/kOmega/Temp solvers
 	unsigned int tlbmIniDumpStep, tlbmNumIniSteps_LB, tlbmNumIniSteps_TLBM;
 
+	double geomPenaltyFactor; // mean velocity calculated from set Re
+							  // is scaled by this amount, when calculating values
+							  // used to initialize flow variables. This is because the
+							  // additional pressure drop induced by geometry will cause 
+							  // velocities to be lower than those in a straight
+							  // channel with same pressure drop (and eqns used to calculate
+							  // initial values are based parallel plate geometry).
+
 	// Variables used in the iterative flowrate solver (not implemented)
 	// Note: not all of these are read from/written to parameter file
 	// at the moment (need to implement this if using flow solver)
@@ -316,7 +324,9 @@ public:
 	// Initializes and nodeType Array
 	//void iniNodeType();
 
-
+	// calculates rho and U values for arrays when distributions
+	// have been loaded from a bin file.
+	void iniRhoUFromDists();
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////              Updating Functions               ///////////////

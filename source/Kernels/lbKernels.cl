@@ -335,6 +335,11 @@ __kernel void LB_collision_SRT_Fluid(__global double *__restrict__ rho_array,
 }
 
 
+
+
+// TODO: make sure that any declaration of nType variable uses NTYPE_NTYPE rather than
+//		int or short in all kernels
+
 #define DBGARR(dbgnum, dbgval)	DebugArrs[gi + dbgnum*DIST_SIZE] = dbgval
 
 __kernel void LB_collision_SRT_Fluid_w_kOmega(__global double* __restrict__ rho_array,

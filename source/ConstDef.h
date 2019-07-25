@@ -49,7 +49,7 @@
 #define DENSITY_AIR					0.675
 #define	THERMAL_CONDUCTIVITY_AIR	0.042
 #define SOOT_NUMBER_CONCENTRATION	1.e10
-
+#define HEAT_CAPACITY_AIR			1026.0 //(J/kg*K)
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -152,7 +152,10 @@
 #define LB_SAVE_AVG_INFO			true
 #define USE_TURB_VEL_BC				true
 
-#define IN_KERNEL_IBB		// cannot be set with yaml params file
+//#define IN_KERNEL_IBB		// cannot be set with yaml params file
+							// currently not working since vls.dXArr does not include diagonal distances
+							// which would waste a ton of memory for storing mostly 1s and a few distances
+							// for the ibb nodes
 
 
 // Initialization time (to obtain pseudo steady state)
@@ -172,8 +175,8 @@
 #define ALPHA_MULT              55.75
 #define SIGMA_MULT              0.00055
 
-
-
+#define GEOMETRIC_PENALTY_FACTOR 1.0
+#define MAX_TURB_VISC_VALUE			1.0
 #define ROUGHNESS_FACTOR		9.
 
 // Keep MU_NUMBER and FORCE_TERM_VAL as functions. (Do not set those directly here)
@@ -205,6 +208,7 @@
 #define USE_THERMAL_SOLVER			true
 #define CALC_NUSSELT				false
 #define SOLVE_SS_TEMP               false
+#define CHT_SOURCE_CORRECTION		true
 
 
 #define MAX_SS_FD_STEPS				(10000000)
@@ -425,61 +429,89 @@
 //Type 1 Boundaries are IBB boundaries applied before collision step (q < 0.5)
 //Type 2 Boundaries are IBB boundaries applied after collision step (q >= 0.5)
 
-#define C_BOUND			0x0 //just a placeholder. Not actually used
-#define M_SOLID_NODE	0x1
-#define M_FLUID_NODE	0x2
-#define M0_SOLID_NODE	0x4
-#define M0_FLUID_NODE	0x8
-#define M_FOUL_NODE		0x9  // M0_FLUID_NODE | M_SOLID_NODE
 
 #ifndef IN_KERNEL_IBB
-	#define E_BOUND		0x100
-	#define W_BOUND		0x200
-	#define N_BOUND		0x400
-	#define S_BOUND		0x800
-	#define NE_BOUND	0x1000
-	#define SW_BOUND	0x2000
-	#define SE_BOUND	0x4000
-	#define NW_BOUND	0x8000
-	#define BOUNDARY_NODE 0xFF00  // E_BOUND | W_BOUND | ... | NW_BOUND
+	#define C_BOUND					0x0000 //just a placeholder. Not actually used
+	#define M_SOLID_NODE			0x0001
+	#define M_FLUID_NODE			0x0002
+	#define M0_SOLID_NODE			0x0004
+	#define M0_FLUID_NODE			0x0008
+	#define SOLID_BOUNDARY_NODE		0x0010
+	#define SOLID_BOUNDARY_NODE0	0x0020	// Solid boundary node in unfouled domain
+	#define NESW_BOUNDARY_NODE0		0x0040  // NESW_BOUNDARY_NODE in unfouled domain
+	#define BOUNDARY_NODE0			0x0080  // BOUNDARY_NODE in unfouled domain
+
+	#define E_BOUND					0x0100
+	#define W_BOUND					0x0200
+	#define N_BOUND					0x0400
+	#define S_BOUND					0x0800
+	#define NE_BOUND				0x1000
+	#define SW_BOUND				0x2000
+	#define SE_BOUND				0x4000
+	#define NW_BOUND				0x8000
+	
+	#define M_FOUL_NODE				0x0009  // M0_FLUID_NODE | M_SOLID_NODE
+	#define NESW_BOUNDARY_NODE		0x0F00  // E_BOUND | W_BOUND | N_BOUND | S_BOUND
+	#define FD_BOUNDARY_NODE		0x0F10	//SOLID_BOUNDARY_NODE | NESW_BOUNDARY_NODE
+	#define BOUNDARY_NODE			0xFF00  // E_BOUND | W_BOUND | ... | NW_BOUND
+	#define FD_BOUNDARY_NODE0		0x0060	//SOLID_BOUNDARY_NODE0 | NESW_BOUNDARY_NODE0
+
+	
 #else
-	#define E_BOUND		0x100
-	#define W_BOUND		0x200
-	#define N_BOUND		0x400
-	#define S_BOUND		0x800
-	#define NE_BOUND	0x1000
-	#define SW_BOUND	0x2000
-	#define SE_BOUND	0x4000
-	#define NW_BOUND	0x8000
-	#define E_BOUND_T1	0x10000
-	#define W_BOUND_T1	0x20000
-	#define N_BOUND_T1	0x40000
-	#define S_BOUND_T1	0x80000
-	#define NE_BOUND_T1 0x100000
-	#define SW_BOUND_T1 0x200000
-	#define SE_BOUND_T1 0x400000
-	#define NW_BOUND_T1 0x800000
-	#define E_BOUND_T2	0x1000000
-	#define W_BOUND_T2	0x2000000
-	#define N_BOUND_T2	0x4000000
-	#define S_BOUND_T2	0x8000000
-	#define NE_BOUND_T2 0x10000000
-	#define SW_BOUND_T2 0x20000000
-	#define SE_BOUND_T2 0x40000000
-	#define NW_BOUND_T2 0x80000000
-	#define BOUNDARY_NODE 0xFFFFFF00
+	#define C_BOUND					0x00000000 //just a placeholder. Not actually used
+	#define M_SOLID_NODE			0x00000001
+	#define M_FLUID_NODE			0x00000002
+	#define M0_SOLID_NODE			0x00000004
+	#define M0_FLUID_NODE			0x00000008
+	#define SOLID_BOUNDARY_NODE		0x00000010	
+	#define SOLID_BOUNDARY_NODE0	0x00000020	// Solid boundary node in unfouled domain
+	#define NESW_BOUNDARY_NODE0		0x00000040  // NESW_BOUNDARY_NODE in unfouled domain
+	#define BOUNDARY_NODE0			0x00000080  // BOUNDARY_NODE in unfouled domain
+
+	#define E_BOUND					0x00000100
+	#define W_BOUND					0x00000200
+	#define N_BOUND					0x00000400
+	#define S_BOUND					0x00000800
+	#define NE_BOUND				0x00001000
+	#define SW_BOUND				0x00002000
+	#define SE_BOUND				0x00004000
+	#define NW_BOUND				0x00008000
+	#define E_BOUND_T1				0x00010000
+	#define W_BOUND_T1				0x00020000
+	#define N_BOUND_T1				0x00040000
+	#define S_BOUND_T1				0x00080000
+	#define NE_BOUND_T1				0x00100000
+	#define SW_BOUND_T1				0x00200000
+	#define SE_BOUND_T1				0x00400000
+	#define NW_BOUND_T1				0x00800000
+	#define E_BOUND_T2				0x01000000
+	#define W_BOUND_T2				0x02000000
+	#define N_BOUND_T2				0x04000000
+	#define S_BOUND_T2				0x08000000
+	#define NE_BOUND_T2				0x10000000
+	#define SW_BOUND_T2				0x20000000
+	#define SE_BOUND_T2				0x40000000
+	#define NW_BOUND_T2				0x80000000
+
+	#define M_FOUL_NODE				0x00000009  // M0_FLUID_NODE | M_SOLID_NODE
+	#define NESW_BOUNDARY_NODE		0x00000F00  // E_BOUND | W_BOUND | N_BOUND | S_BOUND
+	#define FD_BOUNDARY_NODE		0x00000F10	//SOLID_BOUNDARY_NODE | NESW_BOUNDARY_NODE
+	#define BOUNDARY_NODE			0xFFFFFF00
+	#define FD_BOUNDARY_NODE0		0x00000060	//SOLID_BOUNDARY_NODE0 | NESW_BOUNDARY_NODE0
 #endif
 
+// Resets node originally set as M0_FLUID_NODE to M0_SOLID_NODE
+// These are mutually exclusive, so the M0_FLUID_NODE bit must be set
+// to zero along with M0_SOLID_NODE bit being set to 1.
+#define RESET_NODE_TO_M0_SOLID(nodeVal)		nodeVal &= !M0_FLUID_NODE;\
+											nodeVal |= M0_SOLID_NODE;
 
-
-// vls.M flag values 
-#define M_SOLID_NODE	0x1
-#define M_FLUID_NODE	0x2
-#define M0_SOLID_NODE	0x4
-#define M0_FLUID_NODE	0x8
-#define M_FOUL_NODE		0x9
-
-
+// Converts node that is currently tagged as M_FLUID_NODE
+// to a M_SOLID_NODE. These are mutually exclusive, so the
+// M_FLUID_NODE bit must be set to zero along with 
+// M_SOLID_NODE bit being set to 1.
+#define RESET_NODE_TO_M_SOLID(nodeVal)		nodeVal &= !M_FLUID_NODE;\
+											nodeVal |= M_SOLID_NODE;
 
 
 
@@ -549,6 +581,9 @@
 #define ERROR_IN_TIMEDATA_ARRAY 							-117
 #define ERROR_IN_LOGGER										-118
 #define ERROR_INITIALIZING_VFD								-119
+#define ERROR_INITIALIZING_VLB								-120
+#define ERROR_INITIALIZING_CSR_CLASS						-121
+
 
 #ifdef _DEBUG
 
@@ -573,6 +608,16 @@
 
 #define getGlobalSizeMacro(actSize, wgSize)	\
 	((int)ceil((double)actSize / (double)wgSize)* (int)wgSize)
+
+
+#ifdef IN_KERNEL_IBB
+	#define NTYPE_TYPE int	// needs to be int to store all bitfields
+#else
+	#define NTYPE_TYPE cl_short
+#endif
+
+
+
 
 #endif // !defined(__CONSTDEF_H__INCLUDED_)
 

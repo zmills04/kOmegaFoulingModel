@@ -148,6 +148,9 @@ std::string ReduceGenerator::getGenericName(reduceType redtype_)
 	else if (redtype_ == Sqr) {
 		namestr = "Sqr";
 	}
+	else if (redtype_ == SumNType) {
+		namestr = "SumNType";
+	}
 	else {
 		namestr = "";
 	}
@@ -243,6 +246,15 @@ ReduceGenerator::hashResult ReduceGenerator::addGenericReduce(reduceType redtype
 	}
 	else if (redtype_ == Sqr) {
 		operstr = "(input[stride]*input[stride]) + (input[stride+1]*input[stride+1]);";
+	}
+	else if (redtype_ == SumNType)
+	{
+		// if not using in_kernel_ibb, the input is a short and output is an int,
+		// so need to specifically set input as a short instread of an ftype.
+#ifndef IN_KERNEL_IBB
+		inputstr = "__global short *__restrict__ input,";
+#endif
+		operstr = "((input[stride] & M_FLUID_NODE) ? 1 : 0) + ((input[stride+1] & M_FLUID_NODE) ? 1 : 0);";
 	}
 	else {
 		Gen_Error_Msg(-1593, "tried to create a BaseRed kernel with incorrect type");
@@ -495,6 +507,7 @@ __local FTYPE *sdata)
 #undef WG_SIZE
 #undef FTYPE
 )";
+
 
 
 

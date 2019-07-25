@@ -14,14 +14,11 @@ __kernel void Update_kOmega_Diffusivities(__global int *__restrict__ map,
 	__global double *__restrict__ iF1,
 	__global double *__restrict__ idkdxy,
 	__global double *__restrict__ irho,
-#ifdef USING_THERMAL_SOLVER
-	__global double* __restrict__ iAlphat,
-#endif
+	__global double* __restrict__ dXcur
 #ifndef DEBUG_ARRAYS
-	__global double *__restrict__ dXcur)
+	)
 #else
-	__global double *__restrict__ dXcur,
-	__global double *__restrict__ DebugArrs)
+	, __global double *__restrict__ DebugArrs)
 #endif
 {
 	int i = get_global_id(0);
@@ -32,9 +29,13 @@ __kernel void Update_kOmega_Diffusivities(__global int *__restrict__ map,
 	int gid = i + CHANNEL_LENGTH_FULL*j;
 	const int type = map[gid];
 	if ((type & M_SOLID_NODE)) { return; }
-	
-	double Xe_coeff = dXcur[gid], Xw_coeff = dXcur[gid + DIST_SIZE], Xc_coeff = dXcur[gid + DIST_SIZE * 2];
-	double Yn_coeff = dXcur[gid + DIST_SIZE * 3], Ys_coeff = dXcur[gid + DIST_SIZE * 4], Yc_coeff = dXcur[gid + DIST_SIZE * 5];
+
+
+	double dx_e = dXcur[gid], dx_w = dXcur[gid + DIST_SIZE], dx_c = dx_e + dx_w;
+	double dy_n = dXcur[gid + DIST_SIZE * 2], dy_s = dXcur[gid + DIST_SIZE * 3], dy_c = dy_n + dy_s;
+
+	double Xe_coeff = dx_w / (dx_e * dx_c), Xw_coeff = -dx_e / (dx_w * dx_c), Xc_coeff = (dx_e - dx_w) / (dx_e * dx_w);
+	double Yn_coeff = dy_s / (dy_n * dy_c), Ys_coeff = -dy_n / (dy_s * dy_c), Yc_coeff = (dy_n - dy_s) / (dy_n * dy_s);
 
 	int gidw = (i > 0) ? gid - 1 : (CHANNEL_LENGTH - 1 + j*CHANNEL_LENGTH_FULL);
 	int gide = (i < CHANNEL_LENGTH - 1) ? gid + 1 : (j*CHANNEL_LENGTH_FULL);
@@ -73,10 +74,6 @@ __kernel void Update_kOmega_Diffusivities(__global int *__restrict__ map,
 
 	sigma = KO_SIGMA_O1*F1val + KO_SIGMA_O2*(1. - F1val);
 	iDo[gid] = MU_NUMBER + sigma*nutval;
-
-#ifdef USING_THERMAL_SOLVER
-	iAlphat[gid] = nutval / PR_TURB_NUMBER;
-#endif
 
 }
 
@@ -159,34 +156,43 @@ __kernel void Update_kOmega_Diffusivities(__global int *__restrict__ map,
 //		to a neighbor in the solid to the b array as there would be no corresponding element
 //		in the sparse matrix in the case of no wall boundary nodes being "solved" for.
 
+// TODO (IN PROGRESS): set c coefficient to 1 and other coefficients, element in b vector, and element in nut array
+//		to 0 when node changes from fluid to solid (fouls). After doing this, the kernel can return
+//		at beginning when the node is solid and will no longer need to be handled toward the end of
+//      kernel. The kernel will still need to handle omega for fluid boundary nodes even after this
+//		change is made.  
+		//		THE KERNEL BELOW HAS MADE THE CHANGES TO IMPLEMENT THIS
+		//		AND THE FUNCTION UPDATEM IN LSKERNELS SETS THE ELEMENTS TO 0 WHEN IT CHANGES. OLDER
+		//		IMPLEMENTATION IS COMMENTED OUT BELOW THIS KERNEL
+				
 
-//// LEFT OFF HERE, STILL HAVE NOT UPDATED THE SETTING OF ARGUMENTS FOR THIS KERNEL
-__kernel void Update_kOmega_Coeffs_Implicit(__global int *__restrict__ IndArr,
-	__global double *__restrict__ iK,
-	__global double *__restrict__ iO,
-	__global double *__restrict__ iNut,
-	__global double *__restrict__ iDk,
-	__global double *__restrict__ iDo,
-	__global double *__restrict__ iF1,
-	__global double *__restrict__ idkdo,
-	__global double *__restrict__ iSxy,
-	__global double *__restrict__ irho,
-	__global double *__restrict__ ivx,
-	__global double *__restrict__ ivy,
-	__global double *__restrict__ kAmat,
-	__global double *__restrict__ oAmat,
-	__global double *__restrict__ kbvec,
-	__global double *__restrict__ obvec,
-	__global double *__restrict__ dXcur,
+
+__kernel void Update_kOmega_Coeffs_Implicit(__global int* __restrict__ IndArr,
+	__global double* __restrict__ iK,
+	__global double* __restrict__ iO,
+	__global double* __restrict__ iNut,
+	__global double* __restrict__ iDk,
+	__global double* __restrict__ iDo,
+	__global double* __restrict__ iF1,
+	__global double* __restrict__ idkdo,
+	__global double* __restrict__ iSxy,
+	__global double* __restrict__ irho,
+	__global double* __restrict__ ivx,
+	__global double* __restrict__ ivy,
+	__global double* __restrict__ kAmat,
+	__global double* __restrict__ oAmat,
+	__global double* __restrict__ kbvec,
+	__global double* __restrict__ obvec,
+	__global double* __restrict__ dXcur,
 	__global double* __restrict__ WallD,
 	__global int* __restrict__ ssIndMap,
 	__global double* __restrict__ wallShearArr,
 	__global NTYPE_TYPE* __restrict__ Map,
+	double DTFD
 #ifndef DEBUG_ARRAYS
-	double DTFD, double TurbInts, double TurbLScale_Inv)
+)
 #else
-	double DTFD, double TurbInts, double TurbLScale_Inv,
-	__global double *__restrict__ DebugArrs)
+	, __global double* __restrict__ DebugArrs)
 #endif
 {
 
@@ -195,23 +201,29 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int *__restrict__ IndArr,
 	if (i >= CHANNEL_LENGTH || j >= CHANNEL_HEIGHT)
 		return;
 
-	int gid = i + CHANNEL_LENGTH_FULL*j;
+	int gid = i + CHANNEL_LENGTH_FULL * j;
+	NTYPE_TYPE ntype = Map[gid];
 
-	int Cind = IndArr[gid];
-	if (Cind < 0)
+	if (ntype & M_SOLID_NODE)
 		return;
+	int Cind = IndArr[gid];
+
 
 	int Eind = IndArr[gid + DIST_SIZE], Wind = IndArr[gid + DIST_SIZE * 2];
 	int Nind = IndArr[gid + DIST_SIZE * 3], Sind = IndArr[gid + DIST_SIZE * 4];
 
+	double dx_e = dXcur[gid], dx_w = dXcur[gid + DIST_SIZE], dx_c = dx_e + dx_w;
+	double dy_n = dXcur[gid + DIST_SIZE * 2], dy_s = dXcur[gid + DIST_SIZE * 3], dy_c = dy_n + dy_s;
 
-	double Xe_coeff = dXcur[gid], Xw_coeff = dXcur[gid + DIST_SIZE], Xc_coeff = dXcur[gid + DIST_SIZE * 2];
-	double Yn_coeff = dXcur[gid + DIST_SIZE * 3], Ys_coeff = dXcur[gid + DIST_SIZE * 4], Yc_coeff = dXcur[gid + DIST_SIZE * 5];
-	double Xe2_coeff = dXcur[gid + DIST_SIZE * 6], Xw2_coeff = dXcur[gid + DIST_SIZE * 7], Xc2_coeff = dXcur[gid + DIST_SIZE * 8];
-	double Yn2_coeff = dXcur[gid + DIST_SIZE * 9], Ys2_coeff = dXcur[gid + DIST_SIZE * 10], Yc2_coeff = dXcur[gid + DIST_SIZE * 11];
+	double Xe_coeff = dx_w / (dx_e * dx_c), Xw_coeff = -dx_e / (dx_w * dx_c), Xc_coeff = (dx_e - dx_w) / (dx_e * dx_w);
+	double Yn_coeff = dy_s / (dy_n * dy_c), Ys_coeff = -dy_n / (dy_s * dy_c), Yc_coeff = (dy_n - dy_s) / (dy_n * dy_s);
 
-	int gidw = (i > 0) ? gid - 1 : (CHANNEL_LENGTH - 1 + j*CHANNEL_LENGTH_FULL);
-	int gide = (i < CHANNEL_LENGTH - 1) ? gid + 1 : (j*CHANNEL_LENGTH_FULL);
+
+	double Xe2_coeff = 2. / (dx_e * dx), Xw2_coeff = 2. / (dx_w * dx), Xc2_coeff = -2. / (dx_e * dx_w);
+	double Yn2_coeff = 2. / (dy_n * dy), Ys2_coeff = 2. / (dy_s * dy), Yc2_coeff = -2. / (dy_n * dy_s);
+
+	int gidw = (i > 0) ? gid - 1 : (CHANNEL_LENGTH - 1 + j * CHANNEL_LENGTH_FULL);
+	int gide = (i < CHANNEL_LENGTH - 1) ? gid + 1 : (j * CHANNEL_LENGTH_FULL);
 
 	double diffk_w = iDk[gidw], diffo_w = iDo[gidw]; ///will never be out of bounds because node (0,0) is always solid
 	double diffk_e = iDk[gide], diffo_e = iDo[gide];
@@ -219,7 +231,7 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int *__restrict__ IndArr,
 	double diffk_s = iDk[gid - CHANNEL_LENGTH_FULL], diffo_s = iDo[gid - CHANNEL_LENGTH_FULL];
 
 	double diffk = iDk[gid], diffo = iDo[gid];
-	
+
 	double diffk_dx = Xe_coeff * diffk_e + Xw_coeff * diffk_w + Xc_coeff * diffk;
 	double diffo_dx = Xe_coeff * diffo_e + Xw_coeff * diffo_w + Xc_coeff * diffo;
 	double diffk_dy = Yn_coeff * diffk_n + Ys_coeff * diffk_s + Yc_coeff * diffk;
@@ -240,19 +252,19 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int *__restrict__ IndArr,
 	double Ux = ivx[gid], Uy = ivy[gid], Rho = irho[gid];
 
 	double Jx_omega = Ux - diffo_dx - idkdo[gid];
-	double Jy_omega = Uy - diffo_dy - idkdo[gid+DIST_SIZE];
+	double Jy_omega = Uy - diffo_dy - idkdo[gid + DIST_SIZE];
 
 	double Jx_k = Ux - diffk_dx;
 	double Jy_k = Uy - diffk_dy;
 
-	double omegaval = iO[gid], kval = iK[gid]; 
+	double omegaval = iO[gid], kval = iK[gid];
 	double F1val = iF1[gid], nutval = iNut[gid];
 	double Sxx = iSxy[gid], Sxy = iSxy[gid + DIST_SIZE], Syy = iSxy[gid + 2 * DIST_SIZE];
-	double Pk = 2. * nutval * (Sxx * Sxx + Syy * Syy + 2. * Sxy * Sxy) - 
+	double Pk = 2. * nutval * (Sxx * Sxx + Syy * Syy + 2. * Sxy * Sxy) -
 		2. / 3. * kval * Rho * (Sxx + Syy);
-	
-	Pk = min(Pk, 10.*KO_BETA_STAR*kval*omegaval);
-	double gammaval = (F1val*KO_GAMMA1 + (1. - F1val)*KO_GAMMA2) / nutval;
+
+	Pk = min(Pk, 10. * KO_BETA_STAR * kval * omegaval);
+	double gammaval = (F1val * KO_GAMMA1 + (1. - F1val) * KO_GAMMA2) / nutval;
 
 
 	double Sc = -KO_BETA_STAR * omegaval;
@@ -266,14 +278,11 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int *__restrict__ IndArr,
 	DBGARR(9, Sc);
 #endif
 
-
+	// C coefficient set to 1 while remaining coefficients and value in b vec
+	// are set to 0 when node becomes fouled, so these nodes will have kernel
+	// return at beginning and dont need to be dealt with.
 	
-	// If Node is a solid: 
-	//		all coefficients set to zero except for Kc and Wc which are set to 1.
-	//		current omega and kappa values read from array = 0, leaving
-	//		equation at node as 1*new_value = old_value = 0
-
-	// if Node is at a boundary:
+	// if Node is at a boundary inside the fluid domain:
 	//		all coefficients for omega are set to zero except for Wc which is set to 1.
 	//		The current value for omega is replaced with wall value calculated according
 	//		to "The SST Turbulence Model with Improved Wall Treatment for Heat 
@@ -281,27 +290,16 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int *__restrict__ IndArr,
 	//		at node at 1*new_value = replace old_value = omega(yplus).
 	//		k equations are left as is, since a dirichlet BC suffices for k eqn.
 
-	// To set coefficients to zero, a variable alterVal is set to 0 or 1 and all coefficients
-	// are multiplied by it. Rather than multiplying alterVal*DTFD during the calculation of
-	// each coefficient, DTFD is updated by multiplying it by alterVal once and used in each
-	// subsequent coefficient calculation.
-	NTYPE_TYPE ntype = Map[gid];
-	double alterVal = (ntype & M_SOLID_NODE) ? 0. : 1.;
-	DTFD *= alterVal;
-	Sc *= alterVal;
 	
 	double Kc = 1. + DTFD * (Jx_k * Xc_coeff + Jy_k * Yc_coeff - diffk * (Xc2_coeff + Yc2_coeff)) - Sc;
-	double Ke = DTFD * (Jx_k*Xe_coeff - diffk * Xe2_coeff);
-	double Kw = DTFD * (Jx_k*Xw_coeff - diffk * Xw2_coeff);
-	double Kn = DTFD * (Jy_k*Yn_coeff - diffk * Yn2_coeff);
-	double Ks = DTFD * (Jy_k*Ys_coeff - diffk * Ys2_coeff);
-	double Ksrc = kval + DTFD*Pk;
-	
-	// Update omegaval, alterVal and DTFD for calculation of omega
-	// coefficients if node is on the boundary.
+	double Ke = DTFD * (Jx_k * Xe_coeff - diffk * Xe2_coeff);
+	double Kw = DTFD * (Jx_k * Xw_coeff - diffk * Xw2_coeff);
+	double Kn = DTFD * (Jy_k * Yn_coeff - diffk * Yn2_coeff);
+	double Ks = DTFD * (Jy_k * Ys_coeff - diffk * Ys2_coeff);
+	double Ksrc = kval + DTFD * Pk;
+
 	if (ntype & NESW_BOUNDARY_NODE)
 	{
-		alterVal = 0.;
 		DTFD = 0.;
 		Sc = 0.;
 		// get yplus value = sqrt(tau_wall/rho)*wall_distance/nu
@@ -313,11 +311,11 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int *__restrict__ IndArr,
 	}
 
 	double Wc = 1. + DTFD * (Jx_omega * Xc_coeff + Jy_omega * Yc_coeff - diffo * (Xc2_coeff + Yc2_coeff)) - Sc;
-	double We = DTFD * (Jx_omega*Xe_coeff - diffo * Xe2_coeff);
-	double Ww = DTFD * (Jx_omega*Xw_coeff - diffo * Xw2_coeff);
-	double Wn = DTFD * (Jy_omega*Yn_coeff - diffo * Yn2_coeff);
-	double Ws = DTFD * (Jy_omega*Ys_coeff - diffo * Ys2_coeff);
-	double Wsrc = omegaval + DTFD*(gammaval * Pk);
+	double We = DTFD * (Jx_omega * Xe_coeff - diffo * Xe2_coeff);
+	double Ww = DTFD * (Jx_omega * Xw_coeff - diffo * Xw2_coeff);
+	double Wn = DTFD * (Jy_omega * Yn_coeff - diffo * Yn2_coeff);
+	double Ws = DTFD * (Jy_omega * Ys_coeff - diffo * Ys2_coeff);
+	double Wsrc = omegaval + DTFD * (gammaval * Pk);
 
 #ifdef DEBUG_ARRAYS
 	DBGARR(10, Kc);
@@ -335,68 +333,279 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int *__restrict__ IndArr,
 #endif
 
 
+	kAmat[Cind] = Kc;
+	oAmat[Cind] = Wc;
 
-//	if (Sind >= 0 && Wind >= 0 && Eind >= 0 && Nind >= 0)
-//	{
-		kAmat[Sind] = Ks;
-		oAmat[Sind] = Ws;
-		kAmat[Wind] = Kw;
-		oAmat[Wind] = Ww;
-		kAmat[Cind] = Kc;
-		oAmat[Cind] = Wc;
-		kAmat[Eind] = Ke;
-		oAmat[Eind] = We;
-		kAmat[Nind] = Kn;
-		oAmat[Nind] = Wn;
+	kbvec[gid] = Ksrc;
+	obvec[gid] = Wsrc;
 
-		kbvec[gid] = Ksrc;
-		obvec[gid] = Wsrc;
-//	}
-	//else
-	//{
-	//	//if (Sind < 0)
-	//	//{
-	//	//	kAmat[Cind] = Kc + Ks;
-	//	//	kAmat[Nind] = Kn;
-	//	//	oAmat[Nind] = 0.;
-	//	//}
-	//	//else
-	//	//{
-	//	//	oAmat[Sind] = 0.;
-	//	//	kAmat[Sind] = Ks;
-	//	//	kAmat[Cind] = Kc + Kn;
-	//	//}
+	// Function will return for any solid node,
+	// so no need to test before writing.
+	kAmat[Sind] = Ks;
+	kAmat[Wind] = Kw;
+	kAmat[Eind] = Ke;
+	kAmat[Nind] = Kn;
 
-	//	//
-	//	//kAmat[Wind] = Kw;
-	//	//oAmat[Wind] = 0.;
-	//	//oAmat[Cind] = 1.;
-	//	//kAmat[Eind] = Ke;
-	//	//oAmat[Eind] = 0.;
-
-	//	//if (Sind < 0)
-	//	//{
-	//	//	kAmat[Nind] = 1e-3;
-	//	//	oAmat[Nind] = 1e-3;
-	//	//}
-	//	//else
-	//	//{
-	//	//	kAmat[Sind] = 1e-3;
-	//	//	oAmat[Sind] = 1e-3;
-	//	//}
-
-	//	//kAmat[Wind] = 1e-3;
-	//	//kAmat[Eind] = 1e-3;
-
-	//	kAmat[Cind] = 1.;
-	//	oAmat[Cind] = 1.;
-	//	
-	//	kbvec[gid] = K_WALL_VALUE;
-	//	obvec[gid] = OMEGA_WALL_VALUE;
-	//}
-
-
+	oAmat[Sind] = Ws;
+	oAmat[Wind] = Ww;
+	oAmat[Eind] = We;
+	oAmat[Nind] = Wn;
 }
+
+//__kernel void Update_kOmega_Coeffs_Implicit(__global int *__restrict__ IndArr,
+//	__global double *__restrict__ iK,
+//	__global double *__restrict__ iO,
+//	__global double *__restrict__ iNut,
+//	__global double *__restrict__ iDk,
+//	__global double *__restrict__ iDo,
+//	__global double *__restrict__ iF1,
+//	__global double *__restrict__ idkdo,
+//	__global double *__restrict__ iSxy,
+//	__global double *__restrict__ irho,
+//	__global double *__restrict__ ivx,
+//	__global double *__restrict__ ivy,
+//	__global double *__restrict__ kAmat,
+//	__global double *__restrict__ oAmat,
+//	__global double *__restrict__ kbvec,
+//	__global double *__restrict__ obvec,
+//	__global double *__restrict__ dXcur,
+//	__global double* __restrict__ WallD,
+//	__global int* __restrict__ ssIndMap,
+//	__global double* __restrict__ wallShearArr,
+//	__global NTYPE_TYPE* __restrict__ Map,
+//	double DTFD
+//#ifndef DEBUG_ARRAYS
+//	)
+//#else
+//	, __global double *__restrict__ DebugArrs)
+//#endif
+//{
+//
+//	int i = get_global_id(0);
+//	int j = get_global_id(1);
+//	if (i >= CHANNEL_LENGTH || j >= CHANNEL_HEIGHT)
+//		return;
+//
+//	int gid = i + CHANNEL_LENGTH_FULL*j;
+//
+//	int Cind = IndArr[gid];
+//	if (Cind < 0)
+//		return;
+//
+//	int Eind = IndArr[gid + DIST_SIZE], Wind = IndArr[gid + DIST_SIZE * 2];
+//	int Nind = IndArr[gid + DIST_SIZE * 3], Sind = IndArr[gid + DIST_SIZE * 4];
+//
+//	double dx_e = dXcur[gid], dx_w = dXcur[gid + DIST_SIZE], dx_c = dx_e + dx_w;
+//	double dy_n = dXcur[gid + DIST_SIZE * 2], dy_s = dXcur[gid + DIST_SIZE * 3], dy_c = dy_n + dy_s;
+//
+//	double Xe_coeff = dx_w / (dx_e * dx_c), Xw_coeff = -dx_e / (dx_w * dx_c), Xc_coeff = (dx_e - dx_w) / (dx_e * dx_w);
+//	double Yn_coeff = dy_s / (dy_n * dy_c), Ys_coeff = -dy_n / (dy_s * dy_c), Yc_coeff = (dy_n - dy_s) / (dy_n * dy_s);
+//
+//
+//	double Xe2_coeff = 2. / (dx_e * dx), Xw2_coeff = 2. / (dx_w * dx), Xc2_coeff = -2. / (dx_e * dx_w);
+//	double Yn2_coeff = 2. / (dy_n * dy), Ys2_coeff = 2. / (dy_s * dy), Yc2_coeff = -2. / (dy_n * dy_s);
+//
+//	int gidw = (i > 0) ? gid - 1 : (CHANNEL_LENGTH - 1 + j*CHANNEL_LENGTH_FULL);
+//	int gide = (i < CHANNEL_LENGTH - 1) ? gid + 1 : (j*CHANNEL_LENGTH_FULL);
+//
+//	double diffk_w = iDk[gidw], diffo_w = iDo[gidw]; ///will never be out of bounds because node (0,0) is always solid
+//	double diffk_e = iDk[gide], diffo_e = iDo[gide];
+//	double diffk_n = iDk[gid + CHANNEL_LENGTH_FULL], diffo_n = iDo[gid + CHANNEL_LENGTH_FULL];
+//	double diffk_s = iDk[gid - CHANNEL_LENGTH_FULL], diffo_s = iDo[gid - CHANNEL_LENGTH_FULL];
+//
+//	double diffk = iDk[gid], diffo = iDo[gid];
+//	
+//	double diffk_dx = Xe_coeff * diffk_e + Xw_coeff * diffk_w + Xc_coeff * diffk;
+//	double diffo_dx = Xe_coeff * diffo_e + Xw_coeff * diffo_w + Xc_coeff * diffo;
+//	double diffk_dy = Yn_coeff * diffk_n + Ys_coeff * diffk_s + Yc_coeff * diffk;
+//	double diffo_dy = Yn_coeff * diffo_n + Ys_coeff * diffo_s + Yc_coeff * diffo;
+//
+//
+//
+//#ifdef DEBUG_ARRAYS
+//	DBGARR(0, diffk_dx);
+//	DBGARR(1, diffk_dy);
+//	DBGARR(2, diffo_dx);
+//	DBGARR(3, diffo_dy);
+//#endif
+//
+//
+//
+//
+//	double Ux = ivx[gid], Uy = ivy[gid], Rho = irho[gid];
+//
+//	double Jx_omega = Ux - diffo_dx - idkdo[gid];
+//	double Jy_omega = Uy - diffo_dy - idkdo[gid+DIST_SIZE];
+//
+//	double Jx_k = Ux - diffk_dx;
+//	double Jy_k = Uy - diffk_dy;
+//
+//	double omegaval = iO[gid], kval = iK[gid]; 
+//	double F1val = iF1[gid], nutval = iNut[gid];
+//	double Sxx = iSxy[gid], Sxy = iSxy[gid + DIST_SIZE], Syy = iSxy[gid + 2 * DIST_SIZE];
+//	double Pk = 2. * nutval * (Sxx * Sxx + Syy * Syy + 2. * Sxy * Sxy) - 
+//		2. / 3. * kval * Rho * (Sxx + Syy);
+//	
+//	Pk = min(Pk, 10.*KO_BETA_STAR*kval*omegaval);
+//	double gammaval = (F1val*KO_GAMMA1 + (1. - F1val)*KO_GAMMA2) / nutval;
+//
+//
+//	double Sc = -KO_BETA_STAR * omegaval;
+//
+//#ifdef DEBUG_ARRAYS
+//	DBGARR(4, Jx_omega);
+//	DBGARR(5, Jy_omega);
+//	DBGARR(6, Jx_k);
+//	DBGARR(7, Jy_k);
+//	DBGARR(8, Pk);
+//	DBGARR(9, Sc);
+//#endif
+//
+//
+//	
+//	// If Node is a solid boundary node: 
+//	//		all coefficients set to zero except for Kc and Wc which are set to 1.
+//	//		current omega and kappa values read from array = 0, leaving
+//	//		equation at node as 1*new_value = old_value = 0
+//
+//	// if Node is at a boundary:
+//	//		all coefficients for omega are set to zero except for Wc which is set to 1.
+//	//		The current value for omega is replaced with wall value calculated according
+//	//		to "The SST Turbulence Model with Improved Wall Treatment for Heat 
+//	//		Transfer Predictions in Gas Turbines" paper, leaving equation
+//	//		at node at 1*new_value = replace old_value = omega(yplus).
+//	//		k equations are left as is, since a dirichlet BC suffices for k eqn.
+//
+//	// To set coefficients to zero, a variable alterVal is set to 0 or 1 and all coefficients
+//	// are multiplied by it. Rather than multiplying alterVal*DTFD during the calculation of
+//	// each coefficient, DTFD is updated by multiplying it by alterVal once and used in each
+//	// subsequent coefficient calculation.
+//	NTYPE_TYPE ntype = Map[gid];
+//	double alterVal = (ntype & SOLID_BOUNDARY_NODE) ? 0. : 1.;
+//	DTFD *= alterVal;
+//	Sc *= alterVal;
+//	
+//	double Kc = 1. + DTFD * (Jx_k * Xc_coeff + Jy_k * Yc_coeff - diffk * (Xc2_coeff + Yc2_coeff)) - Sc;
+//	double Ke = DTFD * (Jx_k*Xe_coeff - diffk * Xe2_coeff);
+//	double Kw = DTFD * (Jx_k*Xw_coeff - diffk * Xw2_coeff);
+//	double Kn = DTFD * (Jy_k*Yn_coeff - diffk * Yn2_coeff);
+//	double Ks = DTFD * (Jy_k*Ys_coeff - diffk * Ys2_coeff);
+//	double Ksrc = kval + DTFD*Pk;
+//	
+//	// Update omegaval, alterVal and DTFD for calculation of omega
+//	// coefficients if node is on the boundary.
+//	if (ntype & NESW_BOUNDARY_NODE)
+//	{
+//		alterVal = 0.;
+//		DTFD = 0.;
+//		Sc = 0.;
+//		// get yplus value = sqrt(tau_wall/rho)*wall_distance/nu
+//		double fricVel = sqrt(fabs(wallShearArr[ssIndMap[gid]]) / Rho);
+//		double yplus = WallD[gid] * fricVel / MU_NUMBER;
+//		double omegaVis = (6. * MU_NUMBER / 0.75) / pown(yplus);
+//		double omegaLog = (1. / (0.3 * KO_KAPPA)) * fricVel / yplus;
+//		omegaval = sqrt(omegaVis * omegaVis + omegaLog * omegaLog);
+//	}
+//
+//	double Wc = 1. + DTFD * (Jx_omega * Xc_coeff + Jy_omega * Yc_coeff - diffo * (Xc2_coeff + Yc2_coeff)) - Sc;
+//	double We = DTFD * (Jx_omega*Xe_coeff - diffo * Xe2_coeff);
+//	double Ww = DTFD * (Jx_omega*Xw_coeff - diffo * Xw2_coeff);
+//	double Wn = DTFD * (Jy_omega*Yn_coeff - diffo * Yn2_coeff);
+//	double Ws = DTFD * (Jy_omega*Ys_coeff - diffo * Ys2_coeff);
+//	double Wsrc = omegaval + DTFD*(gammaval * Pk);
+//
+//#ifdef DEBUG_ARRAYS
+//	DBGARR(10, Kc);
+//	DBGARR(11, Ke);
+//	DBGARR(12, Kw);
+//	DBGARR(13, Kn);
+//	DBGARR(14, Ks);
+//	DBGARR(15, Ksrc);
+//	DBGARR(16, Wc);
+//	DBGARR(17, We);
+//	DBGARR(18, Ww);
+//	DBGARR(19, Wn);
+//	DBGARR(20, Ws);
+//	DBGARR(21, Wsrc);
+//#endif
+//
+//
+//
+////	if (Sind >= 0 && Wind >= 0 && Eind >= 0 && Nind >= 0)
+////	{
+//		// These 4 are always set regarless of the node type
+//		kAmat[Cind] = Kc;
+//		oAmat[Cind] = Wc;
+//		
+//		kbvec[gid] = Ksrc;
+//		obvec[gid] = Wsrc;
+//
+//		// if a fluid node, set all k coefficients
+//		if ((ntype & M_FLUID_NODE))
+//		{
+//			kAmat[Sind] = Ks;
+//			kAmat[Wind] = Kw;
+//			kAmat[Eind] = Ke;
+//			kAmat[Nind] = Kn;
+//		}
+//
+//		// if not a boundary node (either solid or fluid),
+//		// set all omega coefficients
+//		if ((ntype & FD_BOUNDARY_NODE) == 0)
+//		{
+//			oAmat[Sind] = Ws;
+//			oAmat[Wind] = Ww;
+//			oAmat[Eind] = We;
+//			oAmat[Nind] = Wn;
+//		}
+//		
+//		
+//		//	}
+//	//else
+//	//{
+//	//	//if (Sind < 0)
+//	//	//{
+//	//	//	kAmat[Cind] = Kc + Ks;
+//	//	//	kAmat[Nind] = Kn;
+//	//	//	oAmat[Nind] = 0.;
+//	//	//}
+//	//	//else
+//	//	//{
+//	//	//	oAmat[Sind] = 0.;
+//	//	//	kAmat[Sind] = Ks;
+//	//	//	kAmat[Cind] = Kc + Kn;
+//	//	//}
+//
+//	//	//
+//	//	//kAmat[Wind] = Kw;
+//	//	//oAmat[Wind] = 0.;
+//	//	//oAmat[Cind] = 1.;
+//	//	//kAmat[Eind] = Ke;
+//	//	//oAmat[Eind] = 0.;
+//
+//	//	//if (Sind < 0)
+//	//	//{
+//	//	//	kAmat[Nind] = 1e-3;
+//	//	//	oAmat[Nind] = 1e-3;
+//	//	//}
+//	//	//else
+//	//	//{
+//	//	//	kAmat[Sind] = 1e-3;
+//	//	//	oAmat[Sind] = 1e-3;
+//	//	//}
+//
+//	//	//kAmat[Wind] = 1e-3;
+//	//	//kAmat[Eind] = 1e-3;
+//
+//	//	kAmat[Cind] = 1.;
+//	//	oAmat[Cind] = 1.;
+//	//	
+//	//	kbvec[gid] = K_WALL_VALUE;
+//	//	obvec[gid] = OMEGA_WALL_VALUE;
+//	//}
+//
+//
+//}
 
 #undef DBGARR
 
@@ -475,7 +684,7 @@ double findMinDist(int2 botSearchInds, int2 topSearchInds, double2* nLoc,
 
 
 __kernel void updateWallD(__global double *__restrict__ WallD,
-	__global int* __restrict__ lsMap,
+	__global ushort* __restrict__ lsMap,
 	__global double2* __restrict__ Cvals,
 	__global NTYPE_TYPE* __restrict__ nType)
 {
