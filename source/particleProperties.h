@@ -13,6 +13,8 @@
 #define AFX_PARTICLEPROPERTIES_H__INCLUDED_
 
 #include "StdAfx.h"
+#include "Kernels.h"
+#include "Array.h"
 #include "particleStructs.h"
 
 #pragma once

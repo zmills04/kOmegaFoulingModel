@@ -15,7 +15,10 @@
 #endif // _MSC_VER > 1000
 
 #include "StdAfx.h"
+#include "Kernels.h"
+#include "Array.h"
 #include "clProblem.h"
+#include "foulStructs.h"
 
 
 
@@ -36,13 +39,17 @@ public:
 	std::function<void(void)> loadParamsPtr;
 
 
-	clVariablesFL()
+	clVariablesFL() : BLdep_tot("blDepTot"), BLdep_tot_temp("blDepTotTemp"),
+		IO_ind_dist("ioIndDist"), FI("FoulI"), RI("RampI")
 	{
 		loadParamsPtr = std::bind(&clVariablesFL::loadParams, this);
 	};
+
+
 	virtual ~clVariablesFL()
 	{
 	};
+
 
 
 
@@ -55,9 +62,6 @@ public:
 	////////////////////////////////////////////////////////////////////////////
 
 	Kernel update_FL_kernel[4];
-	Kernel update_LS_kernel[5];
-	Kernel update_LB_kernel[2];
-	Kernel update_FD_kernel;
 	Kernel update_TR_kernel[5];
 	Kernel update_GL_kernel;
 
@@ -69,12 +73,13 @@ public:
 	//////////////                                               ///////////////
 	////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////
-			//	Array1DFI FI;
-	Array1DRI RI;
+	
+	foulI FI;
+	rampI RI;
 	Array2Dd BLdep_tot, BLdep_tot_temp;
 	Array1Dd IO_ind_dist;
-	Array1Dd Sum_M_temp;
-	Array1Dd Debug_out;
+	//Array1Dd Sum_M_temp;
+	//Array1Dd Debug_out;
 	
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////                   Data Arrays                 ///////////////
@@ -126,6 +131,8 @@ public:
 	int Smooth_timer, flTimePerSmooth, neighsPerSideSmoothing;
 	int SaveStepNum = 0;
 	double smoothingPct;
+	int updateTRActiveFreq;
+	clVariablesTR::kernelType kernelT;
 
 
 	////////////////////////////////////////////////////////////////////////////	
@@ -165,6 +172,9 @@ public:
 
 	// Inititialization function
 	void ini();
+
+	// initialization function for time data array
+	void iniTimeData();
 
 	// Loads parameters passed in yaml parameter file, (also reads in 
 	// restart variables when a run is restarted)
@@ -219,36 +229,31 @@ public:
 	////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////
 
-	void ini_foulI();
-	void ini_IO_vars();//done
+	
 	cl_double2 get_center(cl_double2 P0, cl_double2 P1);
-	void update_FL();
-	void update_FD(cl_event* wait);
-	void update_LS(cl_event* evt);
-	void update_LB();
-	void update_TR(cl_event* wait_fill, int Num_Wnodes_temp);
-	void update_GL();
-	void update();
-	void ini_group_sizes();
-	void save_variables();
-
-	//saves variables necessary for debugging
-	bool test_bounds();
-	bool Restart_Run();
-	double Gaussian_Kernel(double input);
-	void UpdateRestart();
-	void RenameDebug_Files(int dirnumber);
-	void CallRename(char* file, const char* fol);
-
-
-
+	
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////            Initialization Functions           ///////////////
 	////////////////////////////////////////////////////////////////////////////
 
+	void getNumActiveNodes();
+	void iniFoulI();
+	void iniIOVars();//done
+
+
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////              Updating Functions               ///////////////
 	////////////////////////////////////////////////////////////////////////////
+
+	void update();
+	void update_FD(cl_event* wait);
+	void update_FL();
+	void update_GL();
+	void update_LB();
+	void update_LS();
+	void update_TR(cl_event* wait_fill, int Num_Wnodes_temp);
+
+
 
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////               Solving Functions               ///////////////
@@ -263,7 +268,14 @@ public:
 	////////////////////////////////////////////////////////////////////////////
 
 
-
+	//void ini_group_sizes();
+	//void save_variables();
+	////saves variables necessary for debugging
+	//bool test_bounds();
+	//bool Restart_Run();
+	//void UpdateRestart();
+	//void RenameDebug_Files(int dirnumber);
+	//void CallRename(char* file, const char* fol);
 
 
 

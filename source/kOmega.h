@@ -60,8 +60,8 @@ public:
 	Kernel updateWallDKernel;		// updates wall distance array
 
 	// Reduction kernels
-	Reducer<double, ReduceGenerator::Min> minKappa, minOmega;
-	Reducer<double> sumKappa, sumOmega;
+	Reducer<double, double, ReduceGenerator::Min> minKappa, minOmega;
+	Reducer<double, double> sumKappa, sumOmega;
 
 	// Solvers for Kappa and Omega
 	BiCGStabSolver Kappa;

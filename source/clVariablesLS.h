@@ -9,7 +9,11 @@
 #pragma once
 
 #include "StdAfx.h"
-#include "clProblem.h"
+#include "Array.h"
+#include "Kernels.h"
+#include "Reducer.h"
+
+
 
 // TODO: Combine all arrays containing node information, to reduce to as few
 //		as possible. This includes node info in vtr, vfd, vlb and vls.
@@ -40,8 +44,6 @@ public:
 		dXArr("dXArr"), dXArr0("dXArr0"), bFlag("bFlag"), ssArrIndMap("ssIndMap"),
 		lsMap("lsMap"),	ibbDistArr(WORKGROUPSIZE_IBB * 16, "ibbArr", WORKGROUPSIZE_IBB, 3),
 		nTypePrev("nTypePrev")
-
-
 	{
 		loadParamsPtr = std::bind(&clVariablesLS::loadParams, this);
 	};
@@ -73,7 +75,7 @@ public:
 
 
 
-	Reducer<int, ReduceGenerator::SumNType, REDUCE_RESULTS_SIZE, NTYPE_TYPE> sumFluid;
+	Reducer<int, cl_short, ReduceGenerator::SumNType, REDUCE_RESULTS_SIZE> sumFluid;
 
 
 	////////////////////////////////////////////////////////////////////////////
@@ -440,7 +442,8 @@ public:
 	void updatedXArr();
 
 	// updates ls arrays by calling necessary functions on host and device.
-	void updateLS();
+	// moved to vfl
+	//void updateLS();
 
 	// Updates dXArr, IBB arrays and finalizes update of nType array by
 	// calling necessary kernels

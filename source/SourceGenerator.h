@@ -11,6 +11,8 @@
 #pragma once
 
 #include "StdAfx.h"
+#include "Kernels.h"
+#include "Array.h"
 
 
 #ifndef CHECK_KERNEL_STATUS

@@ -40,6 +40,72 @@
 //		this will significantly reduce memory usage
 
 
+
+
+void clVariablesTR::addWeightFunctionToSource(kernelType kerT_, std::string kerName_)
+{
+	std::string ker2Add;
+	switch (kerT_)
+	{
+	case uniformKer:
+	{
+		ker2Add = uniformKerStr;
+		break;
+	}
+	case triangularKer:
+	{
+		ker2Add = triangularKerStr;
+		break;
+	}
+	case parabolicKer:
+	{
+		ker2Add = parabolicKerStr;
+		break;
+	}
+	case quarticKer:
+	{
+		ker2Add = quarticKerStr;
+		break;
+	}
+	case triWeightKer:
+	{
+		ker2Add = triWeightKerStr;
+		break;
+	}
+	case triCubeKer:
+	{
+		ker2Add = triCubeKerStr;
+		break;
+	}
+	case cosineKer:
+	{
+		ker2Add = cosineKerStr;
+		break;
+	}
+	case logisticKer:
+	{
+		ker2Add = logisticKerStr;
+		break;
+	}
+	case sigmoidKer:
+	{
+		ker2Add = sigmoidKerStr;
+		break;
+	}
+	case gaussianKer:
+	{
+		ker2Add = gaussianKerStr;
+		break;
+	}
+	}
+	std::string toReplace = "(REPLACE_NAME)";
+	size_t pos = ker2Add.find(toReplace);
+	ker2Add.replace(pos, toReplace.size(), kerName_);
+	SOURCEINSTANCE->addString2Kernel(ker2Add);
+
+}
+
+
 void clVariablesTR::allocateArrays()
 {
 	trDomainFullSizeX = getGlobalSizeMacro(trDomainSize.x, WORKGROUPSIZE_TR);
@@ -136,7 +202,6 @@ void clVariablesTR::allocateBuffers()
 	parSort.allocateBuffers();
 	wallShear.allocateBuffers();
 	parP.allocateBuffers();
-
 }
 
 void clVariablesTR::createKernels()
@@ -176,6 +241,10 @@ void clVariablesTR::createKernels()
 	trWallParKernel[4].set_size(2 * WORKGROUPSIZE_TR_WALL, WORKGROUPSIZE_TR_WALL);
 
 	//	saveDistsKernel.create_kernel(GetSourceProgram, TRQUEUE_REF, "TR_save_dists");
+
+	glParticles.createKernels();
+	wallShear.createKernels();
+	parSort.createKernels();
 }
 
 void clVariablesTR::fillNodeI(int i, Array2Dd& dist2Center)
@@ -291,12 +360,17 @@ void clVariablesTR::ini()
 		return;
 	}
 
+
+	addWeightFunctionToSource(kernelT,"trWeightFunction");
+	sourceGenerator::SourceInstance()->addFile2Kernel("trKernels.cl");
+
+
 	// Initialize Random Seed Array
 	rmax = (double)RAND_MAX + 1.;
 	iniRand();
 
 	// If not a restart, initialize Particles
-	if (restartRunFlag == false)
+	if (!restartRunFlag)
 	{
 		iniParticles();
 		//call necessary restart functions
@@ -339,13 +413,8 @@ void clVariablesTR::ini()
 	sourceGenerator::SourceInstance()->addIniFunction(createKerPtr, setArgsPtr);
 
 
-	if (saveMacroStart)
+	if (saveMacroStart && !restartRunFlag)
 		save2file();
-
-#ifdef SAVE_BIN_IN_LOAD
-	//saveRestartFilesIni();
-	saveRestartFiles();
-#endif
 }
 
 void clVariablesTR::iniBLandNodI()
@@ -1095,9 +1164,6 @@ void clVariablesTR::iniNode()
 
 void clVariablesTR::iniParticles()
 {
-	if (restartRunFlag)
-		return;
-
 	for (int i = 0; i < nN; i++)
 	{
 		legacyPar Ptemp;
@@ -1198,8 +1264,42 @@ void clVariablesTR::loadParams()
 
 	trDomainSize.x = (trDomainXBounds.y - trDomainXBounds.x);
 	trDomainSize.y = p.nY - 1;
-	
+
+	kernelT = getKernelType(TR_WEIGHT_KERNEL);
+
+
 	testRestartRun();
+}
+
+clVariablesTR::kernelType clVariablesTR::getKernelType(std::string kername_)
+{
+	std::string weightker_ = p.getParameter<std::string>("Weight Kernel", kername_);
+	std::transform(weightker_.begin(), weightker_.end(), weightker_.begin(), ::tolower);
+	if (weightker_.compare("uniform") == 0) 
+		return uniformKer;
+	else if (weightker_.compare("triangular") == 0)
+		return triangularKer; 
+	else if (weightker_.compare("parabolic") == 0)
+		return parabolicKer;
+	else if (weightker_.compare("quartic") == 0) 
+		return quarticKer; 
+	else if (weightker_.compare("triweight") == 0) 
+		return triWeightKer;
+	else if (weightker_.compare("tricube") == 0) 
+		return triCubeKer;
+	else if (weightker_.compare("gaussian") == 0) 
+		return gaussianKer;
+	else if (weightker_.compare("cosine") == 0) 
+		return cosineKer;
+	else if (weightker_.compare("logistic") == 0) 
+		return logisticKer;
+	else if (weightker_.compare("sigmoid") == 0) 
+		return sigmoidKer;
+	else
+	{
+		ERROR_CHECKING(true, weightker_ + " is an invalid name provided for " + kername_,\
+			ERROR_INITIALIZING_VTR)
+	}
 }
 
 double clVariablesTR::rand1()
@@ -1210,12 +1310,19 @@ double clVariablesTR::rand1()
 
 void clVariablesTR::renameSaveFiles()
 {
-
+	//parSort.renameSaveFiles();
+	//parP.renameSaveFiles();
+	//wallShear.renameSaveFiles();
+	glParticles.renameSaveFiles();
 }
 
 // TODO: decide what to save and set it up
 void clVariablesTR::save2file()
 {
+	parSort.save2file();
+	parP.save2file();
+	wallShear.save2file();
+	glParticles.save2file();
 
 }
 
@@ -1381,6 +1488,11 @@ void clVariablesTR::saveDebug()
 
 void clVariablesTR::saveParams()
 {
+	p.setParameter("ParamsName", trParamNum);
+
+	if (trSolverFlag == false)
+		return;
+
 	p.setParameter("Use Par Solver", trSolverFlag);
 
 	if (p.Time > 0)
@@ -1411,10 +1523,78 @@ void clVariablesTR::saveParams()
 	p.setParameter("LS Spacing", lsSpacing);
 	p.setParameter("BL_SEARCH_RAD", blSearchRad);
 
+	saveKernelType(kernelT);
+
+
+
+
+
+
+
+
+
+
 	parSort.saveParams();
 	wallShear.saveParams();
 	parP.saveParams();
 	glParticles.saveParams();
+}
+
+void clVariablesTR::saveKernelType(kernelType kerT_)
+{
+	switch (kernelT)
+	{
+	case uniformKer:
+	{
+		p.setParameter<std::string>("Weight Kernel", "uniform");
+		break;
+	}
+	case triangularKer:
+	{
+		p.setParameter<std::string>("Weight Kernel", "triangular");
+		break;
+	}
+	case parabolicKer:
+	{
+		p.setParameter<std::string>("Weight Kernel", "parabolic");
+		break;
+	}
+	case quarticKer:
+	{
+		p.setParameter<std::string>("Weight Kernel", "quartic");
+		break;
+	}
+	case triWeightKer:
+	{
+		p.setParameter<std::string>("Weight Kernel", "triweight");
+		break;
+	}
+	case triCubeKer:
+	{
+		p.setParameter<std::string>("Weight Kernel", "tricube");
+		break;
+	}
+	case cosineKer:
+	{
+		p.setParameter<std::string>("Weight Kernel", "cosine");
+		break;
+	}
+	case logisticKer:
+	{
+		p.setParameter<std::string>("Weight Kernel", "logistic");
+		break;
+	}
+	case sigmoidKer:
+	{
+		p.setParameter<std::string>("Weight Kernel", "sigmoid");
+		break;
+	}
+	case gaussianKer:
+	{
+		p.setParameter<std::string>("Weight Kernel", "gaussian");
+		break;
+	}
+	}
 }
 
 // TODO: add necessary calls to subclasses and set those functions
@@ -1535,6 +1715,12 @@ void clVariablesTR::setKernelArgs()
 	trUpdateParKernel.set_argument(ind++, activeInds.get_buf_add());
 	trUpdateParKernel.setOptionInd(ind);
 	trUpdateParKernel.setOption(activeInds.curSizeAdd());
+
+
+	parSort.setKernelArgs();
+	wallShear.setKernelArgs();
+	glParticles.setKernelArgs();
+	parP.setKernelArgs();
 }
 
 #define setSrcDefinePrefix		SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(),
@@ -1562,7 +1748,8 @@ void clVariablesTR::setSourceDefines()
 	setSrcDefinePrefix "X_START_VAL_INT", xReleasePos);
 	setSrcDefinePrefix "X_MAX_VAL_INT", xStopPos);
 	setSrcDefinePrefix "X_START_VAL", (double)xReleasePos);
-	setSrcDefinePrefix "X_MIN_VAL", (double)xStopPos - 0.5);
+	setSrcDefinePrefix "X_MIN_VAL", (double)xReleasePos - 0.5);
+	setSrcDefinePrefix "X_release", xReleaseVal);
 	setSrcDefinePrefix "X_MAX_VAL", xStopPos);
 	setSrcDefinePrefix "Y_MIN_VAL", 0.5);
 	setSrcDefinePrefix "Y_MAX_VAL", p.nY - 0.5);
@@ -1600,6 +1787,7 @@ void clVariablesTR::setSourceDefines()
 	{
 		setSrcDefinePrefix "MAX_NUM_BL_ROLL", maxNumBLRoll);
 	}
+
 
 	parP.setSourceDefines();
 	parSort.setSourceDefines();
@@ -1729,16 +1917,160 @@ void clVariablesTR::updateWallParticles()
 	reflectInds.FillBuffer(0, TRQUEUE_REF);
 }
 
-double clVariablesTR::weightKernelFunc(double Sval)
+double clVariablesTR::weightKernelFunc(double Sval, kernelType kerT_)
+{
+	switch (kerT_)
+	{
+	case uniformKer:
+	{
+		if (fabs(Sval) <= 1.)
+			return 0.5;
+		break;
+	}
+	case triangularKer:
+	{
+		if (fabs(Sval) <= 1.)
+			return 1. - fabs(Sval);
+		break;
+	}
+	case parabolicKer:
+	{
+		if (fabs(Sval) <= 1.)
+			return 0.75 * (1. - Sval*Sval);
+		break;
+	}
+	case quarticKer:
+	{
+		if (fabs(Sval) <= 1.)
+			return 15. / 16. * pow(1. - Sval * Sval, 2);
+		break;
+	}
+	case triWeightKer:
+	{
+		if (fabs(Sval) <= 1.)
+			return 35. / 32. * pow(1. - Sval * Sval, 3);
+		break;
+	}
+	case triCubeKer:
+	{
+		if (fabs(Sval) <= 1.)
+			return 70. / 81. * pow(1. - pow(fabs(Sval),3), 3);
+		break;
+	}
+	case cosineKer:
+	{
+		if (fabs(Sval) <= 1.)
+			return p.Pi/4. * cos(p.Pi*Sval/2.);
+		break;
+	}
+	case logisticKer:
+	{
+		return 1. / (exp(Sval) + 2. + exp(-Sval));
+		break;
+	}
+	case sigmoidKer:
+	{
+		return 2. / p.Pi / (exp(Sval) + exp(-Sval));
+		break;
+	}
+	default:
+	case gaussianKer:
+	{
+		return (1. / sqrt(2. * p.Pi) * exp(-0.5 * Sval * Sval));
+		break;
+	}
+	}
+
+	return 0.;
+}
+
+
+/// Strings containing weighting kernels to append to opencl source code
+
+const std::string clVariablesTR::uniformKerStr = R"(
+double REPLACE_NAME(double Sval)
+{
+	if (fabs(Sval) <= 1.)
+		return 0.5;
+	else
+		return 0.;
+}\n\n
+)";
+const std::string clVariablesTR::triangularKerStr = R"(
+double REPLACE_NAME(double Sval)
+{
+	if (fabs(Sval) <= 1.)
+		return 1. - fabs(Sval);
+	else
+		return 0.;
+}\n\n
+)";
+const std::string clVariablesTR::parabolicKerStr = R"(
+double REPLACE_NAME(double Sval)
+{
+	if (fabs(Sval) <= 1.)
+		return 0.75 * (1. - Sval*Sval);
+	else
+		return 0.;
+}\n\n
+)";
+const std::string clVariablesTR::quarticKerStr = R"(
+double REPLACE_NAME(double Sval)
+{
+	if (fabs(Sval) <= 1.)
+		return 15. / 16. * pow(1. - Sval * Sval, 2);
+	else
+		return 0.;
+}\n\n
+)";
+const std::string clVariablesTR::triWeightKerStr = R"(
+double REPLACE_NAME(double Sval)
+{
+	if (fabs(Sval) <= 1.)
+		return 35. / 32. * pow(1. - Sval * Sval, 3);
+	else
+		return 0.;
+}\n\n
+)";
+const std::string clVariablesTR::triCubeKerStr = R"(
+double REPLACE_NAME(double Sval)
+{
+	if (fabs(Sval) <= 1.)
+		return 70. / 81. * pow(1. - pow(fabs(Sval),3), 3);
+	else
+		return 0.;
+}\n\n
+)";
+const std::string clVariablesTR::gaussianKerStr = R"(
+double REPLACE_NAME(double Sval)
 {
 	return (1. / sqrt(2. * p.Pi) * exp(-0.5 * Sval * Sval));
-	//if (Sval <= 1.)
-	//{
-	//	double tempval = 1. - Sval*Sval;
-	//	return 35. / 32. * tempval * tempval * tempval;
-	//}
-	//return 0.;
-}
+}\n\n
+)";
+const std::string clVariablesTR::cosineKerStr = R"(
+double REPLACE_NAME(double Sval)
+{
+	if (fabs(Sval) <= 1.)
+		return p.Pi/4. * cos(p.Pi*Sval/2.);
+	else
+		return 0.;
+}\n\n
+)";
+const std::string clVariablesTR::logisticKerStr = R"(
+double REPLACE_NAME(double Sval)
+{
+	return 1. / (exp(Sval) + 2. + exp(-Sval));
+}\n\n
+)";
+const std::string clVariablesTR::sigmoidKerStr = R"(
+double REPLACE_NAME(double Sval)
+{
+		return 2. / p.Pi / (exp(Sval) + exp(-Sval));
+}\n\n
+)";
+
+
+
 
 
 //// Dont think this is necessary as all of these can be reconstructed

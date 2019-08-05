@@ -9,9 +9,9 @@
 #pragma once
 #endif // _MSC_VER >= 1000
 
-#include <stdio.h>
-#include <memory.h>
-#include <CL\cl.h>
+//#include <stdio.h>
+//#include <memory.h>
+//#include <CL\cl.h>
 #include "StdAfx.h"
 #include "Array.h"
 #include <clsparse_export.h>

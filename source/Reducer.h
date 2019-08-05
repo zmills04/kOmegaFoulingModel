@@ -298,8 +298,7 @@ template <typename T, typename T2> int ReducerBase<T, T2>::redMemSet = 0;
 // For domain variables, which use the same intermediate buffers, only variable types which have sizes
 // less than or equal to doubles can be used (opencl buffers are type agnostic (addressing based on the 
 // type declared in the kernel, so a buffer for 100 doubles can store 100 ints with only have the buffer being used)
-template <typename T, ReduceGenerator::reduceType redT_ = ReduceGenerator::Sum, 
-	int ArrSize_ = REDUCE_RESULTS_SIZE, typename T2 = T>
+template <typename T, typename T2, ReduceGenerator::reduceType redT_ = ReduceGenerator::Sum, int ArrSize_ = REDUCE_RESULTS_SIZE>
 class Reducer : public ReducerBase<T,T2>
 {
 public:

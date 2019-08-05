@@ -46,7 +46,7 @@ void TR_shear_removal(__global double2* __restrict__ lsc,
 	// and return.
 	if (depTimer == 0)
 	{
-		int bldep_ind = blInd * NUM_PAR_SIZES + sizeInd;
+		int bldep_ind = blInd + NUM_PAR_SIZES * sizeInd;
 		atomic_add(&BLdep[bldep_ind], P_Num_rep[i]);
 		P_Dep_Flag[i] = -2;
 		P_loc[i] = -2;

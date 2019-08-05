@@ -60,7 +60,7 @@ public:
 	Kernel updateDAlphaKernel; // Calculates derivatives of Alpha (and rho*Cp if
 							   // CHT correction flag is set
 	
-	Reducer<double> sumTemp;	
+	Reducer<double, double> sumTemp;	
 
 	// Sparse Methods/Classes
 	CSR_Inds TempInds;

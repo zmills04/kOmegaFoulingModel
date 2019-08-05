@@ -26,12 +26,14 @@
 #endif // _MSC_VER > 1000
 
 #include "StdAfx.h"
+#include "HelperFuncs.h"
 #include "clProblem.h"
 #include "particleProperties.h"
 #include "particleSort.h"
 #include "shearStress.h"
 #include "particleDisplay.h"
 #include "particleStructs.h"
+
 
 typedef struct BLbound
 {
@@ -70,6 +72,17 @@ public:
 	virtual ~clVariablesTR()
 	{
 	};
+
+
+	enum kernelType {
+		uniformKer, triangularKer, parabolicKer,
+		quarticKer, triWeightKer, triCubeKer, gaussianKer, cosineKer,
+		logisticKer, sigmoidKer
+	};
+
+	static const std::string uniformKerStr, triangularKerStr, parabolicKerStr,
+		quarticKerStr, triWeightKerStr, triCubeKerStr, gaussianKerStr, cosineKerStr,
+		logisticKerStr, sigmoidKerStr;
 
 	// Sections of vtr split into own classes
 	particleSort parSort;
@@ -127,7 +140,9 @@ public:
 ////////////////////////////////////////////////////////////////////////////
 
 	// Indicies of active nodes (this is all nodes i.e. wall nodes + non-wall nodes)
-	// Similar array is wallInds, which is a list of the wall node indicies 
+	// Similar array is wallInds, which is a list of the wall node indicies
+	// This can be updated very infrequently since it will change very little
+	// over the course of the simulation.
 	DynArray1Di activeInds;
 
 	// indicates if a node in domain is active or not
@@ -244,6 +259,8 @@ public:
 	bool trSolverFlag, saveMacroStart;
 	bool calcIOFlag;		// Flag to save distribution at inlet outlet
 							// as TimeData array
+
+	kernelType kernelT;
 
 	int maxOutputLinesIO;	// number of lines in ioDistsSave
 
@@ -478,13 +495,15 @@ public:
 	// Calculates interpolation weight using basic kernel
 	// TODO: implements various kernels, and allow for
 	//		the kernel used to be selected with input parameter
-	double weightKernelFunc(double Sval);
+	double weightKernelFunc(double Sval, kernelType kerT_);
 
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////            Initialization Functions           ///////////////
 ////////////////////////////////////////////////////////////////////////////
 	
+	clVariablesTR::kernelType getKernelType(std::string kername_);
+
 	// Initializes particles
 	void iniParticles();
 
@@ -505,6 +524,9 @@ public:
 
 	// Initializes activeInds and wallInds arrays
 	void iniIndexInfo();
+
+	// adds weight kernel function to opencl source
+	void addWeightFunctionToSource(kernelType kerT_, std::string kerName_);
 
 
 	// Initializes arrays containing node neighbor arrays
@@ -537,6 +559,8 @@ public:
 	// Saves all data within box drawn in opengl window.
 	// Very useful for debugging
 	void saveBox(double x1, double y1, double dx, double dy);
+
+	void saveKernelType(kernelType kerT_);
 
 	// files that dont change after initialization (only need bin saved once)
 	// void saveRestartFilesIni();    

@@ -303,6 +303,7 @@ uint2 MWC64X_NextUint2(uint2 s, double2* resd)
 
 #define WF_TEST_ALL_SOLID	0x00F0
 
+
 // adding ibbRev[dir-1] to ibb index give index of the 
 // reverse disribution 
 __constant int ibbRev[8] = { DIST_SIZE, -DIST_SIZE, DIST_SIZE, -DIST_SIZE, DIST_SIZE, -DIST_SIZE, DIST_SIZE, -DIST_SIZE };
@@ -398,6 +399,13 @@ double2 getLocFromGlobalIdx(const int gid)
 {
 	int2 ret = { { (gid % CHANNEL_LENGTH_FULL), (gid / CHANNEL_LENGTH_FULL) } };
 	return convert_double2(ret);
+}
+
+int getTRPaddedPosFromLBPos(int gid)
+{
+	int xval, yval;
+	decodeGlobalIdx(gid, &xval, &yval);
+	return xval - TR_X_IND_START + FULLSIZEX_TR_PADDED * yval;
 }
 
 uint getRevDist(const int gid)

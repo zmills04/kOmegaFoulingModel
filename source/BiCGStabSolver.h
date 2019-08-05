@@ -6,8 +6,12 @@
 #define AFX_BICGSTABSOLVER_H__INCLUDED_
 #pragma once
 
+#include "StdAfx.h"
 #include "SparseMatrix.h"
 #include "BiCGStabGenerator.h"
+#include "Kernels.h"
+#include "Array.h"
+
 class BiCGStabDebugger;
 // Easier to just use clsparse's functions to calculate meta info for matrix
 // and extract it from there. The matrix_meta class is not accessable through
@@ -221,10 +225,10 @@ public:
 
 	// Functions for transfering between host and device and outputting data
 
-	void setInitialValue(double inival, bool fullArrFlag = false);
+	//void setInitialValue(double inival, bool fullArrFlag = false);
 
-	void setInitialValueRows(double inival, std::vector<int> &rowi);
-	void setInitialValueCols(double inival, std::vector<int> &coli);
+	//void setInitialValueRows(double inival, std::vector<int> &rowi);
+	//void setInitialValueCols(double inival, std::vector<int> &coli);
 
 	double& BiCGStabSolver::operator()(int i, int j)
 	{

@@ -1,8 +1,9 @@
 #include "BiCGStabSolver.h"
-#include "clVariablesLS.h"
+//#include "clVariablesLS.h"
+#include "clProblem.h"
 #include "SourceGenerator.h"
 #include "ReduceGenerator.h"
-#include "BiCGStabGenerator.h"
+//#include "BiCGStabGenerator.h"
 
 int BiCGStabSolver::fullSize = 0;
 int BiCGStabSolver::colSize = 0; 
@@ -513,62 +514,62 @@ void BiCGStabSolver::solve()
 	}
 }
 
-void BiCGStabSolver::setInitialValue(double inival, bool fullArrFlag)
-{
-	if (fullArrFlag)
-	{
-		xVec->FillBuffer(inival);
-		return;
-	}
+//void BiCGStabSolver::setInitialValue(double inival, bool fullArrFlag)
+//{
+//	if (fullArrFlag)
+//	{
+//		xVec->FillBuffer(inival);
+//		return;
+//	}
+//
+//	for (int i = 0; i < Xsize; i++)
+//	{
+//		for (int j = 0; j < Ysize; j++)
+//		{
+//			if (vls.nType(i, j) & Inds->fluidFlag)
+//			{
+//				xVec->operator()(i, j) = inival;
+//			}
+//		}
+//	}
+//
+//	xVec->copy_to_buffer();
+//}
 
-	for (int i = 0; i < Xsize; i++)
-	{
-		for (int j = 0; j < Ysize; j++)
-		{
-			if (vls.nType(i, j) & Inds->fluidFlag)
-			{
-				xVec->operator()(i, j) = inival;
-			}
-		}
-	}
-
-	xVec->copy_to_buffer();
-}
-
-void BiCGStabSolver::setInitialValueRows(double inival, std::vector<int> &rowi)
-{
-	xVec->read_from_buffer(NULL, CL_TRUE);
-	for (int i = 0; i < Xsize; i++)
-	{
-		for (int jj = 0; jj < rowi.size(); jj++)
-		{
-			int j = rowi[jj];
-			if (vls.nType(i, j) & Inds->fluidFlag)
-			{
-				xVec->operator()(i, j) = inival;
-			}
-		}
-	}
-	xVec->copy_to_buffer();
-}
-
-void BiCGStabSolver::setInitialValueCols(double inival, std::vector<int> &coli)
-{
-	xVec->read_from_buffer(NULL, CL_TRUE);
-	for (int ii = 0; ii < coli.size(); ii++)
-	{
-		int i = coli[ii];
-		for (int j = 0; j < Ysize; j++)
-		{
-			if (vls.nType(i, j) & Inds->fluidFlag)
-			{
-				xVec->operator()(i, j) = inival;
-			}
-		}
-	}
-
-	xVec->copy_to_buffer(NULL, CL_TRUE);
-}
+//void BiCGStabSolver::setInitialValueRows(double inival, std::vector<int> &rowi)
+//{
+//	xVec->read_from_buffer(NULL, CL_TRUE);
+//	for (int i = 0; i < Xsize; i++)
+//	{
+//		for (int jj = 0; jj < rowi.size(); jj++)
+//		{
+//			int j = rowi[jj];
+//			if (vls.nType(i, j) & Inds->fluidFlag)
+//			{
+//				xVec->operator()(i, j) = inival;
+//			}
+//		}
+//	}
+//	xVec->copy_to_buffer();
+//}
+//
+//void BiCGStabSolver::setInitialValueCols(double inival, std::vector<int> &coli)
+//{
+//	xVec->read_from_buffer(NULL, CL_TRUE);
+//	for (int ii = 0; ii < coli.size(); ii++)
+//	{
+//		int i = coli[ii];
+//		for (int j = 0; j < Ysize; j++)
+//		{
+//			if (vls.nType(i, j) & Inds->fluidFlag)
+//			{
+//				xVec->operator()(i, j) = inival;
+//			}
+//		}
+//	}
+//
+//	xVec->copy_to_buffer(NULL, CL_TRUE);
+//}
 
 
 

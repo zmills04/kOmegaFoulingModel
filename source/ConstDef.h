@@ -242,6 +242,7 @@
 #define SAVE_WALL_SHEAR			true
 #define CLUMP_PARTICLES			true
 #define SAVE_IO_DISTS			true
+#define TR_WEIGHT_KERNEL		"Gaussian"
 
 #define X_RELEASE_POS			(490)
 #define X_STOP_POS				(10500)
@@ -340,6 +341,7 @@
 /////////////////////////////////////////////////////////////
 #define USE_FL_SOLVER		false
 #define FL_SAVE_ON_START	true
+#define FL_WEIGHT_KERNEL		"Gaussian"
 
 #define UPDATE_TIME				(8000)
 #define NUM_INLET_OUTLET_NODES	30
@@ -347,7 +349,7 @@
 #define NUM_UPDATES_BTW_SMOOTHING	20
 #define PERCENT_USED_IN_SMOOTHING	0.05
 #define NEIGHS_PER_SIDE_SMOOTHING	3
-
+#define FL_UPDATE_TR_ACTIVE_FREQ	20
 
 
 //////////////////////////////////////////////////////////////////////////

@@ -22,3 +22,18 @@ void TR_opengl_par(__global double2 *__restrict__ pPos,
 	gl_color[i + 1] = gl_color_array[pTypeTemp + 1] * Dep_mult;
 	gl_color[i + 2] = gl_color_array[pTypeTemp + 2] * Dep_mult;
 }
+
+
+__kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_UPDATE_GL, 1, 1)))
+void update_GL_wall(__global double2* C,
+	__global float2* BotWall,
+	__global float2* TopWall)
+{
+	int i = get_global_id(0);
+	if (i >= LSC_NN)
+		return;
+
+	int itop = 2 * num_nodes - 1 - i;
+	TopWall[i] = convert_float2(C[itop]);
+	BotWall[i] = convert_float2(C[i]);
+}

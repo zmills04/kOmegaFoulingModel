@@ -95,6 +95,8 @@ void particleDisplay::createKernels()
 
 void particleDisplay::freeHostArrays()
 {
+	if (!p.useOpenGL)
+		return;
 	parColorList.FreeHost();
 	Tcrit_color.FreeHost();
 

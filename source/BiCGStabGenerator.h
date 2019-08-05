@@ -6,7 +6,10 @@
 #define AFX_BICGSTABGENERATOR_H__INCLUDED_
 #pragma once
 
+#include "StdAfx.h"
 #include "SourceGenerator.h"
+#include "Kernels.h"
+#include "Array.h"
 
 
 

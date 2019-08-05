@@ -32,7 +32,6 @@
 
 #include "StdAfx.h"
 #include "oclEnvironment.h"
-#include "Reducer.h"
 #include "clVariablesLS.h"
 #include "clVariablesLB.h"
 #include "clVariablesFD.h"
@@ -40,7 +39,7 @@
 #include "clVariablesFL.h"
 #include "clProblem.h"
 #include "clDisplay.h"
-
+#include "Reducer.h"
 
 clDisplay d;
 clProblem p;

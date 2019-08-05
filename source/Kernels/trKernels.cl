@@ -846,7 +846,7 @@ void TR_update_par_no_wall(
 
 	//activeNodes contains wall nodes as well, which are handled by wall 
 	//kernels, so we can skip those nodes
-	if (wallFlag[neighLin] & WF_WALL)
+	if (wallFlag[neighLin] & (WF_WALL || WF_SOLID))
 		return;
 
 	int i, j;

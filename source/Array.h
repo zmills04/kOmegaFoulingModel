@@ -13,8 +13,8 @@
 
 #include "StdAfx.h"
 #include "oclEnvironment.h"
-#include "Kernels.h"
 #include "logger.h"
+#include "StreamFuncs.h"
 
 
 #ifdef _DEBUG
@@ -1912,7 +1912,7 @@ typedef  Array1D <cl_short> Array1Ds;
 //typedef  Array1D <par> Array1DP;
 //typedef  Array1D <bLinks> Array1DBL;
 //typedef  Array1D <Pparam> Array1DPP;
-typedef  Array1D <rampI> Array1DRI;
+//typedef  Array1D <rampI> Array1DRI;
 //typedef  Array1D <foulI> Array1DFI;
 
 

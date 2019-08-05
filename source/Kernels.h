@@ -12,7 +12,7 @@
 
 
 #include "StdAfx.h"
-#include "HelperFuncs.h"
+//#include "HelperFuncs.h"
 
 
 

@@ -186,6 +186,12 @@
     <ClInclude Include="source\kOmega.h">
       <Filter>Fluid\LBM</Filter>
     </ClInclude>
+    <ClInclude Include="source\StreamFuncs.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="source\foulStructs.h">
+      <Filter>Walls</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="source\Kernels\Heading.cl">
@@ -228,6 +234,9 @@
       <Filter>OpenCL\Kernels</Filter>
     </None>
     <None Include="source\Kernels\lsKernels.cl">
+      <Filter>OpenCL\Kernels</Filter>
+    </None>
+    <None Include="source\Kernels\trKernelsUpdate.cl">
       <Filter>OpenCL\Kernels</Filter>
     </None>
   </ItemGroup>

@@ -12,14 +12,13 @@
 
 void clVariablesFD::allocateArrays()
 {
-	rhoCpDer.allocate(p.nX, p.XsizeFull, p.nY, p.nY);
-	rhoCpDer.fill({ {0.,0.} });
 	tempArray.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
-
+	alphaDer.allocate(p.nX, p.XsizeFull, p.nY, p.nY);
+	alphaDer.fill({ {0.,0.} });
 	if (chtCorrectionFlag)
 	{
-		alphaDer.allocate(p.nX, p.XsizeFull, p.nY, p.nY);
-		alphaDer.fill({ {0.,0.} });
+		rhoCpDer.allocate(p.nX, p.XsizeFull, p.nY, p.nY);
+		rhoCpDer.fill({ {0.,0.} });
 	}
 	// Nu intialized in separate function (need to calculate
 	// number of nodes before initializing)
@@ -75,8 +74,6 @@ double clVariablesFD::calcAlphaDirection(const int i1, const int j1, const int i
 
 	return k_c * k_n / (coeffA * del * del * del + coeffB * del * del * (1.0 - del) +
 		coeffC * del * (1.0 - del) * (1.0 - del) + coeffD * (1.0 - del) * (1.0 - del) * (1.0 - del));
-
-
 }
 
 cl_double2 clVariablesFD::calcAlphaRhoCpDirection(const int i1, const int j1, const int i2, const int j2, const int dirInd)
@@ -230,7 +227,7 @@ void clVariablesFD::ini()
 	// allocate device buffers
 	allocateBuffers();
 
-	if (saveMacroStart)
+	if (saveMacroStart && !restartRunFlag)
 		save2file();
 }
 
@@ -398,6 +395,7 @@ void clVariablesFD::iniNuCoeffs()
 
 void clVariablesFD::loadParams()
 {
+
 	thermalSolverFlag = p.getParameter<bool>("Thermal Solver", USE_THERMAL_SOLVER);
 	calcNuFlag = p.getParameter<bool>("Calculate Nu", CALC_NUSSELT);
 	saveMacroStart = p.getParameter<bool>("Save Macros On Start", THERMAL_SAVE_MACROS_ON_START);
@@ -663,7 +661,7 @@ void clVariablesFD::setSourceDefines()
 
 void clVariablesFD::solveSSThermal()
 {
-	if (vfd.calcSSTempFlag == false)
+	if (calcSSTempFlag == false || !thermalSolverFlag)
 		return;
 
 	SetSSCoeffs.call_kernel();
@@ -688,7 +686,16 @@ void clVariablesFD::Solve()
 
 void clVariablesFD::saveParams()
 {
-	p.setParameter("Restart Run", restartRunFlag);
+	p.setParameter("ParamsName", thermalParamNum);
+
+	if (!thermalSolverFlag)
+		return;
+
+	if (p.Time > 0)
+		p.setParameter("Restart Run", true);
+	else
+		p.setParameter("Restart Run", false);
+
 	p.setParameter("Thermal Solver", thermalSolverFlag);
 	p.setParameter("Calculate Nu", calcNuFlag);
 	p.setParameter("Save Macros On Start", saveMacroStart);

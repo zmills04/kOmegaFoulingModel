@@ -134,6 +134,7 @@ void operator >> (const YAML::Node& node, cl_uint4 vec_)
 	node[3] >> vec_.w;
 }
 
+
 YAML::Emitter& operator << (YAML::Emitter& out, const cl_uint4 vec_)
 {
 	out << YAML::Flow;

@@ -18,23 +18,21 @@
 
 void kOmega::allocateArrays()
 {
-	if (kOmegaSolverFlag)
-	{
-		Kappa_array.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
-		Omega_array.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
+	if (!kOmegaSolverFlag)
+		return
+	Kappa_array.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
+	Omega_array.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
 
-		/////// Strain rate tensor elements (stress tensor can be calculated from this with bousinesque approximation)
-		Sxy_array.zeros(p.nX, p.XsizeFull, p.nY, p.nY, 3, 3);
-		//////// Turbulent Viscosity (LB calculates this, so no need to initialize)
-		Nut_array.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
-		////////// Diffusivities of Turb parameters
-		Diff_Omega.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
-		Diff_K.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
-		//////// Coefficients calculated in first update step
-		Fval_array.zeros(p.nX, p.XsizeFull, p.nY, p.nY); //F1
-		dKdO_array.zeros(p.nX, p.XsizeFull, p.nY, p.nY, 2, 2); //2*(1-f1)*sigma_w2/omega*dk/dxi
-	}
-
+	/////// Strain rate tensor elements (stress tensor can be calculated from this with bousinesque approximation)
+	Sxy_array.zeros(p.nX, p.XsizeFull, p.nY, p.nY, 3, 3);
+	//////// Turbulent Viscosity (LB calculates this, so no need to initialize)
+	Nut_array.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
+	////////// Diffusivities of Turb parameters
+	Diff_Omega.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
+	Diff_K.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
+	//////// Coefficients calculated in first update step
+	Fval_array.zeros(p.nX, p.XsizeFull, p.nY, p.nY); //F1
+	dKdO_array.zeros(p.nX, p.XsizeFull, p.nY, p.nY, 2, 2); //2*(1-f1)*sigma_w2/omega*dk/dxi
 }
 
 void kOmega::allocateBuffers()
@@ -269,7 +267,6 @@ void kOmega::save2file()
 {
 	Kappa.savetxt_from_device();
 	Omega.savetxt_from_device();
-
 }
 
 void kOmega::saveDebug(int saveFl)
@@ -411,9 +408,7 @@ void kOmega::setInitialValues()
 
 void kOmega::setKernelArgs()
 {
-	if (!kOmegaSolverFlag)
-		return;
-	
+
 	cl_int ind = 0;
 	int zer = 0;
 
@@ -515,6 +510,11 @@ void kOmega::Solve()
 
 bool kOmega::testRestartRun()
 {
+	// if not solving, return true since we dont want to show as
+	// not a restart when kappa and omega dont load
+	if (!kOmegaSolverFlag)
+		return true;
+
 	allocateArrays();
 
 	bool koBool = Kappa_array.load("load" SLASH "lbkappa") && Omega_array.load("load" SLASH "lbomega");

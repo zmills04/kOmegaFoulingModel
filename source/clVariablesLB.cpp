@@ -35,7 +35,7 @@
 //		run getInitialFlow and/or getInitialFlowAndTemp
 
 
-
+#include "HelperFuncs.h"
 #include "clVariablesLS.h"
 #include "clVariablesLB.h"
 #include "clVariablesFD.h"
@@ -51,7 +51,6 @@ void clVariablesLB::allocateArrays()
 	Ux_array.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
 	Uy_array.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
 	Ro_array.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
-	//NodeType.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
 }
 
 void clVariablesLB::allocateBuffers()
@@ -147,7 +146,9 @@ void clVariablesLB::createKernels()
 	calcRoJKernel.create_kernel(GetSourceProgram, LBQUEUE_REF, "Calc_Ro_J");
 	calcRoJKernel.set_size(GlobalX, WORKGROUPSIZEX_LB, GlobalY, WORKGROUPSIZEY_LB);
 
-	kOmegaClass.createKernels();
+
+	if (kOmegaClass.kOmegaSolverFlag)
+		kOmegaClass.createKernels();
 
 #ifndef IN_KERNEL_IBB
 	ibbKernel.create_kernel(GetSourceProgram, LBQUEUE_REF,
@@ -158,7 +159,11 @@ void clVariablesLB::createKernels()
 
 void clVariablesLB::freeHostArrays()
 {
-	kOmegaClass.freeHostArrays();
+	FA.FreeHost();
+	FB.FreeHost();
+
+	if (kOmegaClass.kOmegaSolverFlag)
+		kOmegaClass.freeHostArrays();
 }
 
 
@@ -339,7 +344,7 @@ void clVariablesLB::ini()
 	// For iterative flowrate method, doesnt hurt to just keep it here
 	Next_Update_Time = p.Time + timeBetweenIntervals;
 
-	if(saveMacroStart & !restartRunFlag)
+	if(saveMacroStart && !restartRunFlag)
 		save2file();
 }
 
@@ -482,9 +487,6 @@ void clVariablesLB::iniRhoUFromDists()
 		}
 
 	}
-
-
-
 }
 
 void clVariablesLB::iniTimeData()
@@ -608,7 +610,12 @@ void clVariablesLB::save2file()
 
 void clVariablesLB::saveDebug(int saveFl)
 {
-	kOmegaClass.saveDebug(saveFl);
+	saveDistributions();
+	if (kOmegaClass.kOmegaSolverFlag)
+	{
+		kOmegaClass.saveDebug(saveFl);
+	}
+
 }
 
 void clVariablesLB::saveDistributions()
@@ -658,6 +665,11 @@ void clVariablesLB::saveParams()
 	p.setParameter("Use Turb Vel BC", turbVelBCFlag);
 
 	p.setParameter("Geometric Penalty Factor", geomPenaltyFactor);
+
+	if (kOmegaClass.kOmegaSolverFlag)
+		kOmegaClass.saveParams();
+	else
+		p.setParameter("Use Turb Model", false);
 	// The values of these shouldnt matter during a restart
 	//p.setParameter("Ini Turb Velocity", false);
 	//p.setParameter("Save Macros On Start", false);
@@ -668,7 +680,7 @@ void clVariablesLB::saveParams()
 	//p.setParameter("Ini LB Steps", tlbmNumIniSteps_LB);
 	//p.setParameter("Ini TLBM Steps", tlbmNumIniSteps_TLBM);
 
-	kOmegaClass.saveParams();
+
 }
 
 
@@ -683,7 +695,9 @@ void clVariablesLB::saveRestartFiles()
 	{
 		FA.save_bin_from_device("lbf");
 	}
-	kOmegaClass.saveRestartFiles();
+
+	if (kOmegaClass.kOmegaSolverFlag)
+		kOmegaClass.saveRestartFiles();
 }
 
 
@@ -705,6 +719,7 @@ void clVariablesLB::saveTimeData()
 		kOmegaClass.sumKappa.appendToFileFromDevice();
 		kOmegaClass.sumOmega.appendToFileFromDevice();
 	}
+	// kOmegaClass has empty saveTimeData, so no need to call
 }
 
 
@@ -772,7 +787,8 @@ void clVariablesLB::setKernelArgs()
 	ibbKernel.setOptionInd(3);
 #endif
 
-	kOmegaClass.setKernelArgs();
+	if (kOmegaClass.kOmegaSolverFlag)
+		kOmegaClass.setKernelArgs();
 }
 
 #define SETSOURCEDEFINE SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr()
@@ -791,6 +807,8 @@ void clVariablesLB::setSourceDefines()
 	{
 		SETSOURCEDEFINE, "USE_TURB_VEL_BC");
 	}
+	// Must call kOmegaClass because source wont compile without
+	// those defines set
 	kOmegaClass.setSourceDefines();
 }
 
@@ -858,6 +876,8 @@ void clVariablesLB::updateTimeData()
 		kOmegaClass.sumKappa.reduce(p.Time);
 		kOmegaClass.sumOmega.reduce(p.Time);
 	}
+
+	// Function empty in kOmegaClass so no need to call it
 }
 
 

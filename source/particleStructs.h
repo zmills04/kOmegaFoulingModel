@@ -19,6 +19,8 @@
 
 
 #include "StdAfx.h"
+#include "Array.h"
+#include "Kernels.h"
 
 
 ////////////////////////////////

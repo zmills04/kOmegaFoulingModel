@@ -479,6 +479,7 @@ void clVariablesLS::loadParams()
 
 void clVariablesLS::saveParams()
 {
+	p.setParameter("ParamsName", lsParamNum);
 	p.setParameter("nN", nN);
 	p.setParameter("LS Spacing", lsSpacing);
 	if (p.Time > 0)
@@ -567,7 +568,7 @@ void clVariablesLS::ini()
 	// setKernelArgs function.
 	//iniIBBArrays();
 
-	sumFluid.ini(nType, restartRunFlag, "redUx");
+	//sumFluid.ini(nType, restartRunFlag, "redUx");
 
 	setSourceDefines();
 	std::function<void(void)> createKerPtr = std::bind(&clVariablesLS::createKernels, this);
@@ -1055,23 +1056,22 @@ void clVariablesLS::iniIBBArrays()
 	}
 }
 
-void clVariablesLS::updateLS()
-{
-	// Prepares dXArr and nType for updating.
-	nType.enqueue_copy_to_buffer(nTypePrev.get_buffer(), -1, LBQUEUE_REF);
-	dXArr.enqueue_copy_to_buffer(dXArr0.get_buffer(), -1, LBQUEUE_REF);
-	ibbArrCurIndex.FillBuffer(0, LBQUEUE_REF);
-
-	// updates nType
-	updateNType.call_kernel();
-
-	// Saves updated nType to nTypePrev to use in next update step
-	nTypePrev.enqueue_copy_to_buffer(nType.get_buffer(), -1, LBQUEUE_REF);
-
-	updateBoundaryArrays();
-
-
-}
+// Move to vfl
+//void clVariablesLS::updateLS()
+//{
+//	// Prepares dXArr and nType for updating.
+//	nType.enqueue_copy_to_buffer(nTypePrev.get_buffer(), -1, LBQUEUE_REF);
+//	dXArr.enqueue_copy_to_buffer(dXArr0.get_buffer(), -1, LBQUEUE_REF);
+//	ibbArrCurIndex.FillBuffer(0, LBQUEUE_REF);
+//
+//	// updates nType
+//	updateNType.call_kernel();
+//
+//	// Saves updated nType to nTypePrev to use in next update step
+//	nTypePrev.enqueue_copy_to_buffer(nType.get_buffer(), -1, LBQUEUE_REF);
+//
+//	updateBoundaryArrays();
+//}
 
 
 

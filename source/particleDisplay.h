@@ -11,6 +11,9 @@
 #pragma once
 
 #include "StdAfx.h"
+#include "Kernels.h"
+#include "Array.h"
+#include "particleStructs.h"
 
 
 

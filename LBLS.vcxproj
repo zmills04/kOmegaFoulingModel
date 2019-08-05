@@ -471,6 +471,7 @@
     <ClInclude Include="source\clVariablesLS.h" />
     <ClInclude Include="source\clVariablesTR.h" />
     <ClInclude Include="source\ConstDef.h" />
+    <ClInclude Include="source\foulStructs.h" />
     <ClInclude Include="source\HelperFuncs.h" />
     <ClInclude Include="source\Kernels.h" />
     <ClInclude Include="source\kOmega.h" />
@@ -487,6 +488,7 @@
     <ClInclude Include="source\SourceGenerator.h" />
     <ClInclude Include="source\SparseMatrix.h" />
     <ClInclude Include="source\StdAfx.h" />
+    <ClInclude Include="source\StreamFuncs.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="source\Kernels\csrmvGeneralKernels.cl" />
@@ -506,6 +508,7 @@
     <None Include="source\Kernels\trKernelsDisplay.cl" />
     <None Include="source\Kernels\trKernelsShear.cl" />
     <None Include="source\Kernels\trKernelsSort.cl" />
+    <None Include="source\Kernels\trKernelsUpdate.cl" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="source\MethodClassLayout.txt">
