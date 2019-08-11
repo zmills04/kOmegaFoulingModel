@@ -894,7 +894,7 @@ public:
 //	{
 //		if (fromDevFlag)
 //		{
-//			copy_to_host_all(TRUE);
+//			copy_to_host_all(true);
 //		}
 //		Array2D<T> Outarray(nnz(), 3);
 //

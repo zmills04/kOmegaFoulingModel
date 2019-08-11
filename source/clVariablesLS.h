@@ -179,7 +179,12 @@ public:
 	Array1Di ssArrInds; // index of first element in ssArr for a given x value
 						// i.e. ssArrInds(2) is the first element in ssArr that is located at x = 2
 
+
 	Array2D<cl_ushort> lsMap; // nearest BL for each x index (j = 0: bottom wall, j = 1: top wall)
+							  // Should be sufficient to use same values throughout simulation, since
+							  // kernel that uses it (updateWallDistKernel) actually searches a range
+							  // of BLs centered around this BL and the boundaries are not displaced
+							  // significantly enough to move this Srange too far.
 	
 	// These arrays were originally used for IBB implementation. New implementation
 	// will just use ii0 array, which contains absolute position of bounced back distribution
@@ -328,6 +333,9 @@ public:
 	// being a new run for remaining methods
 	bool testRestartRun();
 
+	// called by FL class to update data
+	void update();
+
 	// Calls kernels to save time data (umean, avg density, etc) to array
 	// on device, which will eventually be saved if it reaches its max 
 	// size, or a save step is reached
@@ -450,9 +458,9 @@ public:
 	void updateBoundaryArrays();
 
 	// Fills arrays used for IBB in vlb
-	void updateIBBArrays();
+	//void updateIBBArrays();
 
-	void updateShearArrays();
+	bool updateShearArrays();
 
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////               Solving Functions               ///////////////

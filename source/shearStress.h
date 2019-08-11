@@ -264,7 +264,7 @@ public:
 	
 	// Updates arrays used in the calculation of shear stress at boundary nodes
 	// and, following this, at boundary links
-	void updateShearArrays(bool reSizeFlag);
+	void updateShearArrays();
 
 	// This function is called after sort, and it will update the kernel
 	// arguments used in trShearRemovalKernel until the next sort.

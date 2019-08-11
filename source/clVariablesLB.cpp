@@ -847,16 +847,23 @@ bool clVariablesLB::testRestartRun()
 }
 
 
-void clVariablesLB::updateIBBArrays(bool reSizeFlag)
+void clVariablesLB::update()
 {
-#ifndef IN_KERNEL_IBB
-	if (reSizeFlag)
-	{
-		ibbKernel.set_argument(0, vls.ibbArr.get_buf_add());
-	}
-	ibbKernel.setOption(vls.ibbArr.curSizeAdd());
-#endif
+	// vls updates IBB arrays, so only need to update wall Distances for kOmega
+	if (kOmegaClass.kOmegaSolverFlag)
+		kOmegaClass.updateWallDKernel.call_kernel(LBQUEUE_REF);
 }
+
+//void clVariablesLB::updateIBBArrays(bool reSizeFlag)
+//{
+//#ifndef IN_KERNEL_IBB
+//	if (reSizeFlag)
+//	{
+//		ibbKernel.set_argument(0, vls.ibbArr.get_buf_add());
+//	}
+//	ibbKernel.setOption(vls.ibbArr.curSizeAdd());
+//#endif
+//}
 
 
 

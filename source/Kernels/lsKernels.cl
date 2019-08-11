@@ -21,7 +21,6 @@
 // ssArrInds - updated with ssArr
 // lsMap - not updated
 
-DynArray1Dd ibbDistArr; // distances from bounce back node to wall;
 
 
 
@@ -116,12 +115,12 @@ void updateNType(__global NTYPE_TYPE * __restrict__ Map,
 					// Set A matrix C location to 1. and rest of terms
 					// along with element in b vector to 0. so it always
 					// solves as 0.
-					int KOind = IndArr[gid + DIST_SIZE * 4];
-					kAmat[KOind] = 0.;
-					oAmat[KOind] = 0.;
+				int KOind = IndArr[gid + DIST_SIZE * 4];
+				kAmat[KOind] = 0.;
+				oAmat[KOind] = 0.;
 
-					KOind = IndArr[gid + DIST_SIZE * 2];
-					kAmat[KOind] = 0.;
+				KOind = IndArr[gid + DIST_SIZE * 2];
+				kAmat[KOind] = 0.;
 				oAmat[KOind] = 0.;
 
 				KOind = IndArr[gid];

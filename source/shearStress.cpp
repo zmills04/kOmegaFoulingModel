@@ -331,8 +331,11 @@ void shearStress::updateParRemArgs()
 	trShearRemovalKernel.reset_global_size(removalOptionVal.y);
 }
 
-void shearStress::updateShearArrays(bool reSizeFlag)
+void shearStress::updateShearArrays()
 {
+	if (!vtr.wallShear.calcSSFlag)
+		return;
+	bool reSizeFlag = vls.updateShearArrays();
 	if (reSizeFlag)
 	{
 		shearNodeDynSize = vls.ssArr.curFullSize();

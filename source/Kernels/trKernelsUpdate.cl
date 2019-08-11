@@ -286,7 +286,7 @@ void calc_tr_coeffs(int linInd, int tnum,
 }
 
 __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_TR, 1, 1)))
-void Update_BD_Nodes(__global NTYPE_TYPE* nType,
+void updateTRCoeffs(__global NTYPE_TYPE* nType,
 	__global double4* __restrict__ CoeffT00,
 	__global double4* __restrict__ CoeffT10,
 	__global double4* __restrict__ CoeffT01,
@@ -536,10 +536,10 @@ void Update_BD_Nodes(__global NTYPE_TYPE* nType,
 // TODO: create dist array to track distances, and fill with 1000. before
 //		calling this function every time
 __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_TR_WALL, 1, 1)))
-void Update_BD_Wall_Nodes(__global ushort2* __restrict__ blP01,
+void updateTRWallNodes(__global ushort2* __restrict__ blP01,
 	__global double2* __restrict__ Cvals,
 	__global double* __restrict__ distVals,
-	__global short* __restrict__ wallflagval,
+	__global short* __restrict__ niWallFlag,
 	__global int* __restrict__ niBLInd)
 {
 	//zero BLind_ind before calling this kernel
@@ -603,7 +603,7 @@ void Update_BD_Wall_Nodes(__global ushort2* __restrict__ blP01,
 }
 
 __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_UPDATEWALL, 1, 1)))
-	void find_wall_nodes(__global short* __restrict__ niWallFlag,
+	void findTRWallNodes(__global short* __restrict__ niWallFlag,
 	__global int* __restrict__ Winds,
 	__global int* __restrict__ cur_loc,
 	__global int* __restrict__ ActiveNodes, 

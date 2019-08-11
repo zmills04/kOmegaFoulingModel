@@ -117,6 +117,18 @@ public:
 	// and prepares it to be written to file
 	Kernel saveDistsKernel;
 
+	// Updates locations of free particles [0] and particles deposited on the walls [1]
+	Kernel shiftParticlesKernel[2];
+	
+	// Updates coefficients in NodC
+	Kernel updateTrCoeffsKernel;
+	
+	// Updates NodI with wall information
+	Kernel updateTRWallNodesKernel;
+
+	// Finds wall nodes and appends their indicies to wallInds
+	Kernel findTRWallNodesKernel;
+
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                                               ///////////////
@@ -210,6 +222,17 @@ public:
 
 	// indicies of wall nodes
 	DynArray1Di wallInds;
+	Array1Di wallIndsCurIndex;	// Tracks current index of wallInds array on device.
+								// When updating wallInds, this is incremented 
+								// atomically to track where the next ibbArr info
+								// should be place. Also, since memory cannot be
+								// reallocated inside kernel, the min function is 
+								// used to ensure that the arrays are not indexed out
+								// of bounds. After kernel to find wall nodes
+								// is called, the value of this must be compared to 
+								// the current size of the dynamic array, and if its >=
+								// the size, the ibb arrays must be reallocated, and
+								// the vfl.findWallNodesKernel function must be called again
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                   Output Arrays               ///////////////
@@ -444,6 +467,9 @@ public:
 	// Note: The run will be able to load temp and velocity data while still
 	// being a new run for remaining methods
 	bool testRestartRun();
+
+	// called by FL class to update data
+	void update(std::thread& shearUpdateThread);
 
 	// Calls kernels to save time data (umean, avg density, etc) to array
 	// on device, which will eventually be saved if it reaches its max 

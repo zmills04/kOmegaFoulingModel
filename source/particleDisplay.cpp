@@ -91,6 +91,10 @@ void particleDisplay::createKernels()
 		return;
 	TR_GL_kernel.create_kernel(GetSourceProgram, TRQUEUE_REF, "TR_opengl_par");
 	TR_GL_kernel.set_size(TRC_NUM_TRACERS, WORKGROUPSIZE_TR_GL);
+	
+	int updateGLGlobalSize = getGlobalSizeMacro(vls.nN / 2, WORKGROUPSIZE_UPDATE_GL);
+	updateGLKernel.create_kernel(GetSourceProgram, IOQUEUE_REF, "update_GL_wall");
+	updateGLKernel.set_size(updateGLGlobalSize, WORKGROUPSIZE_UPDATE_GL);
 }
 
 void particleDisplay::freeHostArrays()
@@ -282,6 +286,12 @@ void particleDisplay::setKernelArgs()
 	TR_GL_kernel.set_argument(ind++, P_vbo.get_buf_add());
 	TR_GL_kernel.set_argument(ind++, P_vbo.get_col_buf_add());
 	TR_GL_kernel.set_argument(ind++, parColorList.get_buf_add());
+
+	ind = 0;
+	int num_nodes = vls.nN / 2;
+	updateGLKernel.set_argument(ind++, vls.C.get_buf_add());
+	updateGLKernel.set_argument(ind++, LSb_vbo.get_buf_add());
+	updateGLKernel.set_argument(ind++, LSt_vbo.get_buf_add());
 }
 
 #define setSrcDefinePrefix		SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(),

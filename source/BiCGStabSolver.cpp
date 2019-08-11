@@ -726,7 +726,7 @@ bool BiCGStabSolver::save_w_indicies(std::string Name, bool fromDevFlag)
 {
 	if (fromDevFlag)
 	{
-		copy_to_host_all(TRUE);
+		copy_to_host_all(true);
 	}
 	Array2Dd Outarray(nnz(), 3);
 
@@ -744,7 +744,7 @@ bool BiCGStabSolver::save_w_indicies_as_bin(std::string Name, bool fromDevFlag)
 {
 	if (fromDevFlag)
 	{
-		copy_to_host_all(TRUE);
+		copy_to_host_all(true);
 	}
 	Array2Dd Outarray(nnz(), 3);
 

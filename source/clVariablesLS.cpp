@@ -966,6 +966,24 @@ void clVariablesLS::iniShearArray()
 //////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////
 
+
+void clVariablesLS::update()
+{
+	// Prepares dXArr and nType for updating.
+	nType.enqueue_copy_to_buffer(nTypePrev.get_buffer(), -1, LBQUEUE_REF);
+	dXArr.enqueue_copy_to_buffer(dXArr0.get_buffer(), -1, LBQUEUE_REF);
+	ibbArrCurIndex.FillBuffer(0, LBQUEUE_REF);
+
+	// updates nType
+	updateNType.call_kernel();
+
+	// Saves updated nType to nTypePrev to use in next update step
+	nTypePrev.enqueue_copy_to_buffer(vls.nType.get_buffer(), -1, LBQUEUE_REF);
+
+	updateBoundaryArrays();
+}
+
+
 void clVariablesLS::updateBoundaryArrays()
 {
 	updateBoundArr.call_kernel();
@@ -1101,7 +1119,7 @@ void clVariablesLS::updatedXArr()
 	}
 }
 
-void clVariablesLS::updateShearArrays()
+bool clVariablesLS::updateShearArrays()
 {
 	nType.read_from_buffer();
 	// TODO: check if it is necessary to set this to zeros, or if
@@ -1116,7 +1134,8 @@ void clVariablesLS::updateShearArrays()
 	}
 	ssArr.copy_dynamic_to_buffer();
 	ssArrInds.copy_to_buffer();
-	vtr.wallShear.updateShearArrays(reallocFlag);
+	return reallocFlag;
+	
 }
 
 

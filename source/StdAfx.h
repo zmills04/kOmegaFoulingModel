@@ -90,6 +90,7 @@
 #include <algorithm>
 #include <functional>
 #include <iomanip>
+#include <thread>
 #include <clSPARSE.h>
 #include <clSPARSE-error.h>
 #pragma warning( push )

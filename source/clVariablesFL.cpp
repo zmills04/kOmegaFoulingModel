@@ -21,73 +21,43 @@ void clVariablesFL::allocateArrays()
 	RI.setSizes(Num_IO_indicies * 4, Num_IO_indicies * 4, 1);
 	RI.allocateArrays();
 
-	IO_ind_dist.allocate(Num_IO_indicies * 4);
-	BLdep_tot.zeros(Num_active_nodes, vtr.parP.Nd);
-	BLdep_tot_temp.zeros(Num_active_nodes, vtr.parP.Nd);
+	blDepTot.zeros(Num_active_nodes, vtr.parP.Nd);
+	blDepTot_temp.zeros(Num_active_nodes, vtr.parP.Nd);
+	updateWallsDist.zeros(vtr.trDomainFullSizeX, vtr.trDomainSize.y);
 }
 
 void clVariablesFL::allocateBuffers()
 {
 	FI.allocateBuffers();
 	RI.allocateBuffers();
-	IO_ind_dist.allocate_buffer_w_copy(CL_MEM_READ_ONLY);
-	BLdep_tot.allocate_buffer_w_copy();
-	BLdep_tot_temp.allocate_buffer_w_copy();
+	blDepTot.allocate_buffer_w_copy();
+	blDepTot_temp.allocate_buffer_w_copy();
+	updateWallsDist.allocate_buffer_w_copy();
 }
 
 void clVariablesFL::createKernels()
 {
-	int gsize_FL0 = WORKGROUPSIZE_FL_SHIFT;
-	while (gsize_FL0 < vls.nBL)
-		gsize_FL0 += WORKGROUPSIZE_FL_SHIFT;
+	int shiftWallsGlobalSize = getGlobalSizeMacro(vls.nBL, WORKGROUPSIZE_FL_SHIFT);
+	int updateTRCoeffGlobalSize = getGlobalSizeMacro(vtr.nActiveNodes, WORKGROUPSIZE_TR);
+	int updateTRWallNodesGlobalSize = getGlobalSizeMacro(vls.nBL, WORKGROUPSIZE_TR_WALL);
+	int findTRWallNodesGlobalSize = getGlobalSizeMacro(vtr.nActiveNodes, WORKGROUPSIZE_UPDATEWALL);
+	int shiftParticlesGlobalSize = getGlobalSizeMacro(vtr.nN, WORKGROUPSIZE_SHIFT_PAR);
 
-	int gsizex_TR0 = (int)ceil(double(vtr.nActiveNodes) / (double)WORKGROUPSIZE_TR) *
-		WORKGROUPSIZE_TR;
+	//updateFL[0]
+	shiftWallsKernel.create_kernel(GetSourceProgram, LBQUEUE_REF, "Shift_walls");
+	shiftWallsKernel.set_size(shiftWallsGlobalSize, WORKGROUPSIZE_FL_SHIFT);
 
-	int gsize_TR1 = WORKGROUPSIZE_TR_WALL;
-	while (gsize_TR1 < vls.nBL)
-		gsize_TR1 += WORKGROUPSIZE_TR_WALL;
+	//updateFL[2]
+	smoothWallsKernel[0].create_kernel(GetSourceProgram, LBQUEUE_REF, "Smooth_walls1");
+	smoothWallsKernel[0].set_size(shiftWallsGlobalSize, WORKGROUPSIZE_FL_SHIFT);
 
-	int gsizex_TR3 = (int)ceil(double(vtr.nActiveNodes) / (double)WORKGROUPSIZE_RERELEASE) *
-		WORKGROUPSIZE_RERELEASE;
+	//updateFL[3]
+	smoothWallsKernel[1].create_kernel(GetSourceProgram, LBQUEUE_REF, "Smooth_walls2");
+	smoothWallsKernel[1].set_size(shiftWallsGlobalSize, WORKGROUPSIZE_FL_SHIFT);
 
-	int gsizex_TR4 = (int)ceil(double(vtr.nActiveNodes) / (double)WORKGROUPSIZE_UPDATEWALL) *
-		WORKGROUPSIZE_UPDATEWALL;
-
-	update_FL_kernel[0].create_kernel(GetSourceProgram, LBQUEUE_REF, "Shift_walls");
-	update_FL_kernel[0].set_size(gsize_FL0, WORKGROUPSIZE_FL_SHIFT);
-
-	update_FL_kernel[1].create_kernel(GetSourceProgram, LBQUEUE_REF, "Ramp_ends");
-	update_FL_kernel[1].set_size(4 * Num_IO_indicies, Num_IO_indicies);
-
-	update_FL_kernel[2].create_kernel(GetSourceProgram, LBQUEUE_REF, "Smooth_walls1");
-	update_FL_kernel[2].set_size(gsize_FL0, WORKGROUPSIZE_FL_SHIFT);
-
-	update_FL_kernel[3].create_kernel(GetSourceProgram, LBQUEUE_REF, "Smooth_walls2");
-	update_FL_kernel[3].set_size(gsize_FL0, WORKGROUPSIZE_FL_SHIFT);
-
-	update_TR_kernel[0].create_kernel(GetSourceProgram, TRQUEUE_REF, "Update_BD_Nodes");
-	update_TR_kernel[0].set_size(gsizex_TR0, WORKGROUPSIZE_TR);
-
-	update_TR_kernel[1].create_kernel(GetSourceProgram, TRQUEUE_REF, "Update_BD_Wall_Nodes");
-	update_TR_kernel[1].set_size(gsize_TR1, WORKGROUPSIZE_TR_WALL);
-
-	update_TR_kernel[2].create_kernel(GetSourceProgram, TRQUEUE_REF, "Shift_particles");
-	update_TR_kernel[2].set_size(TRC_NUM_TRACERS, WORKGROUPSIZE_SHIFT_PAR);
-
-	update_TR_kernel[3].create_kernel(GetSourceProgram, TRQUEUE_REF, "Shift_deposited_particles");
-	update_TR_kernel[3].set_size(gsizex_TR3, WORKGROUPSIZE_RERELEASE);
-
-	update_TR_kernel[4].create_kernel(GetSourceProgram, TRQUEUE_REF, "find_wall_nodes");
-	/*update_TR_kernel[4].set_size(gsizex_TR4, WORKGROUPSIZE_UPDATEWALL);*/
-	update_TR_kernel[4].set_size(1, 1);
-
-
-	if (p.useOpenGL)
-	{
-		update_GL_kernel.create_kernel(GetSourceProgram, IOQUEUE_REF, "update_GL_wall");
-		update_GL_kernel.set_size((double)vls.nN / 2., WORKGROUPSIZE_UPDATE_GL);
-	}
+	//updateFL[1]
+	rampEndsKernel.create_kernel(GetSourceProgram, LBQUEUE_REF, "Ramp_ends");
+	rampEndsKernel.set_size(4 * Num_IO_indicies, Num_IO_indicies);
 
 
 }
@@ -154,6 +124,10 @@ void clVariablesFL::ini()
 	iniIOVars();
 	allocateBuffers();
 
+	sourceGenerator::SourceInstance()->addFile2Kernel("flKernels.cl");
+	sourceGenerator::SourceInstance()->addFile2Kernel("trKernelsUpdate.cl");
+
+
 	std::function<void(void)> createKerPtr = std::bind(&clVariablesFL::createKernels, this);
 	std::function<void(void)> setArgsPtr = std::bind(&clVariablesFL::setKernelArgs, this);
 
@@ -179,7 +153,7 @@ void clVariablesFL::iniFoulI()
 	double cutoff_rad = 4.5 * LS_SPACING;
 
 	// Get Starting BL
-	while (TRUE)
+	while (true)
 	{
 		blind++;
 		if (vls.BL(blind + 1, 0) == IO_end.x)
@@ -320,7 +294,7 @@ void clVariablesFL::iniFoulI()
 
 	// Get starting BL of top wall
 	blind = vls.nBL / 2;
-	while (TRUE)
+	while (true)
 	{
 		blind++;
 		if (static_cast<int>(vtr.BL.P01ind(blind).x) == IO_end.z)
@@ -547,7 +521,7 @@ void clVariablesFL::renameSaveFiles()
 
 void clVariablesFL::save2file()
 {
-	BLdep_tot.save_txt_from_device("BLdep_tot");
+	blDepTot.save_txt_from_device("BLdep_tot");
 }
 
 void clVariablesFL::saveParams()
@@ -574,7 +548,7 @@ void clVariablesFL::saveParams()
 void clVariablesFL::saveRestartFiles()
 {
 	FI.saveFromDevice(true, trStructBase::saveBinFl);
-	BLdep_tot.save_bin_from_device("BLdep_tot");
+	blDepTot.save_bin_from_device("BLdep_tot");
 }
 
 void clVariablesFL::saveTimeData()
@@ -584,161 +558,36 @@ void clVariablesFL::saveTimeData()
 
 void clVariablesFL::setKernelArgs()
 {
+	cl_int ind = 0;
+	shiftWallsKernel.set_argument(ind++, vtr.blDep.get_buf_add());
+	shiftWallsKernel.set_argument(ind++, blDepTot.get_buf_add());
+	shiftWallsKernel.set_argument(ind++, vls.C.get_buf_add());
+	shiftWallsKernel.set_argument(ind++, vls.C0.get_buf_add());
+	shiftWallsKernel.set_argument(ind++, FI.weightsL.get_buf_add());
+	shiftWallsKernel.set_argument(ind++, FI.weightsR.get_buf_add());
+	shiftWallsKernel.set_argument(ind++, FI.blInd.get_buf_add());
+	shiftWallsKernel.set_argument(ind++, FI.cInd.get_buf_add());
+	shiftWallsKernel.set_argument(ind++, FI.disp.get_buf_add());
+	shiftWallsKernel.set_argument(ind++, FI.vN.get_buf_add());
 
-	//cl_int ind = 0;
-	//update_FL_kernel[0].set_argument(ind++, sizeof(cl_mem), vtr.BL_dep.get_buf_add());
-	//update_FL_kernel[0].set_argument(ind++, sizeof(cl_mem), BLdep_tot.get_buf_add());
-	//update_FL_kernel[0].set_argument(ind++, sizeof(cl_mem), vls.C.get_buf_add());
-	//update_FL_kernel[0].set_argument(ind++, sizeof(cl_mem), vls.C0.get_buf_add());
-	//update_FL_kernel[0].set_argument(ind++, sizeof(cl_mem), FI.get_buf_add());
-	//update_FL_kernel[0].set_argument(ind++, sizeof(cl_uint), (void *)&Num_active_nodes);
+	ind = 0;
+	smoothWallsKernel[0].set_argument(ind++, blDepTot.get_buf_add());
+	smoothWallsKernel[0].set_argument(ind++, blDepTot_temp.get_buf_add());
 
-	//ind = 0;
-	//update_FL_kernel[1].set_argument(ind++, sizeof(cl_mem), RI.get_buf_add());
-	//update_FL_kernel[1].set_argument(ind++, sizeof(cl_mem), IO_ind_dist.get_buf_add());
-	//update_FL_kernel[1].set_argument(ind++, sizeof(cl_mem), vls.C.get_buf_add());
-
-	//cl_uint2 SSbot = { { 0, Num_active_nodes / 2 } };
-	//cl_uint2 SStop = { { Num_active_nodes / 2, Num_active_nodes } };
-	//
-	//ind = 0;
-	//update_FL_kernel[2].set_argument(ind++, sizeof(cl_mem), BLdep_tot.get_buf_add());
-	//update_FL_kernel[2].set_argument(ind++, sizeof(cl_mem), BLdep_tot_temp.get_buf_add());
-	//update_FL_kernel[2].set_argument(ind++, sizeof(cl_mem), FI.get_buf_add());
-	//update_FL_kernel[2].set_argument(ind++, sizeof(cl_uint), (void *)&Num_active_nodes);
-	//update_FL_kernel[2].set_argument(ind++, sizeof(cl_int2), (void *)&SSbot);
-	//update_FL_kernel[2].set_argument(ind++, sizeof(cl_int2), (void *)&SStop);
-
-	//ind = 0;
-	//update_FL_kernel[3].set_argument(ind++, sizeof(cl_mem), BLdep_tot_temp.get_buf_add());
-	//update_FL_kernel[3].set_argument(ind++, sizeof(cl_mem), vls.C.get_buf_add());
-	//update_FL_kernel[3].set_argument(ind++, sizeof(cl_mem), vls.C0.get_buf_add());
-	//update_FL_kernel[3].set_argument(ind++, sizeof(cl_mem), FI.get_buf_add());
-	//update_FL_kernel[3].set_argument(ind++, sizeof(cl_uint), (void *)&Num_active_nodes);
-
-
-	//cl_int2 Dmax = { { p.nX - 1, p.nY - 1 } };
-	//int nCnodes = vls.nN - 1;
-	//int SkipNode = nCnodes / 2 - 1;
-	//ind = 0;
-	//update_LS_kernel[0].set_argument(ind++, sizeof(cl_mem), vls.M.get_buf_add());
-	//update_LS_kernel[0].set_argument(ind++, sizeof(cl_mem), vls.M_o.get_buf_add());
-	//update_LS_kernel[0].set_argument(ind++, sizeof(cl_mem), vlb.Stor.get_buf_add());
-	//update_LS_kernel[0].set_argument(ind++, sizeof(cl_mem), vls.C.get_buf_add());
-	//update_LS_kernel[0].set_argument(ind++, sizeof(cl_mem), vls.C0.get_buf_add());
-	//update_LS_kernel[0].set_argument(ind++, sizeof(cl_int2), (void *)&Dmax);
-	//update_LS_kernel[0].set_argument(ind++, sizeof(cl_int), (void *)&nCnodes);
-	//update_LS_kernel[0].set_argument(ind++, sizeof(cl_int), (void *)&SkipNode);
-	//update_LS_kernel[0].set_argument(ind++, sizeof(cl_mem), vlb.J_array.get_buf_add());
-	//update_LS_kernel[0].set_argument(ind++, sizeof(cl_mem), vlb.Ro_array.get_buf_add());
-
-	//ind = 0;
-	//update_LS_kernel[1].set_argument(ind++, sizeof(cl_mem), vls.M.get_buf_add());
-	//update_LS_kernel[1].set_argument(ind++, sizeof(cl_mem), vls.M_o.get_buf_add());
-	//update_LS_kernel[1].set_argument(ind++, sizeof(cl_mem), vls.s.get_buf_add());
-	//update_LS_kernel[1].set_argument(ind++, sizeof(cl_mem), vls.sf.get_buf_add());
-
-	//ind = 0;
-	//update_LS_kernel[2].set_argument(ind++, sizeof(cl_mem), vls.M.get_buf_add());
-	//update_LS_kernel[2].set_argument(ind++, sizeof(cl_mem), vls.sf.get_buf_add());
-	//update_LS_kernel[2].set_argument(ind++, sizeof(cl_mem), Sum_M_temp.get_buf_add());
-	//update_LS_kernel[2].set_argument(ind++, 2 * WORKGROUPSIZE_RED * sizeof(double), NULL);
-
-	//ind = 0;
-	//update_LS_kernel[3].set_argument(ind++, sizeof(cl_mem), Sum_M_temp.get_buf_add());
-	//update_LS_kernel[3].set_argument(ind++, sizeof(cl_mem), vls.Masses.get_buf_add());
-	//update_LS_kernel[3].set_argument(ind++, sizeof(cl_int), (void *)&vls.numBlocksM);
-
-
-	//ind = 0;
-	//update_LS_kernel[4].set_argument(ind++, sizeof(cl_mem), vls.M.get_buf_add());
-	//update_LS_kernel[4].set_argument(ind++, sizeof(cl_mem), vls.M_red.get_buf_add());
-	//update_LS_kernel[4].set_argument(ind++, sizeof(cl_mem), vlb.Act.get_buf_add());
-
-	//ind = 0;
-	//update_LB_kernel[0].set_argument(ind++, sizeof(cl_mem), vls.M.get_buf_add());
-	//update_LB_kernel[0].set_argument(ind++, sizeof(cl_mem), vlb.Prop_loc.get_buf_add());
-	//update_LB_kernel[0].set_argument(ind++, sizeof(cl_mem), vlb.Act.get_buf_add());
-	//update_LB_kernel[0].set_argument(ind++, sizeof(cl_mem), vlb.Stor.get_buf_add());
-
-	//ind = 0;
-	//update_LB_kernel[1].set_argument(ind++, sizeof(cl_mem), vlb.IBB_loc.get_buf_add());
-	//update_LB_kernel[1].set_argument(ind++, sizeof(cl_mem), vlb.IBB_coeff.get_buf_add());
-	//update_LB_kernel[1].set_argument(ind++, sizeof(cl_mem), vls.ii0_array.get_buf_add());
-	//update_LB_kernel[1].set_argument(ind++, sizeof(cl_mem), vls.iis1_array.get_buf_add());
-	//update_LB_kernel[1].set_argument(ind++, sizeof(cl_mem), vls.dir_array.get_buf_add());
-	//update_LB_kernel[1].set_argument(ind++, sizeof(cl_mem), vlb.Stor.get_buf_add());
-	//update_LB_kernel[1].set_argument(ind++, sizeof(cl_mem), vls.D_array.get_buf_add());
-
-
-	//ind = 0;
-	//update_FD_kernel.set_argument(ind++, sizeof(cl_mem), vtr.BL.get_buf_add());
-	//update_FD_kernel.set_argument(ind++, sizeof(cl_mem), vls.C.get_buf_add());
-	//update_FD_kernel.set_argument(ind++, sizeof(cl_mem), vls.M.get_buf_add());
-	//update_FD_kernel.set_argument(ind++, sizeof(cl_mem), vls.s.get_buf_add());
-	//update_FD_kernel.set_argument(ind++, sizeof(cl_mem), vls.sf.get_buf_add());
-	//update_FD_kernel.set_argument(ind++, sizeof(cl_mem), vls.M_o.get_buf_add());
-	//update_FD_kernel.set_argument(ind++, sizeof(cl_mem), vfd.dX.get_buf_add());
-	//update_FD_kernel.set_argument(ind++, sizeof(cl_mem), vfd.dX_cur.get_buf_add());
-	//update_FD_kernel.set_argument(ind++, sizeof(cl_mem), vlb.Stor.get_buf_add());
-	//update_FD_kernel.set_argument(ind++, sizeof(cl_int2), (void *)&Dmax);
-	//update_FD_kernel.set_argument(ind++, sizeof(cl_int), (void *)&vls.nBL);
-	//update_FD_kernel.set_argument(ind++, sizeof(cl_mem), vls.C0.get_buf_add());
-
-	//ind = 0;
-	//int Xnum = p.TrDomainSize.x, Ynum = p.TrDomainSize.y;
-
-	//update_TR_kernel[0].set_argument(ind++, sizeof(cl_mem), vls.M.get_buf_add());
-	//update_TR_kernel[0].set_argument(ind++, sizeof(cl_mem), vtr.NodC.get_buf_add());
-	//update_TR_kernel[0].set_argument(ind++, sizeof(cl_mem), vfd.dX_cur.get_buf_add());
-	//update_TR_kernel[0].set_argument(ind++, sizeof(cl_mem), vfd.dX.get_buf_add());
-	//update_TR_kernel[0].set_argument(ind++, sizeof(cl_mem), vlb.Stor.get_buf_add());
-	//update_TR_kernel[0].set_argument(ind++, sizeof(cl_mem), vtr.Active_indicies.get_buf_add());
-	//update_TR_kernel[0].set_argument(ind++, sizeof(cl_uint), (void *)&vtr.nActiveNodes);
-	//
-
-	//int xstart = (int)floor(X_MIN_VAL);
-	//int xstop = (int)ceil(X_STOP_POS) - 1;
-	//ind = 0;
-	//update_TR_kernel[1].set_argument(ind++, sizeof(cl_mem), vtr.BL.get_buf_add());
-	//update_TR_kernel[1].set_argument(ind++, sizeof(cl_mem), vtr.NodI.get_buf_add());
-	//update_TR_kernel[1].set_argument(ind++, sizeof(cl_mem), vtr.BLind_ind.get_buf_add());
-	//update_TR_kernel[1].set_argument(ind++, sizeof(cl_mem), vtr.Num_W_nodes.get_buf_add());
-	//update_TR_kernel[1].set_argument(ind++, sizeof(BLbound), (void *)&vtr.Bounds);
-	//update_TR_kernel[1].set_argument(ind++, sizeof(cl_uint), (void *)&xstart);
-	//update_TR_kernel[1].set_argument(ind++, sizeof(cl_uint), (void *)&xstop);
-	//update_TR_kernel[1].set_argument(ind++, sizeof(cl_mem), vtr.Active_flag.get_buf_add());
-
-	//double Ymin = vls.C0[0].y;
-	//double Ymax = vls.C0[vls.nN - 1].y;
-	//ind = 0;
-	//update_TR_kernel[2].set_argument(ind++, sizeof(cl_mem), vtr.P.get_buf_add());
-	//update_TR_kernel[2].set_argument(ind++, sizeof(cl_mem), vtr.NodI.get_buf_add());
-	//update_TR_kernel[2].set_argument(ind++, sizeof(cl_mem), vtr.BL.get_buf_add());
-	//update_TR_kernel[2].set_argument(ind++, sizeof(double), (void*)&vtr.trP.X_release);
-	//update_TR_kernel[2].set_argument(ind++, sizeof(double), (void*)&Ymin);
-	//update_TR_kernel[2].set_argument(ind++, sizeof(double), (void*)&Ymax);
-
-	//ind = 0;
-	//update_TR_kernel[3].set_argument(ind++, sizeof(cl_mem), vtr.P.get_buf_add());
-	//update_TR_kernel[3].set_argument(ind++, sizeof(cl_mem), vtr.BL.get_buf_add());
-
-
-	//ind = 0;
-	//update_TR_kernel[4].set_argument(ind++, sizeof(cl_mem), vtr.NodI.get_buf_add());
-	//update_TR_kernel[4].set_argument(ind++, sizeof(cl_mem), vtr.Winds.get_buf_add());
-	//update_TR_kernel[4].set_argument(ind++, sizeof(cl_mem), vtr.Active_indicies.get_buf_add());
-	//update_TR_kernel[4].set_argument(ind++, sizeof(cl_uint), (void *)&vtr.nActiveNodes);
-
-	//if (p.useOpenGL)
-	//{
-	//	ind = 0;
-	//	int num_nodes = vls.nN / 2;
-	//	vfl.update_GL_kernel.set_argument(ind++, sizeof(cl_mem), vls.C.get_buf_add());
-	//	vfl.update_GL_kernel.set_argument(ind++, sizeof(cl_mem), vls.LSb_vbo.get_buf_add());
-	//	vfl.update_GL_kernel.set_argument(ind++, sizeof(cl_mem), vls.LSt_vbo.get_buf_add());
-	//	vfl.update_GL_kernel.set_argument(ind++, sizeof(int), (void*)& num_nodes);
-	//}
+	ind = 0;
+	smoothWallsKernel[1].set_argument(ind++, blDepTot_temp.get_buf_add());
+	smoothWallsKernel[1].set_argument(ind++, vls.C.get_buf_add());
+	smoothWallsKernel[1].set_argument(ind++, vls.C0.get_buf_add());
+	smoothWallsKernel[1].set_argument(ind++, FI.cInd.get_buf_add());
+	smoothWallsKernel[1].set_argument(ind++, FI.disp.get_buf_add());
+	smoothWallsKernel[1].set_argument(ind++, FI.vN.get_buf_add());
+	
+	ind = 0;
+	rampEndsKernel.set_argument(ind++, RI.IOind.get_buf_add());
+	rampEndsKernel.set_argument(ind++, RI.Cind.get_buf_add());
+	rampEndsKernel.set_argument(ind++, RI.Ybegin.get_buf_add());
+	rampEndsKernel.set_argument(ind++, RI.Coeff.get_buf_add());
+	rampEndsKernel.set_argument(ind++, vls.C.get_buf_add());
 }
 
 #define setSrcDefinePrefix		SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(),
@@ -747,6 +596,8 @@ void clVariablesFL::setSourceDefines()
 	setSrcDefinePrefix "PERCENT_USED_IN_SMOOTHING", vfl.smoothingPct);
 	setSrcDefinePrefix "PERCENT_NOT_USED_IN_SMOOTHING", (1. - vfl.smoothingPct));
 	setSrcDefinePrefix "NEIGHS_PER_SIDE_SMOOTHING", vfl.neighsPerSideSmoothing);
+
+	setSrcDefinePrefix "FL_NUM_ACTIVE_NODES", static_cast<unsigned int>(Num_active_nodes));
 
 	double Ymin = vls.C0[0].y;
 	double Ymax = vls.C0[vls.nN - 1].y;
@@ -777,7 +628,7 @@ bool clVariablesFL::testRestartRun()
 	
 	allocateArrays();
 
-	restartRunFlag &= BLdep_tot.load("load" SLASH "blDepTot");
+	restartRunFlag &= blDepTot.load("load" SLASH "blDepTot");
 	restartRunFlag &= FI.load();
 	return restartRunFlag;
 }
@@ -788,168 +639,148 @@ void clVariablesFL::updateTimeData()
 
 void clVariablesFL::update()
 {//TODO: test if case is handled when dX becomes > 1.
-//	cl_event Red_T_Evt;
-//	//vfd.FD_reduce_T.call_kernels(&Red_T_Evt);
-//	//vfd.Sum_Temp.read_from_buffer(IOQUEUE, 1, &Red_T_Evt);
-//	clReleaseEvent(Red_T_Evt);
-//
-//
-//	cl_event LS_Evt, Fill_Evt;
-//	
-//	//vfd.dX_cur.enqueue_copy_to_buffer(FDQUEUE, vfd.dX.get_buffer());
-//	
-//	update_FL();
-//	update_LS(&LS_Evt);
-//		
-//	vls.C.read_from_buffer(IOQUEUE, 1, &LS_Evt);
-//	vls.M.read_from_buffer(IOQUEUE);
-//
-//	update_LB();
-//
-//#ifdef USE_OPENGL
-//	update_GL();
-//#endif
-//
-//	update_FD(&LS_Evt);
-//
-//	clFlush(FDQUEUE);
-//	
-//	nodeI Ntemp;
-//	for (int i = 0; i < MAX_BL_PER_NODE; i++)
-//		Ntemp.BLind[i] = -1;
-//	Ntemp.Wall_Flag = 0;
-//	vtr.NodI.FillBuffer(IOQUEUE, Ntemp);
-//	vtr.BLind_ind.FillBuffer(IOQUEUE, 0);
-//
-//	int Num_Wnodes_temp = vtr.Num_wall_nodes_max;
-//	vtr.Num_W_nodes.FillBuffer(IOQUEUE, 0, &Fill_Evt);
-//
-//	clFlush(IOQUEUE);
-//
-//	update_TR(&Fill_Evt, Num_Wnodes_temp);
-//
-//	p.flushQueues();
-//
-//	clReleaseEvent(LS_Evt);
-//	clReleaseEvent(Fill_Evt);
+	cl_event Red_T_Evt;
+	//vfd.FD_reduce_T.call_kernels(&Red_T_Evt);
+	//vfd.Sum_Temp.read_from_buffer(IOQUEUE, 1, &Red_T_Evt);
+	clReleaseEvent(Red_T_Evt);
+
+
+	//cl_event LS_Evt, Fill_Evt;
+	
+	//vfd.dX_cur.enqueue_copy_to_buffer(FDQUEUE, vfd.dX.get_buffer());
+	
+	update_FL();
+	update_LS();
+
+	// Only needs LS variables updated, so we can go ahead and
+	// spin off a thread to execute this function.
+	std::thread updateShearThread(vtr.wallShear.updateShearArrays);
+
+	update_LB();
+
+	//vls.C.read_from_buffer(IOQUEUE, 1, &LS_Evt);
+	//vls.M.read_from_buffer(IOQUEUE);
+
+	if(p.useOpenGL)
+		update_GL();
+
+	update_FD(updateShearThread);
+
+	clFlush(FDQUEUE);
+	
+	nodeI Ntemp;
+	for (int i = 0; i < MAX_BL_PER_NODE; i++)
+		Ntemp.BLind[i] = -1;
+	Ntemp.Wall_Flag = 0;
+	vtr.NodI.FillBuffer(IOQUEUE, Ntemp);
+	vtr.BLind_ind.FillBuffer(IOQUEUE, 0);
+
+	int Num_Wnodes_temp = vtr.Num_wall_nodes_max;
+	vtr.Num_W_nodes.FillBuffer(IOQUEUE, 0, &Fill_Evt);
+
+	clFlush(IOQUEUE);
+
+	update_TR(&Fill_Evt, Num_Wnodes_temp);
+
+	p.flushQueues();
+
+	clReleaseEvent(LS_Evt);
+	clReleaseEvent(Fill_Evt);
 }
 
-void clVariablesFL::update_GL()
+inline void clVariablesFL::update_GL()
 {
-	update_GL_kernel.call_kernel();
+	updateGLKernel.call_kernel();
 }
 
-void clVariablesFL::update_FD(cl_event* wait)
+inline void clVariablesFL::update_FD()
 {
-	update_FD_kernel.call_kernel(NULL, 1, wait);
-
-	int offset = (p.nX - 1) * p.Channel_Height * 5;
+	vfd.updateDerivativeArrays();
 }
 
 void clVariablesFL::update_FL()
 {
-	//cl_event Evt1;
-	//update_FL_kernel[0].call_kernel(&Evt1);
-	////Smooth_timer--;
-	////if (Smooth_timer == 0)
-	////{
-	////	update_FL_kernel[2].call_kernel();
-	////	update_FL_kernel[3].call_kernel();
-	////}
-	//update_FL_kernel[1].call_kernel();
-	//cl_uint zer = 0;
-	//vtr.BL_dep.FillBuffer(IOQUEUE, 0, 1, &Evt1);
-	//
-	////if (Smooth_timer == 0)
-	////{
-	////	BLdep_tot.enqueue_copy_to_buffer(IOQUEUE, BLdep_tot_temp.get_buffer());
-	////	Smooth_timer = NUM_UPDATES_BTW_SMOOTHING;
-	////}
-
-	//clReleaseEvent(Evt1);
-}
-
-void clVariablesFL::update_LB()
-{
-	update_LB_kernel[0].call_kernel();
+	cl_event Evt1;
+	shiftWallsKernel.call_kernel(nullptr, 0, nullptr, &Evt1);
+	Smooth_timer--;
+	if (Smooth_timer == 0)
+	{
+		smoothWallsKernel[0].call_kernel();
+		smoothWallsKernel[1].call_kernel();
+	}
+	rampEndsKernel.call_kernel();
+	cl_uint zer = 0;
+	vtr.blDep.FillBuffer(0, LBQUEUE_REF, 1, &Evt1);
+	
+	if (Smooth_timer == 0)
+	{
+		blDepTot.enqueue_copy_to_buffer(blDepTot_temp.get_buffer(), -1, IOQUEUE_REF);
+		Smooth_timer = flTimePerSmooth;
+	}
+	clReleaseEvent(Evt1);
 }
 
 
-void clVariablesFL::update_LS()
+
+
+void clVariablesFL::update_TR(std::thread& shearUpdateThread)
 {
-	// Prepares dXArr and nType for updating.
-	vls.nType.enqueue_copy_to_buffer(vls.nTypePrev.get_buffer(), -1, LBQUEUE_REF);
-	vls.dXArr.enqueue_copy_to_buffer(vls.dXArr0.get_buffer(), -1, LBQUEUE_REF);
-	vls.ibbArrCurIndex.FillBuffer(0, LBQUEUE_REF);
-
-	// updates nType
-	vls.updateNType.call_kernel();
-
-	// Saves updated nType to nTypePrev to use in next update step
-	vls.nTypePrev.enqueue_copy_to_buffer(vls.nType.get_buffer(), -1, LBQUEUE_REF);
-
-	vls.updateBoundaryArrays();
-}
-
-void clVariablesFL::update_TR(cl_event *wait_fill, int Num_Wnodes_temp)
-{
-
-	//cl_uint offset = vtr.Ploc(1).x;
-	//cl_uint total_removal = vtr.Ploc(1).y - offset;
-	//update_TR_kernel[3].set_argument(2, &offset);
-	//update_TR_kernel[3].set_argument(3, &total_removal);
+	cl_uint offset = vtr.Ploc(1).x;
+	cl_uint total_removal = vtr.Ploc(1).y - offset;
+	update_TR_kernel[3].set_argument(2, &offset);
+	update_TR_kernel[3].set_argument(3, &total_removal);
 
 
-	//update_TR_kernel[0].call_kernel(NULL, 1, wait_fill);  ///Update Nodes
-	//update_TR_kernel[1].call_kernel();  ///Update Wall Nodes
-	//update_TR_kernel[2].call_kernel();	///Update Particles
-	//update_TR_kernel[3].call_kernel();	///Update Wall Particles
+	update_TR_kernel[0].call_kernel(NULL, 1, wait_fill);  ///Update Nodes
+	update_TR_kernel[1].call_kernel();  ///Update Wall Nodes
+	update_TR_kernel[2].call_kernel();	///Update Particles
+	update_TR_kernel[3].call_kernel();	///Update Wall Particles
 
-	//vtr.Num_W_nodes.read_from_buffer();
-	//clFlush(TRQUEUE);
+	vtr.Num_W_nodes.read_from_buffer();
+	clFlush(TRQUEUE);
 
-	//clFinish(FDQUEUE);
+	clFinish(FDQUEUE);
 
-	//// May or may not need to keep this (will require re-implementing method in LBsolver)
-	////vlb.update_IBB_arrays();
-	//vtr.update_Shear_arrays();
-	//vtr.update_trp();
+	// May or may not need to keep this (will require re-implementing method in LBsolver)
+	//vlb.update_IBB_arrays();
+	vtr.update_Shear_arrays();
+	vtr.update_trp();
 
-	//clFinish(TRQUEUE);
-	//vtr.Num_wall_nodes = vtr.Num_W_nodes(0);
-	////cl_event Fill_Evt;
-	////vtr.Num_W_nodes.FillBuffer(IOQUEUE, 0, &Fill_Evt);
+	clFinish(TRQUEUE);
+	vtr.Num_wall_nodes = vtr.Num_W_nodes(0);
+	//cl_event Fill_Evt;
+	//vtr.Num_W_nodes.FillBuffer(IOQUEUE, 0, &Fill_Evt);
 
-	//if (Num_Wnodes_temp < vtr.Num_W_nodes(0))
-	//{
-	//	double gsize = (double)vtr.Num_W_nodes(0) / WORKGROUPSIZE_TR_WALL;
-	//	vtr.Num_wall_nodes_max = (int)(ceil(gsize)*WORKGROUPSIZE_TR_WALL);
+	if (Num_Wnodes_temp < vtr.Num_W_nodes(0))
+	{
+		double gsize = (double)vtr.Num_W_nodes(0) / WORKGROUPSIZE_TR_WALL;
+		vtr.Num_wall_nodes_max = (int)(ceil(gsize)*WORKGROUPSIZE_TR_WALL);
 
-	//	vtr.TR_Wall_Par_kernel[0].reset_global_size(vtr.Num_W_nodes(0));
-	//	vtr.TR_Wall_Node_kernel[0].reset_global_size(vtr.Num_W_nodes(0));
-	//	vtr.TR_Wall_Node_kernel[1].reset_global_size(vtr.Num_W_nodes(0));
-
-
-	//	vtr.Winds.reallocate(vtr.Num_wall_nodes_max);
-	//	clFinish(IOQUEUE);
-
-	//	update_TR_kernel[4].set_argument(1, vtr.Winds.get_buf_add());
+		vtr.TR_Wall_Par_kernel[0].reset_global_size(vtr.Num_W_nodes(0));
+		vtr.TR_Wall_Node_kernel[0].reset_global_size(vtr.Num_W_nodes(0));
+		vtr.TR_Wall_Node_kernel[1].reset_global_size(vtr.Num_W_nodes(0));
 
 
-	//	vtr.TR_Wall_Par_kernel[0].set_argument(7, vtr.Winds.get_buf_add());
-	//	vtr.TR_Wall_Node_kernel[0].set_argument(4, vtr.Winds.get_buf_add());
-	//	vtr.TR_Wall_Node_kernel[1].set_argument(4, vtr.Winds.get_buf_add());
-	//}
+		vtr.Winds.reallocate(vtr.Num_wall_nodes_max);
+		clFinish(IOQUEUE);
 
-	//vtr.TR_Wall_Par_kernel[0].set_argument(8, &vtr.Num_wall_nodes);
-	//vtr.TR_Wall_Node_kernel[0].set_argument(5, &vtr.Num_wall_nodes);
-	//vtr.TR_Wall_Node_kernel[1].set_argument(5, &vtr.Num_wall_nodes);
-	//
-	//////update_TR_kernel[4].call_kernel(1, &Fill_Evt);
-	//update_TR_kernel[4].call_kernel();
+		update_TR_kernel[4].set_argument(1, vtr.Winds.get_buf_add());
 
-	//clFlush(TRQUEUE);
-	////clReleaseEvent(Fill_Evt);
+
+		vtr.TR_Wall_Par_kernel[0].set_argument(7, vtr.Winds.get_buf_add());
+		vtr.TR_Wall_Node_kernel[0].set_argument(4, vtr.Winds.get_buf_add());
+		vtr.TR_Wall_Node_kernel[1].set_argument(4, vtr.Winds.get_buf_add());
+	}
+
+	vtr.TR_Wall_Par_kernel[0].set_argument(8, &vtr.Num_wall_nodes);
+	vtr.TR_Wall_Node_kernel[0].set_argument(5, &vtr.Num_wall_nodes);
+	vtr.TR_Wall_Node_kernel[1].set_argument(5, &vtr.Num_wall_nodes);
+	
+	////update_TR_kernel[4].call_kernel(1, &Fill_Evt);
+	update_TR_kernel[4].call_kernel();
+
+	clFlush(TRQUEUE);
+	//clReleaseEvent(Fill_Evt);
 }
 
 

@@ -43,17 +43,14 @@ void Shift_walls(__global uint* __restrict__ BLdep,
 
 __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_FL_SHIFT, 1, 1)))
 void Smooth_walls1(__global double* __restrict__ BLdep_tot,
-	__global double* __restrict__ BLdep_tot2,
-	int2 SSbottom, int2 SStop)
+	__global double* __restrict__ BLdep_tot2)
 {
 	int i = get_global_id(0);
-
 
 	if (i >= FL_NUM_BL)
 		return;
 
-	int2 startstop = (i < FL_NUM_BL / 2) ? (SSbottom) : (SStop);
-
+	int2 startstop = (i < FL_NUM_BL / 2) ? (int2(0, FL_NUM_ACTIVE_NODES/2)) : (int2(FL_NUM_ACTIVE_NODES/2, FL_NUM_ACTIVE_NODES));
 	int kkstart = MAX(i - NEIGHS_PER_SIDE_SMOOTHING, startstop.x);
 	int kkstop = MIN(i + 1 + NEIGHS_PER_SIDE_SMOOTHING, startstop.y);
 	double num_locs = convert_double(kkstop - kkstart);
@@ -113,7 +110,7 @@ void Ramp_ends(__global uint* __restrict__ IOinds,
 	double Ycur = C[IOind].y;
 
 	double Yshift = Ycur - riYbegin[gid];
-	C[Cind].y = Ycur - riCoeff * Yshift;
+	C[Cind].y = Ycur - riCoeff[gid] * Yshift;
 }
 
 

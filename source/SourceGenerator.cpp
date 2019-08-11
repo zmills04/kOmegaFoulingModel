@@ -41,6 +41,13 @@ void sourceGenerator::addDefine(std::string &kerstr, const std::string varname, 
 	kerstr.append("#define " + varname + "\t\t" + char_temp);
 }
 
+void sourceGenerator::addDefine(std::string& kerstr, const std::string varname, unsigned int value)
+{
+	char char_temp[100];
+	sprintf(char_temp, "(%d)\n", value);
+	kerstr.append("#define " + varname + "\t\t" + char_temp);
+}
+
 void sourceGenerator::addDefine(std::string &kerstr, const std::string varname, std::string value)
 {
 	kerstr.append("#define " + varname + "\t\t" + value + "\n");

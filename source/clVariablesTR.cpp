@@ -127,6 +127,7 @@ void clVariablesTR::allocateArrays()
 	activeInds.allocateDynamic(trDomainSize.x * trDomainSize.y);
 
 	wallInds.allocateDynamic(trDomainSize.x * trDomainSize.y / 10);
+	wallIndsCurIndex.zeros(1);
 
 	/*activeFlag.zeros(trDomainSize.x, trDomainFullSizeX, trDomainSize.y, trDomainSize.y);*/
 
@@ -187,6 +188,7 @@ void clVariablesTR::allocateBuffers()
 	reflectInds.allocate_buffer_w_copy();
 
 	wallInds.allocate_buffer_w_copy();
+	wallIndsCurIndex.allocate_buffer_w_copy();
 
 	ioDistsSave.allocate_buffer_w_copy();
 
@@ -241,6 +243,34 @@ void clVariablesTR::createKernels()
 	trWallParKernel[4].set_size(2 * WORKGROUPSIZE_TR_WALL, WORKGROUPSIZE_TR_WALL);
 
 	//	saveDistsKernel.create_kernel(GetSourceProgram, TRQUEUE_REF, "TR_save_dists");
+
+	int shiftWallsGlobalSize = getGlobalSizeMacro(vls.nBL, WORKGROUPSIZE_FL_SHIFT);
+	int updateTRCoeffGlobalSize = getGlobalSizeMacro(nActiveNodes, WORKGROUPSIZE_TR);
+	int updateTRWallNodesGlobalSize = getGlobalSizeMacro(vls.nBL, WORKGROUPSIZE_TR_WALL);
+	int findTRWallNodesGlobalSize = getGlobalSizeMacro(nActiveNodes, WORKGROUPSIZE_UPDATEWALL);
+	int shiftParticlesGlobalSize = getGlobalSizeMacro(nN, WORKGROUPSIZE_SHIFT_PAR);
+
+
+	// updateTRKernel[0]
+	updateTrCoeffsKernel.create_kernel(GetSourceProgram, TRQUEUE_REF, "updateTRCoeffs");
+	updateTrCoeffsKernel.set_size(updateTRCoeffGlobalSize, WORKGROUPSIZE_TR);
+
+	// updateTRKernel[1]
+	updateTRWallNodesKernel.create_kernel(GetSourceProgram, TRQUEUE_REF, "updateTRWallNodes");
+	updateTRWallNodesKernel.set_size(updateTRWallNodesGlobalSize, WORKGROUPSIZE_TR_WALL);
+
+	// updateTRKernel[4]
+	findTRWallNodesKernel.create_kernel(GetSourceProgram, TRQUEUE_REF, "findTRWallNodes");
+	findTRWallNodesKernel.set_size(findTRWallNodesGlobalSize, WORKGROUPSIZE_UPDATEWALL);
+
+	// updateTRKernel[2]
+	shiftParticlesKernel[0].create_kernel(GetSourceProgram, TRQUEUE_REF, "Shift_particles");
+	shiftParticlesKernel[0].set_size(TRC_NUM_TRACERS, WORKGROUPSIZE_SHIFT_PAR);
+
+	// updateTRKernel[3]
+	shiftParticlesKernel[1].create_kernel(GetSourceProgram, TRQUEUE_REF, "Shift_deposited_particles");
+	shiftParticlesKernel[1].set_size(1, 1);
+
 
 	glParticles.createKernels();
 	wallShear.createKernels();
@@ -330,7 +360,7 @@ int clVariablesTR::getInd(cl_int2 ij)
 double clVariablesTR::getOffset(double xval)
 {
 	int i = 0;
-	while (TRUE)
+	while (true)
 	{
 		if (vls.C0(i).x < xval && vls.C0(i + 1).x >= xval)
 			break;
@@ -1717,6 +1747,50 @@ void clVariablesTR::setKernelArgs()
 	trUpdateParKernel.setOption(activeInds.curSizeAdd());
 
 
+	ind = 0;
+	updateTrCoeffsKernel.set_argument(ind++, vls.nType.get_buf_add());
+	NodC.setTempBuffers(updateTrCoeffsKernel, ind);
+	NodC.setVelBuffers(updateTrCoeffsKernel, ind);
+	updateTrCoeffsKernel.set_argument(ind++, NodI.wallFlag.get_buf_add());
+	updateTrCoeffsKernel.set_argument(ind++, vls.dXArr.get_buf_add());
+	updateTrCoeffsKernel.set_argument(ind++, vls.dXArr0.get_buf_add());
+	updateTrCoeffsKernel.set_argument(ind++, activeInds.get_buf_add());
+	updateTrCoeffsKernel.setOptionInd(ind);
+	updateTrCoeffsKernel.set_argument(ind, &nActiveNodes);
+
+	ind = 0;
+	updateTRWallNodesKernel.set_argument(ind++, BL.P01ind.get_buf_add());
+	updateTRWallNodesKernel.set_argument(ind++, vls.C.get_buf_add());
+	updateTRWallNodesKernel.set_argument(ind++, vfl.updateWallsDist.get_buf_add());
+	updateTRWallNodesKernel.set_argument(ind++, NodI.wallFlag.get_buf_add());
+	updateTRWallNodesKernel.set_argument(ind++, NodI.BLind.get_buf_add());
+
+	ind = 0;
+	shiftParticlesKernel[0].set_argument(ind++, P.Dep_Flag.get_buf_add());
+	shiftParticlesKernel[0].set_argument(ind++, P.loc.get_buf_add());
+	shiftParticlesKernel[0].set_argument(ind++, P.pos.get_buf_add());
+	shiftParticlesKernel[0].set_argument(ind++, BL.P01ind.get_buf_add());
+	shiftParticlesKernel[0].set_argument(ind++, vls.C.get_buf_add());
+	shiftParticlesKernel[0].set_argument(ind++, NodI.wallFlag.get_buf_add());
+	shiftParticlesKernel[0].set_argument(ind++, NodI.BLind.get_buf_add());
+
+	ind = 0;
+	shiftParticlesKernel[1].set_argument(ind++, P.Dep_Flag.get_buf_add());
+	shiftParticlesKernel[1].set_argument(ind++, P.loc.get_buf_add());
+	shiftParticlesKernel[1].set_argument(ind++, P.pos.get_buf_add());
+	shiftParticlesKernel[1].set_argument(ind++, BL.P01ind.get_buf_add());
+	shiftParticlesKernel[1].set_argument(ind++, vls.C.get_buf_add());
+	shiftParticlesKernel[1].setOptionInd(ind);
+
+	ind = 0;
+	findTRWallNodesKernel.set_argument(ind++, NodI.wallFlag.get_buf_add());
+	findTRWallNodesKernel.set_argument(ind++, wallInds.get_buf_add());
+	findTRWallNodesKernel.set_argument(ind++, wallIndsCurIndex.get_buf_add());
+	findTRWallNodesKernel.set_argument(ind++, activeInds.get_buf_add());
+	findTRWallNodesKernel.set_argument(ind++, &nActiveNodes);
+	findTRWallNodesKernel.setOptionInd(ind);
+	findTRWallNodesKernel.set_argument(ind++, &Num_wall_nodes);
+
 	parSort.setKernelArgs();
 	wallShear.setKernelArgs();
 	glParticles.setKernelArgs();
@@ -1875,7 +1949,7 @@ void clVariablesTR::updateWallParticles()
 		return;
 
 	// continue until no tracers have crossed a wall
-	while (TRUE)
+	while (true)
 	{
 		// set number of particles to reflect argument and global size
 		// before calling kernel

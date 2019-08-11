@@ -137,6 +137,8 @@ public:
 
 	void addDefine(std::string &kerstr, const std::string varname);
 
+	void addDefine(std::string& kerstr, const std::string varname, unsigned int value);
+
 	// Appends kernel initialization functions to the lists, which will
 	// call functions after program is compiled
 	void addIniFunction(std::function<void(void)> &createptr_, std::function<void(void)> &setargptr_)

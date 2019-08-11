@@ -39,7 +39,7 @@ public:
 	std::function<void(void)> loadParamsPtr;
 
 
-	clVariablesFL() : BLdep_tot("blDepTot"), BLdep_tot_temp("blDepTotTemp"),
+	clVariablesFL() : blDepTot("blDepTot"), blDepTot_temp("blDepTotTemp"),
 		IO_ind_dist("ioIndDist"), FI("FoulI"), RI("RampI")
 	{
 		loadParamsPtr = std::bind(&clVariablesFL::loadParams, this);
@@ -60,10 +60,8 @@ public:
 	//////////////                                               ///////////////
 	////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////
+	Kernel shiftWallsKernel, smoothWallsKernel[2], rampEndsKernel;
 
-	Kernel update_FL_kernel[4];
-	Kernel update_TR_kernel[5];
-	Kernel update_GL_kernel;
 
 
 	////////////////////////////////////////////////////////////////////////////
@@ -76,8 +74,9 @@ public:
 	
 	foulI FI;
 	rampI RI;
-	Array2Dd BLdep_tot, BLdep_tot_temp;
+	Array2Dd blDepTot, blDepTot_temp;
 	Array1Dd IO_ind_dist;
+	Array2Dd updateWallsDist; //used to track current minimum distance when updating wall
 	//Array1Dd Sum_M_temp;
 	//Array1Dd Debug_out;
 	
@@ -246,12 +245,6 @@ public:
 	////////////////////////////////////////////////////////////////////////////
 
 	void update();
-	void update_FD(cl_event* wait);
-	void update_FL();
-	void update_GL();
-	void update_LB();
-	void update_LS();
-	void update_TR(cl_event* wait_fill, int Num_Wnodes_temp);
 
 
 
