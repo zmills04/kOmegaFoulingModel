@@ -1,6 +1,6 @@
+#pragma OPENCL EXTENSION cl_khr_int64_base_atomics : enable
 #ifndef OPENCL_VERSION_1_2
 #pragma OPENCL EXTENSION cl_khr_subgroups : enable
-#pragma OPENCL EXTENSION cl_khr_int64_base_atomics : enable
 #pragma OPENCL EXTENSION cl_khr_int64_extended_atomics : enable
 #endif
 
@@ -9,8 +9,7 @@
 #define MAX(A, B)		(((A) > (B)) ? (A) : (B))
 #define MIN(A, B)		(((A) < (B)) ? (A) : (B))
 #define EPSILON			1.11e-16
-#define true			1
-#define false			0
+
 #define EQUALS2D(A, B)	((A.x == B.x) && (A.y == B.y))
 #define NEQUALS2D(A, B)	((A.x != B.x) || (A.y != B.y))
 #define CEPS			1.0e-5
@@ -77,7 +76,7 @@ constant double2 CXY_DOUBLE[8] = {
 
 
 //https://github.com/ddemidov/vexcl-experiments/blob/master/sort-by-key-atomic.cpp
-#ifndef OPENCL_VERSION_1_2
+//#ifndef OPENCL_VERSION_1_2
 void AtomicAdd(__global double *val, double delta)
 {
 	union
@@ -96,28 +95,50 @@ void AtomicAdd(__global double *val, double delta)
 		new.f = old.f + delta;
 	} while (atom_cmpxchg((volatile __global ulong *)val, old.i, new.i) != old.i);
 }
-#endif
 
-bool AtomicMin(volatile __global double* __restrict__ source, const double newValDouble) {
-	union {
+bool AtomicMin(__global double* val, double delta)
+{
+	union
+	{
 		double f;
-		ulong i;
-	} newVal;
-	union {
+		ulong  i;
+	} old;
+	union
+	{
 		double f;
-		ulong i;
-	} prevVal;
-	do {
-		prevVal.f = *source;
-		newVal.f = min(prevVal.f, newValDouble);
-	} while (atomic_cmpxchg((volatile __global ulong *)source, prevVal.i, newVal.i) != prevVal.i);
+		ulong  i;
+	} new;
+	do
+	{
+		old.f = *val;
+		new.f = min(old.f, delta);
+	} while (atom_cmpxchg((volatile __global ulong*)val, old.i, new.i) != old.i);
 
-
-	// returns true if source == newValDouble (i.e. newValDouble was smaller and therefore
-	// the new value in source)
-	return (*source == newValDouble);
-
+	return (*val == delta);
 }
+
+//#endif
+
+//bool AtomicMin(volatile __global double* __restrict__ source, const double newValDouble) {
+//	union {
+//		double f;
+//		ulong i;
+//	} newVal;
+//	union {
+//		double f;
+//		ulong i;
+//	} prevVal;
+//	do {
+//		prevVal.f = *source;
+//		newVal.f = min(prevVal.f, newValDouble);
+//	} while (atomic_cmpxchg((volatile __global ulong *)source, prevVal.i, newVal.i) != prevVal.i);
+//
+//
+//	// returns true if source == newValDouble (i.e. newValDouble was smaller and therefore
+//	// the new value in source)
+//	return (*source == newValDouble);
+//
+//}
 
 ////////////////////////////////////////////////
 ////// Random number generator Functions  //////
@@ -312,14 +333,14 @@ __constant int ibbRev[8] = { DIST_SIZE, -DIST_SIZE, DIST_SIZE, -DIST_SIZE, DIST_
 // direction (for use with q >= 0.5). This may need to be set in 
 // vlb.setSourceDefines as it requires calculations and im not sure if
 // opencl can handle it.
-__constant int ibbNeigh[8] = {	DIST_SIZE - 1, 
+__constant int ibbNeigh[8] = { DIST_SIZE - 1,
 								-DIST_SIZE + 1,
-								DIST_SIZE - CHANNEL_LENGTH_FULL, 
+								DIST_SIZE - CHANNEL_LENGTH_FULL,
 								-DIST_SIZE + CHANNEL_LENGTH_FULL,
 								DIST_SIZE - (CHANNEL_LENGTH_FULL + 1),
 								-DIST_SIZE + (CHANNEL_LENGTH_FULL + 1),
-								DIST_SIZE - CHANNEL_LENGTH_FULL + 1, 
-								-DIST_SIZE + CHANNEL_LENGTH_FULL - 1 }
+								DIST_SIZE - CHANNEL_LENGTH_FULL + 1,
+								-DIST_SIZE + CHANNEL_LENGTH_FULL - 1 };
 
 
 #define EVAL1(...) __VA_ARGS__
@@ -335,7 +356,7 @@ __constant int ibbNeigh[8] = {	DIST_SIZE - 1,
 									EVAL1(func EMPTY() (NE));\
 									EVAL1(func EMPTY() (SW));\
 									EVAL1(func EMPTY() (SE));\
-									EVAL1(func EMPTY() (NW));\
+									EVAL1(func EMPTY() (NW));
 
 
 #define CALL_ALL_DISTS_NO_C(func)	EVAL1(func EMPTY() (E));\
@@ -345,15 +366,15 @@ __constant int ibbNeigh[8] = {	DIST_SIZE - 1,
 									EVAL1(func EMPTY() (NE));\
 									EVAL1(func EMPTY() (SW));\
 									EVAL1(func EMPTY() (SE));\
-									EVAL1(func EMPTY() (NW));\
+									EVAL1(func EMPTY() (NW));
 
 #define CALL_WEST_DISTS(func)		EVAL1(func EMPTY() (W));\
 									EVAL1(func EMPTY() (NW));\
-									EVAL1(func EMPTY() (SW));\
+									EVAL1(func EMPTY() (SW));
 
 #define CALL_EAST_DISTS(func)		EVAL1(func EMPTY() (E));\
 									EVAL1(func EMPTY() (NE));\
-									EVAL1(func EMPTY() (SE));\
+									EVAL1(func EMPTY() (SE));
 
 
 
@@ -377,6 +398,7 @@ __constant int ibbNeigh[8] = {	DIST_SIZE - 1,
 
 
 #define GET_GLOBAL_IDX(gx,gy)	(gx + gy*CHANNEL_LENGTH_FULL)
+
 #define GET_FULL_GLOBAL_IDX(gx,gy,gdir)	(gx + gy*CHANNEL_LENGTH_FULL + gdir*DIST_SIZE)
 
 #define GET_TR_GLOBAL_IDX(gx,gy)	(gx + gy*FULLSIZEX_TR_PADDED)
@@ -397,8 +419,8 @@ void decodeGlobalIdx(const int gid, int* xval, int* yval)
 
 double2 getLocFromGlobalIdx(const int gid)
 {
-	int2 ret = { { (gid % CHANNEL_LENGTH_FULL), (gid / CHANNEL_LENGTH_FULL) } };
-	return convert_double2(ret);
+	return convert_double2((int2)((gid % CHANNEL_LENGTH_FULL), (double)(gid / CHANNEL_LENGTH_FULL)));
+	//return convert_double2(ret);
 }
 
 int getTRPaddedPosFromLBPos(int gid)
@@ -435,7 +457,7 @@ bool convertLSBL2TRBL(int lsbl_, int *trbl_)
 		*trbl_ = -1;
 		return false;
 	}
-	return (trbl_ < BL_BOT_STOP) ? trbl_ - BL_BOT_START : trbl_ - BL_TOP_START + NUM_BL_BOT;
+	return (*trbl_ < BL_BOT_STOP) ? *trbl_ - BL_BOT_START : *trbl_ - BL_TOP_START + NUM_BL_BOT;
 }
 
 

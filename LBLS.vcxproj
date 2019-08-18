@@ -199,7 +199,8 @@
     <ClCompile>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <MinimalRebuild>true</MinimalRebuild>
+      <MinimalRebuild>
+      </MinimalRebuild>
       <BasicRuntimeChecks>Default</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <PrecompiledHeader />
@@ -468,7 +469,9 @@
     <ClInclude Include="source\clDisplay.h" />
     <ClInclude Include="source\clProblem.h" />
     <ClInclude Include="source\clVariablesFD.h" />
-    <ClInclude Include="source\clVariablesFL.h" />
+    <ClInclude Include="source\clVariablesFL.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+    </ClInclude>
     <ClInclude Include="source\clVariablesLB.h" />
     <ClInclude Include="source\clVariablesLS.h" />
     <ClInclude Include="source\clVariablesTR.h" />

@@ -369,7 +369,7 @@ __kernel void LB_collision_SRT_Fluid_w_kOmega(__global double* __restrict__ rho_
 	const int gy = get_global_id(1);
 	const int gi = GET_GLOBAL_IDX(gx, gy);
 	const NTYPE_TYPE type = Map[gi];
-	if ((type & FLUID_NODE) == 0) { return; }
+	if ((type & M_SOLID_NODE)) { return; }
 
 
 
@@ -546,19 +546,20 @@ __kernel void LB_collision_SRT_Fluid_w_kOmega(__global double* __restrict__ rho_
 	syy_new += Fi[8] - feq;
 	sxy_new -= Fi[8] - feq;
 	Fi[8] += -Fi[8] * tau_t + feq*tau_t - feq - xi_45 - xi_46 - xi_47 + xi_51;
-
+	/*
 	//								   ____
-	//								   \
-	//                                  \	
+	//								   /
+	//                                  /	
 	// Shear stress t_ab = -3*nu*tau *	/    C_ia*C_ib * (fneq_i)
 	//								   /___i
 
 
 	//								      ____
-	//								      \
-	//									   \	
+	//								      /
+	//									   /	
 	// Strain tensor S_ab = -1.5*tau/rho * /    C_ia*C_ib * (fneq_i) = t_ab/(2*rho*nu)
 	//								      /___i
+	*/
 
 	// Storing strain rate Tensor components for use in kOmega and shear stress
 	// kernels
@@ -637,14 +638,14 @@ void lbIBB(__global int *__restrict__ ibbArr,
 	int revDir = loc + ibbRev[dir-1];
 	double twoQ = 2.*dXCurr[loc + (dir-1)*DIST_SIZE];
 
-	if (dxVal <= 0.5)
+	if (twoQ <= 1.0)
 	{
 		FB[revDir] = twoQ * FB[revDir] + (1. - twoQ) * FB[loc];
 	}
 	else
 	{
-		revNeigh = loc + ibbNeigh[dir - 1];
-		FB[revDir] = 1./twoQ * (FB[revDir] + (twoQ - 1.) * FB[revNeigh])
+		int revNeigh = loc + ibbNeigh[dir - 1];
+		FB[revDir] = 1. / twoQ * (FB[revDir] + (twoQ - 1.) * FB[revNeigh]);
 	}
 }
 

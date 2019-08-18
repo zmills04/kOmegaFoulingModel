@@ -28,7 +28,7 @@
 //		in order to reduce cost if domains require values larger than what they can represent.
 //		specifically anything associated with BL and vls.C as this is where it most often was
 //		used
-
+// TODO: Make sure that dynamic array updates are coupled with resetting of kernel global sizes
 
 #include "StdAfx.h"
 #include "oclEnvironment.h"
@@ -135,11 +135,11 @@ void ini()
 		//	vtr.Update_Par_Rem_Args();
 	}
 
-
-	if ((vfl.restartRunFlag && vlb.restartRunFlag && vtr.restartRunFlag && vfd.restartRunFlag))
-	{
-		vfl.UpdateRestart();
-	}
+	//// Not sure if need to do this after re-factoring of code.
+	//if ((vfl.restartRunFlag && vlb.restartRunFlag && vtr.restartRunFlag && vfd.restartRunFlag))
+	//{
+	//	vfl.UpdateRestart();
+	//}
 
 	clEnv::instance()->finishQueues();
 	//vlb.Calculate_U_mean();

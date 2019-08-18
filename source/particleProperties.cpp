@@ -11,14 +11,15 @@
 // TODO: make sure that this is working after change to 
 //		defining arrays as constants in opencl source
 
-void particleProperties::allocateArrays()
-{
-}
+//void particleProperties::allocateArrays()
+//{
+//	this->allocateArrays();
+//}
 
 
-void particleProperties::allocateBuffers()
-{
-}
+//void particleProperties::allocateBuffers()
+//{
+//}
 
 void particleProperties::createKernels()
 {
@@ -31,7 +32,7 @@ void particleProperties::createPropertyArrays()
 	
 
 	double Distsum = 0.;
-	
+	Kth.zeros(Nd);
 	F_po.zeros(Nd);
 	R_d.zeros(Nd, 2);
 	V_par.zeros(Nd);
@@ -140,7 +141,7 @@ void particleProperties::ini()
 	saveParticleArrays();
 	
 	// Copy arrays to device
-	copyToDevice();
+	//copyToDevice();
 
 #if _DEBUG
 	LOGMESSAGE("Initialized Particle Properties Class");
@@ -183,6 +184,7 @@ void particleProperties::loadParams()
 	Estar_s = yModSoot;
 	WofA_s = surfEnergySoot;
 
+	allocateArrays();
 	createPropertyArrays();
 }
 
@@ -271,38 +273,38 @@ void particleProperties::setSourceDefines()
 	{
 		char parMultVal[80];
 		sprintf(parMultVal, "%20.16g", V_par[0] / vls.lsSpacing);
-		std::string parmult = "const double Par_multiplier[" + std::to_string(Nd) + "] = { " + parMultVal;
+		std::string parmult = "constant double Par_multiplier[" + std::to_string(Nd) + "] = { " + parMultVal;
 
 		sprintf(parMultVal, "%20.16g", Dp[0]);
-		std::string dpString = "const double paramDp[" + std::to_string(Nd) + "] = { " + parMultVal;
+		std::string dpString = "constant double paramDp[" + std::to_string(Nd) + "] = { " + parMultVal;
 
 		sprintf(parMultVal, "%20.16g", Mp[0]);
-		std::string mpString = "const double paramMp[" + std::to_string(Nd) + "] = { " + parMultVal;
+		std::string mpString = "constant double paramMp[" + std::to_string(Nd) + "] = { " + parMultVal;
 
 		sprintf(parMultVal, "%20.16g", Kth[0]);
-		std::string kthString = "const double paramKth[" + std::to_string(Nd) + "] = { " + parMultVal;
+		std::string kthString = "constant double paramKth[" + std::to_string(Nd) + "] = { " + parMultVal;
 
 		sprintf(parMultVal, "%20.16g", L_coeff[0]);
-		std::string lcoeffString = "const double paramLcoeff[" + std::to_string(Nd) + "] = { " + parMultVal;
+		std::string lcoeffString = "constant double paramLcoeff[" + std::to_string(Nd) + "] = { " + parMultVal;
 
 		sprintf(parMultVal, "%20.16g", D_coeff[0]);
-		std::string dcoeffString = "const double paramDcoeff[" + std::to_string(Nd) + "] = { " + parMultVal;
+		std::string dcoeffString = "constant double paramDcoeff[" + std::to_string(Nd) + "] = { " + parMultVal;
 
 		sprintf(parMultVal, "%20.16g", D_dist[0]);
-		std::string ddistString = "const double paramDdist[" + std::to_string(Nd) + "] = { " + parMultVal;
+		std::string ddistString = "constant double paramDdist[" + std::to_string(Nd) + "] = { " + parMultVal;
 
 		sprintf(parMultVal, "%20.16g", Q_A_prime(0).x);
-		std::string qaprimeString = "const double paramQaPrime[" + std::to_string(Nd * 2) + "] = { " + parMultVal;
+		std::string qaprimeString = "constant double paramQaPrime[" + std::to_string(Nd * 2) + "] = { " + parMultVal;
 		sprintf(parMultVal, ", %20.16g", Q_A_prime(0).y);
 		qaprimeString.append(parMultVal);
 
 		sprintf(parMultVal, "%20.16g", Q_A(0).x);
-		std::string qaString = "const double paramQa[" + std::to_string(Nd * 2) + "] = { " + parMultVal;
+		std::string qaString = "constant double paramQa[" + std::to_string(Nd * 2) + "] = { " + parMultVal;
 		sprintf(parMultVal, ", %20.16g", Q_A(0).y);
 		qaString.append(parMultVal);
 
 		sprintf(parMultVal, "%20.16g", tau_crit(0).x);
-		std::string taucritString = "const double paramTauCrit[" + std::to_string(Nd * 2) + "] = { " + parMultVal;
+		std::string taucritString = "constant double paramTauCrit[" + std::to_string(Nd * 2) + "] = { " + parMultVal;
 		sprintf(parMultVal, ", %20.16g", tau_crit(0).y);
 		taucritString.append(parMultVal);
 

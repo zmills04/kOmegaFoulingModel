@@ -92,9 +92,34 @@ public:
 		iniQueues();
 	}
 
-	void iniCLGLContext()
-	{
-	}
+	void iniCLGLContext();
+
+	void displayDevices();
+
+
+
+//////////////OpenGL Variables and Functions///////////////////////
+	MSG msg;
+	HGLRC         gGlCtx;
+	static HWND gHwnd;
+	HDC           gHdc;
+	bool quit = false;
+
+	int down_pixel_x = 0;
+	int down_clicked = 0;
+	int down_pixel_y = 0;
+	int mouse_save = 0;
+	double t2, t1, totalElapsedTime = 0.;
+	int frameCount = 0, frameRefCount = 90;
+	double psize = POINT_SIZES, lsize = LINE_SIZES;
+	cl_double2 Window_Center, Window_Dims, Window_Shift;
+	void setWindow(int framesPerSec);
+	void checkMessage();
+	void initGlew();
+	void renderDomain();
+
+///////////////////////////////////////////////////////////////////
+
 
 
 	cl_command_queue_properties* getQueueProperties() { return queProps; }

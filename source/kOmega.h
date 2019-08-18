@@ -42,7 +42,7 @@ public:
 
 
 	// Used to specify the type of debugging being used for kOmega functions
-	enum { lbDbgSave, koDbgSave1, koDbgSave2, koDbgSave, DbgSave };
+	enum { lbDbgSave = 0, koDbgSave1 = 1, koDbgSave2 = 2, koDbgSave = 3, DbgSave = 4 };
 
 
 

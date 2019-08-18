@@ -307,3 +307,8 @@ bool particleDisplay::testRestartRun()
 	allocateArrays();
 	return true; 
 };
+
+void particleDisplay::update()
+{
+	updateGLKernel.call_kernel();
+}

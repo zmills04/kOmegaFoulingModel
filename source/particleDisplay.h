@@ -200,6 +200,8 @@ public:
 	// being a new run for remaining methods
 	bool testRestartRun();
 
+	void update();
+
 	// Calls kernels to save time data (umean, avg density, etc) to array
 	// on device, which will eventually be saved if it reaches its max 
 	// size, or a save step is reached

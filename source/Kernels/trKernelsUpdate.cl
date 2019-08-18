@@ -27,16 +27,16 @@ void calc_tr_coeffs(int linInd, int tnum,
 		double C2x = (K_SOOT_LB * dXcx) / (K_SOOT_LB * dXcx - K_AIR_LB * (dXcx - dXx));
 		double C2y = (K_SOOT_LB * dXcy) / (K_SOOT_LB * dXcy - K_AIR_LB * (dXcy - dXy));
 
-		CoeffT00[linInd] = { { 1., 0., 0., 0. } };
-		CoeffT10[linInd] = { { (C1x - 1.) / dXcx + 1., C2x / dXcx, 0., 0. } };
-		CoeffT01[linInd] = { { (C1y - 1.) / dXcy + 1., 0., C2y / dXcy, 0. } };
-		CoeffT11[linInd] = { { (C1x - 1.) / dXcx + (C1y - 1.) / dXcy + 1., C2x / dXcx, C2y / dXcy, 0. } };
+		CoeffT00[linInd] = (double4)( 1., 0., 0., 0. );
+		CoeffT10[linInd] = (double4)( (C1x - 1.) / dXcx + 1., C2x / dXcx, 0., 0. );
+		CoeffT01[linInd] = (double4)( (C1y - 1.) / dXcy + 1., 0., C2y / dXcy, 0. );
+		CoeffT11[linInd] = (double4)( (C1x - 1.) / dXcx + (C1y - 1.) / dXcy + 1., C2x / dXcx, C2y / dXcy, 0. );
 
 
-		CoeffU00[linInd] = { { 1., 0., 0., 0. } };
-		CoeffU10[linInd] = { { 1. - 1. / dXcx, 0., 0., 0. } };
-		CoeffU01[linInd] = { { 1. - 1. / dXcy, 0., 0., 0. } };
-		CoeffU11[linInd] = { { 1. - 1. / dXcy - 1. / dXcx, 0, 0, 0 } };
+		CoeffU00[linInd] = (double4)( 1., 0., 0., 0. );
+		CoeffU10[linInd] = (double4)( 1. - 1. / dXcx, 0., 0., 0. );
+		CoeffU01[linInd] = (double4)( 1. - 1. / dXcy, 0., 0., 0. );
+		CoeffU11[linInd] = (double4)( 1. - 1. / dXcy - 1. / dXcx, 0, 0, 0 );
 
 		break;
 	}
@@ -47,15 +47,15 @@ void calc_tr_coeffs(int linInd, int tnum,
 		double C2x = (K_SOOT_LB * dXcx) / (K_SOOT_LB * dXcx - K_AIR_LB * (dXcx - dXx));
 		double C2y = (K_SOOT_LB * dXcy) / (K_SOOT_LB * dXcy - K_AIR_LB * (dXcy - dXy));
 
-		CoeffT00[linInd] = { { C2x / dXcx, (C1x - 1.) / dXcx + 1., 0, 0 } };
-		CoeffT10[linInd] = { { 0., 1., 0., 0. } };
-		CoeffT01[linInd] = { { C2x / dXcx, (C1x - 1.) / dXcx + (C1y - 1.) / dXcy + 1., 0., C2y / dXcy } };
-		CoeffT11[linInd] = { { 0., (C1y - 1.) / dXcy + 1., 0, C2y / dXcy } };
+		CoeffT00[linInd] = (double4)( C2x / dXcx, (C1x - 1.) / dXcx + 1., 0, 0 );
+		CoeffT10[linInd] = (double4)( 0., 1., 0., 0. );
+		CoeffT01[linInd] = (double4)( C2x / dXcx, (C1x - 1.) / dXcx + (C1y - 1.) / dXcy + 1., 0., C2y / dXcy );
+		CoeffT11[linInd] = (double4)( 0., (C1y - 1.) / dXcy + 1., 0, C2y / dXcy );
 
-		CoeffU00[linInd] = { { 0., 1. - 1. / dXcx, 0., 0. } };
-		CoeffU10[linInd] = { { 0., 1., 0., 0. } };
-		CoeffU01[linInd] = { { 0., 1. - 1. / dXcx - 1. / dXcy, 0., 0. } };
-		CoeffU11[linInd] = { { 0., 1. - 1. / dXcy, 0., 0. } };
+		CoeffU00[linInd] = (double4)( 0., 1. - 1. / dXcx, 0., 0. );
+		CoeffU10[linInd] = (double4)( 0., 1., 0., 0. );
+		CoeffU01[linInd] = (double4)( 0., 1. - 1. / dXcx - 1. / dXcy, 0., 0. );
+		CoeffU11[linInd] = (double4)( 0., 1. - 1. / dXcy, 0., 0. );
 		break;
 	}
 	case 3:
@@ -65,15 +65,15 @@ void calc_tr_coeffs(int linInd, int tnum,
 		double C2x = (K_SOOT_LB * dXcx) / (K_SOOT_LB * dXcx - K_AIR_LB * (dXcx - dXx));
 		double C2y = (K_SOOT_LB * dXcy) / (K_SOOT_LB * dXcy - K_AIR_LB * (dXcy - dXy));
 
-		CoeffT00[linInd] = { { 1., 0., 0., 0. } };
-		CoeffT10[linInd] = { { 0., 1., 0., 0. } };
-		CoeffT01[linInd] = { { (C1x - 1.) / dXcx + 1., 0, C2x / dXcx, 0. } };
-		CoeffT11[linInd] = { { 0., (C1y - 1.) / dXcy + 1., 0, C2y / dXcy } };
+		CoeffT00[linInd] = (double4)( 1., 0., 0., 0. );
+		CoeffT10[linInd] = (double4)( 0., 1., 0., 0. );
+		CoeffT01[linInd] = (double4)( (C1x - 1.) / dXcx + 1., 0, C2x / dXcx, 0. );
+		CoeffT11[linInd] = (double4)( 0., (C1y - 1.) / dXcy + 1., 0, C2y / dXcy );
 
-		CoeffU00[linInd] = { { 1., 0., 0., 0. } };
-		CoeffU10[linInd] = { { 0., 1., 0., 0. } };
-		CoeffU01[linInd] = { { 1. - 1. / dXcx, 0., 0., 0. } };
-		CoeffU11[linInd] = { { 0., 1. - 1. / dXcy, 0., 0. } };
+		CoeffU00[linInd] = (double4)( 1., 0., 0., 0. );
+		CoeffU10[linInd] = (double4)( 0., 1., 0., 0. );
+		CoeffU01[linInd] = (double4)( 1. - 1. / dXcx, 0., 0., 0. );
+		CoeffU11[linInd] = (double4)( 0., 1. - 1. / dXcy, 0., 0. );
 		break;
 	}
 	case 4:
@@ -83,15 +83,15 @@ void calc_tr_coeffs(int linInd, int tnum,
 		double C2x = (K_SOOT_LB * dXcx) / (K_SOOT_LB * dXcx - K_AIR_LB * (dXcx - dXx));
 		double C2y = (K_SOOT_LB * dXcy) / (K_SOOT_LB * dXcy - K_AIR_LB * (dXcy - dXy));
 
-		CoeffT00[linInd] = { { C2y / dXcy, 0., (C1y - 1.) / dXcy + 1., 0. } };
-		CoeffT10[linInd] = { { C2y / dXcy, 0., (C1x - 1.) / dXcx + (C1y - 1.) / dXcy + 1., C2x / dXcx } };
-		CoeffT01[linInd] = { { 0., 0., 1., 0. } };
-		CoeffT11[linInd] = { { 0., 0., (C1x - 1.) / dXcx + 1., C2x / dXcx } };
+		CoeffT00[linInd] = (double4)( C2y / dXcy, 0., (C1y - 1.) / dXcy + 1., 0. );
+		CoeffT10[linInd] = (double4)( C2y / dXcy, 0., (C1x - 1.) / dXcx + (C1y - 1.) / dXcy + 1., C2x / dXcx );
+		CoeffT01[linInd] = (double4)( 0., 0., 1., 0. );
+		CoeffT11[linInd] = (double4)( 0., 0., (C1x - 1.) / dXcx + 1., C2x / dXcx );
 
-		CoeffU00[linInd] = { { 0, 0, 1 - 1 / dXcy, 0 } };
-		CoeffU10[linInd] = { { 0, 0, 1. - 1. / dXcy - 1. / dXcx, 0 } };
-		CoeffU01[linInd] = { { 0., 0., 1., 0. } };
-		CoeffU11[linInd] = { { 0, 0, 1. - 1. / dXcx, 0 } };
+		CoeffU00[linInd] = (double4)( 0, 0, 1 - 1 / dXcy, 0 );
+		CoeffU10[linInd] = (double4)( 0, 0, 1. - 1. / dXcy - 1. / dXcx, 0 );
+		CoeffU01[linInd] = (double4)( 0., 0., 1., 0. );
+		CoeffU11[linInd] = (double4)( 0, 0, 1. - 1. / dXcx, 0 );
 		break;
 	}
 	case 5:
@@ -101,15 +101,15 @@ void calc_tr_coeffs(int linInd, int tnum,
 		double C2x = (K_SOOT_LB * dXcx) / (K_SOOT_LB * dXcx - K_AIR_LB * (dXcx - dXx));
 		double C2y = (K_SOOT_LB * dXcy) / (K_SOOT_LB * dXcy - K_AIR_LB * (dXcy - dXy));
 
-		CoeffT00[linInd] = { { 1., 0., 0., 0. } };
-		CoeffT10[linInd] = { { (C1x - 1.) / dXcx + 1., C2x / dXcx, 0., 0. } };
-		CoeffT01[linInd] = { { 0., 0., 1., 0. } };
-		CoeffT11[linInd] = { { 0., 0., (C1y - 1.) / dXcy + 1., C2y / dXcy } };
+		CoeffT00[linInd] = (double4)( 1., 0., 0., 0. );
+		CoeffT10[linInd] = (double4)( (C1x - 1.) / dXcx + 1., C2x / dXcx, 0., 0. );
+		CoeffT01[linInd] = (double4)( 0., 0., 1., 0. );
+		CoeffT11[linInd] = (double4)( 0., 0., (C1y - 1.) / dXcy + 1., C2y / dXcy );
 
-		CoeffU00[linInd] = { { 1., 0., 0., 0. } };
-		CoeffU10[linInd] = { { 1. - 1. / dXcx, 0., 0., 0. } };
-		CoeffU01[linInd] = { { 0., 0., 1., 0. } };
-		CoeffU11[linInd] = { { 0., 0., 1. - 1. / dXcy, 0. } };
+		CoeffU00[linInd] = (double4)( 1., 0., 0., 0. );
+		CoeffU10[linInd] = (double4)( 1. - 1. / dXcx, 0., 0., 0. );
+		CoeffU01[linInd] = (double4)( 0., 0., 1., 0. );
+		CoeffU11[linInd] = (double4)( 0., 0., 1. - 1. / dXcy, 0. );
 		break;
 	}
 	case 6:
@@ -119,15 +119,15 @@ void calc_tr_coeffs(int linInd, int tnum,
 		double C2x = (K_SOOT_LB * dXcx) / (K_SOOT_LB * dXcx - K_AIR_LB * (dXcx - dXx));
 		double C2y = (K_SOOT_LB * dXcy) / (K_SOOT_LB * dXcy - K_AIR_LB * (dXcy - dXy));
 
-		CoeffT00[linInd] = { { C2x / dXcx, (C1x - 1.) / dXcx + 1., 0, 0 } };
-		CoeffT10[linInd] = { { 0., 1., 0., 0. } };
-		CoeffT01[linInd] = { { 0., 0., 1., 0. } };
-		CoeffT11[linInd] = { { 0., (C1y - 1.) / dXcy + 1., 0, C2y / dXcy } };
+		CoeffT00[linInd] = (double4)( C2x / dXcx, (C1x - 1.) / dXcx + 1., 0, 0 );
+		CoeffT10[linInd] = (double4)( 0., 1., 0., 0. );
+		CoeffT01[linInd] = (double4)( 0., 0., 1., 0. );
+		CoeffT11[linInd] = (double4)( 0., (C1y - 1.) / dXcy + 1., 0, C2y / dXcy );
 
-		CoeffU00[linInd] = { { 0., 1. - 1. / dXcx, 0., 0. } };
-		CoeffU10[linInd] = { { 0., 1., 0., 0. } };
-		CoeffU01[linInd] = { { 0., 0., 1., 0. } };
-		CoeffU11[linInd] = { { 0., 1. - 1. / dXcy, 0., 0. } };
+		CoeffU00[linInd] = (double4)( 0., 1. - 1. / dXcx, 0., 0. );
+		CoeffU10[linInd] = (double4)( 0., 1., 0., 0. );
+		CoeffU01[linInd] = (double4)( 0., 0., 1., 0. );
+		CoeffU11[linInd] = (double4)( 0., 1. - 1. / dXcy, 0., 0. );
 		break;
 	}
 	case 7:
@@ -136,15 +136,15 @@ void calc_tr_coeffs(int linInd, int tnum,
 		double C2x = (K_SOOT_LB * dXcx) / (K_SOOT_LB * dXcx - K_AIR_LB * (dXcx - dXx));
 
 
-		CoeffT00[linInd] = { { 1., 0., 0., 0. } };
-		CoeffT10[linInd] = { { 0., 1., 0., 0. } };
-		CoeffT01[linInd] = { { 0., 0., 1., 0. } };
-		CoeffT11[linInd] = { { 0., (C1x - 1.) / dXcx + 1., 0, C2x / dXcx } };
+		CoeffT00[linInd] = (double4)( 1., 0., 0., 0. );
+		CoeffT10[linInd] = (double4)( 0., 1., 0., 0. );
+		CoeffT01[linInd] = (double4)( 0., 0., 1., 0. );
+		CoeffT11[linInd] = (double4)( 0., (C1x - 1.) / dXcx + 1., 0, C2x / dXcx );
 
-		CoeffU00[linInd] = { { 1., 0., 0., 0. } };
-		CoeffU10[linInd] = { { 0., 1., 0., 0. } };
-		CoeffU01[linInd] = { { 0., 0., 1., 0. } };
-		CoeffU11[linInd] = { { 0., 1. - 1. / dXcx, 0., 0. } };
+		CoeffU00[linInd] = (double4)( 1., 0., 0., 0. );
+		CoeffU10[linInd] = (double4)( 0., 1., 0., 0. );
+		CoeffU01[linInd] = (double4)( 0., 0., 1., 0. );
+		CoeffU11[linInd] = (double4)( 0., 1. - 1. / dXcx, 0., 0. );
 		break;
 	}
 	case 8:
@@ -154,15 +154,15 @@ void calc_tr_coeffs(int linInd, int tnum,
 		double C2x = (K_SOOT_LB * dXcx) / (K_SOOT_LB * dXcx - K_AIR_LB * (dXcx - dXx));
 		double C2y = (K_SOOT_LB * dXcy) / (K_SOOT_LB * dXcy - K_AIR_LB * (dXcy - dXy));
 
-		CoeffT00[linInd] = { { 0., C2y / dXcy, C2x / dXcx, (C1x - 1.) / dXcx + (C1y - 1.) / dXcy + 1. } };
-		CoeffT10[linInd] = { { 0., C2y / dXcy, 0., (C1y - 1.) / dXcy + 1. } };
-		CoeffT01[linInd] = { { 0., 0., C2x / dXcx, (C1x - 1.) / dXcx + 1. } };
-		CoeffT11[linInd] = { { 0., 0., 0., 1. } };
+		CoeffT00[linInd] = (double4)( 0., C2y / dXcy, C2x / dXcx, (C1x - 1.) / dXcx + (C1y - 1.) / dXcy + 1. );
+		CoeffT10[linInd] = (double4)( 0., C2y / dXcy, 0., (C1y - 1.) / dXcy + 1. );
+		CoeffT01[linInd] = (double4)( 0., 0., C2x / dXcx, (C1x - 1.) / dXcx + 1. );
+		CoeffT11[linInd] = (double4)( 0., 0., 0., 1. );
 
-		CoeffU00[linInd] = { { 0., 0., 0., 1. - 1. / dXcy - 1. / dXcx } };
-		CoeffU10[linInd] = { { 0., 0., 0., 1. - 1. / dXcy } };
-		CoeffU01[linInd] = { { 0., 0., 0., 1. - 1. / dXcx } };
-		CoeffU11[linInd] = { { 0., 0., 0., 1. } };
+		CoeffU00[linInd] = (double4)( 0., 0., 0., 1. - 1. / dXcy - 1. / dXcx );
+		CoeffU10[linInd] = (double4)( 0., 0., 0., 1. - 1. / dXcy );
+		CoeffU01[linInd] = (double4)( 0., 0., 0., 1. - 1. / dXcx );
+		CoeffU11[linInd] = (double4)( 0., 0., 0., 1. );
 		break;
 	}
 	case 9:
@@ -172,15 +172,15 @@ void calc_tr_coeffs(int linInd, int tnum,
 		double C2x = (K_SOOT_LB * dXcx) / (K_SOOT_LB * dXcx - K_AIR_LB * (dXcx - dXx));
 		double C2y = (K_SOOT_LB * dXcy) / (K_SOOT_LB * dXcy - K_AIR_LB * (dXcy - dXy));
 
-		CoeffT00[linInd] = { { 1., 0., 0., 0. } };
-		CoeffT10[linInd] = { { (C1x - 1.) / dXcx + 1., C2x / dXcx, 0., 0. } };
-		CoeffT01[linInd] = { { (C1y - 1.) / dXcy + 1., 0., C2y / dXcy, 0. } };
-		CoeffT11[linInd] = { { 0., 0., 0., 1. } };
+		CoeffT00[linInd] = (double4)( 1., 0., 0., 0. );
+		CoeffT10[linInd] = (double4)( (C1x - 1.) / dXcx + 1., C2x / dXcx, 0., 0. );
+		CoeffT01[linInd] = (double4)( (C1y - 1.) / dXcy + 1., 0., C2y / dXcy, 0. );
+		CoeffT11[linInd] = (double4)( 0., 0., 0., 1. );
 
-		CoeffU00[linInd] = { { 1., 0., 0., 0. } };
-		CoeffU10[linInd] = { { 1. - 1. / dXcx, 0., 0., 0. } };
-		CoeffU01[linInd] = { { 1. - 1. / dXcy, 0., 0., 0. } };
-		CoeffU11[linInd] = { { 0., 0., 0., 1. } };
+		CoeffU00[linInd] = (double4)( 1., 0., 0., 0. );
+		CoeffU10[linInd] = (double4)( 1. - 1. / dXcx, 0., 0., 0. );
+		CoeffU01[linInd] = (double4)( 1. - 1. / dXcy, 0., 0., 0. );
+		CoeffU11[linInd] = (double4)( 0., 0., 0., 1. );
 		break;
 	}
 	case 10:
@@ -190,15 +190,15 @@ void calc_tr_coeffs(int linInd, int tnum,
 		double C2x = (K_SOOT_LB * dXcx) / (K_SOOT_LB * dXcx - K_AIR_LB * (dXcx - dXx));
 		double C2y = (K_SOOT_LB * dXcy) / (K_SOOT_LB * dXcy - K_AIR_LB * (dXcy - dXy));
 
-		CoeffT00[linInd] = { { C2x / dXcx, (C1x - 1.) / dXcx + 1., 0., 0. } };
-		CoeffT10[linInd] = { { 0., 1., 0., 0. } };
-		CoeffT01[linInd] = { { 0., 0., C2y / dXcy, (C1y - 1.) / dXcy + 1. } };
-		CoeffT11[linInd] = { { 0., 0., 0., 1. } };
+		CoeffT00[linInd] = (double4)( C2x / dXcx, (C1x - 1.) / dXcx + 1., 0., 0. );
+		CoeffT10[linInd] = (double4)( 0., 1., 0., 0. );
+		CoeffT01[linInd] = (double4)( 0., 0., C2y / dXcy, (C1y - 1.) / dXcy + 1. );
+		CoeffT11[linInd] = (double4)( 0., 0., 0., 1. );
 
-		CoeffU00[linInd] = { { 0., 1. - 1. / dXcx, 0., 0. } };
-		CoeffU10[linInd] = { { 0., 1., 0., 0. } };
-		CoeffU01[linInd] = { { 0., 0., 0., 1. - 1. / dXcy } };
-		CoeffU11[linInd] = { { 0., 0., 0., 1. } };
+		CoeffU00[linInd] = (double4)( 0., 1. - 1. / dXcx, 0., 0. );
+		CoeffU10[linInd] = (double4)( 0., 1., 0., 0. );
+		CoeffU01[linInd] = (double4)( 0., 0., 0., 1. - 1. / dXcy );
+		CoeffU11[linInd] = (double4)( 0., 0., 0., 1. );
 		break;
 	}
 	case 11:
@@ -208,15 +208,15 @@ void calc_tr_coeffs(int linInd, int tnum,
 		double C2x = (K_SOOT_LB * dXcx) / (K_SOOT_LB * dXcx - K_AIR_LB * (dXcx - dXx));
 		double C2y = (K_SOOT_LB * dXcy) / (K_SOOT_LB * dXcy - K_AIR_LB * (dXcy - dXy));
 
-		CoeffT00[linInd] = { { 1., 0., 0., 0. } };
-		CoeffT10[linInd] = { { 0., 1., 0., 0. } };
-		CoeffT01[linInd] = { { 1. - (C1x - 1.) / dXcx, 0., -C2x / dXcx, 0. } };
-		CoeffT11[linInd] = { { 0., 0., 0., 1. } };
+		CoeffT00[linInd] = (double4)( 1., 0., 0., 0. );
+		CoeffT10[linInd] = (double4)( 0., 1., 0., 0. );
+		CoeffT01[linInd] = (double4)( 1. - (C1x - 1.) / dXcx, 0., -C2x / dXcx, 0. );
+		CoeffT11[linInd] = (double4)( 0., 0., 0., 1. );
 
-		CoeffU00[linInd] = { { 1., 0., 0., 0. } };
-		CoeffU10[linInd] = { { 0., 1., 0., 0. } };
-		CoeffU01[linInd] = { { 1. - 1. / dXcx, 0., 0., 0. } };
-		CoeffU11[linInd] = { { 0., 0., 0., 1. } };
+		CoeffU00[linInd] = (double4)( 1., 0., 0., 0. );
+		CoeffU10[linInd] = (double4)( 0., 1., 0., 0. );
+		CoeffU01[linInd] = (double4)( 1. - 1. / dXcx, 0., 0., 0. );
+		CoeffU11[linInd] = (double4)( 0., 0., 0., 1. );
 		break;
 	}
 	case 12:
@@ -226,15 +226,15 @@ void calc_tr_coeffs(int linInd, int tnum,
 		double C2x = (K_SOOT_LB * dXcx) / (K_SOOT_LB * dXcx - K_AIR_LB * (dXcx - dXx));
 		double C2y = (K_SOOT_LB * dXcy) / (K_SOOT_LB * dXcy - K_AIR_LB * (dXcy - dXy));
 
-		CoeffT00[linInd] = { { C2x / dXcx, 0., (C1x - 1.) / dXcx + 1., 0 } };
-		CoeffT10[linInd] = { { 0., C2y / dXcy, 0., (C1y - 1.) / dXcy + 1. } };
-		CoeffT01[linInd] = { { 0., 0., 1., 0. } };
-		CoeffT11[linInd] = { { 0., 0., 0., 1. } };
+		CoeffT00[linInd] = (double4)( C2x / dXcx, 0., (C1x - 1.) / dXcx + 1., 0 );
+		CoeffT10[linInd] = (double4)( 0., C2y / dXcy, 0., (C1y - 1.) / dXcy + 1. );
+		CoeffT01[linInd] = (double4)( 0., 0., 1., 0. );
+		CoeffT11[linInd] = (double4)( 0., 0., 0., 1. );
 
-		CoeffU00[linInd] = { { 0., 0., 1. - 1. / dXcx, 0. } };
-		CoeffU10[linInd] = { { 0., 0., 0., 1. - 1. / dXcy } };
-		CoeffU01[linInd] = { { 0., 0., 1., 0. } };
-		CoeffU11[linInd] = { { 0., 0., 0., 1. } };
+		CoeffU00[linInd] = (double4)( 0., 0., 1. - 1. / dXcx, 0. );
+		CoeffU10[linInd] = (double4)( 0., 0., 0., 1. - 1. / dXcy );
+		CoeffU01[linInd] = (double4)( 0., 0., 1., 0. );
+		CoeffU11[linInd] = (double4)( 0., 0., 0., 1. );
 		break;
 	}
 	case 13:
@@ -242,15 +242,15 @@ void calc_tr_coeffs(int linInd, int tnum,
 		double C1x = -(K_AIR_LB * (dXcx - dXx)) / (K_SOOT_LB * dXcx - K_AIR_LB * (dXcx - dXx));
 		double C2x = (K_SOOT_LB * dXcx) / (K_SOOT_LB * dXcx - K_AIR_LB * (dXcx - dXx));
 
-		CoeffT00[linInd] = { { 1., 0., 0., 0 } };
-		CoeffT10[linInd] = { { 0., C2x / dXcx, 0., (C1x - 1.) / dXcy + 1. } };
-		CoeffT01[linInd] = { { 0., 0., 1., 0. } };
-		CoeffT11[linInd] = { { 0., 0., 0., 1. } };
+		CoeffT00[linInd] = (double4)( 1., 0., 0., 0 );
+		CoeffT10[linInd] = (double4)( 0., C2x / dXcx, 0., (C1x - 1.) / dXcy + 1. );
+		CoeffT01[linInd] = (double4)( 0., 0., 1., 0. );
+		CoeffT11[linInd] = (double4)( 0., 0., 0., 1. );
 
-		CoeffU00[linInd] = { { 1., 0., 0., 0. } };
-		CoeffU10[linInd] = { { 0., 0., 0., 1. - 1. / dXcx } };
-		CoeffU01[linInd] = { { 0., 0., 1., 0. } };
-		CoeffU11[linInd] = { { 0., 0., 0., 1. } };
+		CoeffU00[linInd] = (double4)( 1., 0., 0., 0. );
+		CoeffU10[linInd] = (double4)( 0., 0., 0., 1. - 1. / dXcx );
+		CoeffU01[linInd] = (double4)( 0., 0., 1., 0. );
+		CoeffU11[linInd] = (double4)( 0., 0., 0., 1. );
 		break;
 	}
 	case 14:
@@ -258,28 +258,28 @@ void calc_tr_coeffs(int linInd, int tnum,
 		double C1x = -(K_AIR_LB * (dXcx - dXx)) / (K_SOOT_LB * dXcx - K_AIR_LB * (dXcx - dXx));
 		double C2x = (K_SOOT_LB * dXcx) / (K_SOOT_LB * dXcx - K_AIR_LB * (dXcx - dXx));
 
-		CoeffT00[linInd] = { { C2x / dXcx, 0., (C1x - 1.) / dXcx + 1., 0 } };
-		CoeffT10[linInd] = { { 0., 1., 0., 0. } };
-		CoeffT01[linInd] = { { 0., 0., 1., 0. } };
-		CoeffT11[linInd] = { { 0., 0., 0., 1. } };
+		CoeffT00[linInd] = (double4)( C2x / dXcx, 0., (C1x - 1.) / dXcx + 1., 0 );
+		CoeffT10[linInd] = (double4)( 0., 1., 0., 0. );
+		CoeffT01[linInd] = (double4)( 0., 0., 1., 0. );
+		CoeffT11[linInd] = (double4)( 0., 0., 0., 1. );
 
-		CoeffU00[linInd] = { { 0., 0., 1. - 1. / dXcx, 0. } };
-		CoeffU10[linInd] = { { 0., 1., 0., 0. } };
-		CoeffU01[linInd] = { { 0., 0., 1., 0. } };
-		CoeffU11[linInd] = { { 0., 0., 0., 1. } };
+		CoeffU00[linInd] = (double4)( 0., 0., 1. - 1. / dXcx, 0. );
+		CoeffU10[linInd] = (double4)( 0., 1., 0., 0. );
+		CoeffU01[linInd] = (double4)( 0., 0., 1., 0. );
+		CoeffU11[linInd] = (double4)( 0., 0., 0., 1. );
 		break;
 	}
 	case 15:
 	{
-		CoeffT00[linInd] = { { 1., 0., 0., 0. } };
-		CoeffT10[linInd] = { { 0., 1., 0., 0. } };
-		CoeffT01[linInd] = { { 0., 0., 1., 0. } };
-		CoeffT11[linInd] = { { 0., 0., 0., 1. } };
+		CoeffT00[linInd] = (double4)( 1., 0., 0., 0. );
+		CoeffT10[linInd] = (double4)( 0., 1., 0., 0. );
+		CoeffT01[linInd] = (double4)( 0., 0., 1., 0. );
+		CoeffT11[linInd] = (double4)( 0., 0., 0., 1. );
 
-		CoeffU00[linInd] = { { 1., 0., 0., 0. } };
-		CoeffU10[linInd] = { { 0., 1., 0., 0. } };
-		CoeffU01[linInd] = { { 0., 0., 1., 0. } };
-		CoeffU11[linInd] = { { 0., 0., 0., 1. } };
+		CoeffU00[linInd] = (double4)( 1., 0., 0., 0. );
+		CoeffU10[linInd] = (double4)( 0., 1., 0., 0. );
+		CoeffU01[linInd] = (double4)( 0., 0., 1., 0. );
+		CoeffU11[linInd] = (double4)( 0., 0., 0., 1. );
 		break;
 	}
 	}
@@ -298,7 +298,7 @@ void updateTRCoeffs(__global NTYPE_TYPE* nType,
 	__global short* __restrict__ niWallFlag,
 	__global double* __restrict__ dX_cur,
 	__global double* __restrict__ dX,
-	__global int* __restrict__ ActiveNodes,
+	__global int* __restrict__ activeNodes,
 	int nActiveNodes)
 {
 	int ii = get_global_id(0);
@@ -307,7 +307,7 @@ void updateTRCoeffs(__global NTYPE_TYPE* nType,
 		return;
 
 	// get index of nodes aways from wall
-	int iLin = activeNodes[i0];
+	int iLin = activeNodes[ii];
 
 	int i, j;
 	decodeGlobalIdx(iLin, &i, &j);
@@ -564,8 +564,8 @@ void updateTRWallNodes(__global ushort2* __restrict__ blP01,
 	c1Val -= 0.05 * vT;
 	c2Val += 0.05 * vT;
 
-	int2 Cmin = min2(c0, c1);
-	int2 Cmax = max2(c0, c1);
+	int2 Cmin = min2(c1Val, c2Val);
+	int2 Cmax = max2(c1Val, c2Val);
 
 	Cmin.x -= TR_X_IND_START;
 	Cmax.x -= TR_X_IND_START;
@@ -586,14 +586,14 @@ void updateTRWallNodes(__global ushort2* __restrict__ blP01,
 		for (int j0 = Cmin.y; j0 < Cmax.y; j0++)
 		{
 			int linInd = i0 + FULLSIZEX_TR_PADDED * j0;
-			double centerVal = convert_double2((int2)(i0 + TR_X_IND_START, j0));
+			double2 centerVal = convert_double2((int2)(i0 + TR_X_IND_START, j0));
 			centerVal += 0.5 - cCenter;
 
 			double distTemp = length(centerVal);
 			if (distTemp > 2.)
 				continue;
 
-			if (AtomicMin(distVals[linInd], distTemp))
+			if (AtomicMin(&distVals[linInd], distTemp))
 			{
 				niBLInd[linInd] = i;
 				niWallFlag[linInd] |= wallflagval;
@@ -636,7 +636,7 @@ int testInside_Shift(double2 vd, double2 v0, double2 v1)
 
 int bcFindIntersectionLinePlane_shift(double* dist, double2 vL0, double2 vP0, double2 vP1, double2 * vN)
 {
-	*vN = normalize(double2(vP0.y - vP1.y, vP1.x - vP0.x));
+	*vN = normalize((double2)(vP0.y - vP1.y, vP1.x - vP0.x));
 	double2 vLd = (vP0 - vL0);
 	*dist = dot(*vN, vLd);
 	if ((*dist) <= 0.)
@@ -652,8 +652,8 @@ void Shift_deposited_particles(__global int* __restrict__ pDepFlag,
 	__global double2 * __restrict__ pPos,
 	__global ushort2 * __restrict__ blP01,
 	__global double2 * __restrict__ Cvals,
-	uint offset,
-	uint maxel)
+	int offset,
+	int maxel)
 {
 	int i = get_global_id(0);
 
@@ -703,7 +703,7 @@ void Shift_particles(__global int* __restrict__ pDepFlag,
 		return;
 	}
 
-	trLoc = pLoc[i];
+	int trLoc = pLoc[i];
 
 
 	short wallFlag = niWallFlag[trLoc];
@@ -719,7 +719,7 @@ void Shift_particles(__global int* __restrict__ pDepFlag,
 	int minBl = (wallFlag & WF_BOT_WALL) ? MIN_BL_BOT : MIN_BL_TOP;
 	int maxBl = (wallFlag & WF_BOT_WALL) ? MAX_BL_BOT : MAX_BL_TOP;
 
-	int indStart = max(minBL, blInd - 5);
+	int indStart = max(minBl, blInd - 5);
 	int indStop = min(maxBl, blInd + 6);
 
 

@@ -237,24 +237,24 @@
 /////////////////////////////////////////////////////////////
 //////               Particle Parameters               //////
 /////////////////////////////////////////////////////////////
-#define USE_PARTICLE_SOLVER		false
-#define TR_SAVE_MACROS_ON_START	false
+#define USE_PARTICLE_SOLVER		true
+#define TR_SAVE_MACROS_ON_START	true
 #define SAVE_WALL_SHEAR			true
 #define CLUMP_PARTICLES			true
 #define SAVE_IO_DISTS			true
 #define TR_WEIGHT_KERNEL		"Gaussian"
 
-#define X_RELEASE_POS			(490)
-#define X_STOP_POS				(10500)
-#define REDUCE_DEP_STOP1		(990)
-#define REDUCE_DEP_STOP2		(1490)
+#define X_RELEASE_POS			(90)
+#define X_STOP_POS				(1900)
+#define REDUCE_DEP_STOP1		(190)
+#define REDUCE_DEP_STOP2		(290)
 #define AMT_REDUCE_DEP			0.1
-#define START_THERMO_VEL		(500)
+#define START_THERMO_VEL		(100)
 #define AVG_PAR_PER_RELEASE		(50)
 
-#define X_MIN_VAL			(X_RELEASE_POS - 1.)
+#define X_MIN_VAL				(X_RELEASE_POS - 1.)
 
-#define BL_SEARCH_RAD			2
+#define BL_SEARCH_RAD			5
 #define INDEX_RADIUS_SEARCH		30	//Radius of indicies to search when finding Shear Neighbors
 #define MASS_FLUX_INLET			10
 #define CUTOFF_RADIUS			5.
@@ -268,7 +268,7 @@
 #define FOUL_SIZE_SWITCH_SOOT2	0.5
 
 
-#define STOP_DIST_X				0
+#define STOP_DIST_X				1900
 #define K_coeff					0.4711
 
 #define NUM_EACH_PAR			(50.) ////Min number of particles represented in a given Particle Size

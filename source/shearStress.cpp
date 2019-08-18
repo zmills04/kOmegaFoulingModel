@@ -172,10 +172,16 @@ void shearStress::save2file()
 
 void shearStress::saveDebug()
 {
-	sInds.save_txt_from_device();
-	blInds.save_txt_from_device();
-	ssWeights.save_txt_from_device();
-	shearCoeffs.save_txt_from_device();
+	Tau.save_from_device();
+	vtr.BL.saveFromDevice(true, trStructBase::saveTxtFl);
+	ssWeights.save_from_device();
+	blInds.save_from_device();
+	shearCoeffs.save_from_device();
+	vlb.Ux_array.save_txt_from_device();
+	vlb.Uy_array.save_txt_from_device();
+	vlb.Ro_array.save_txt_from_device();
+	vlb.FA.save_txt_from_device();
+	vlb.FB.save_txt_from_device();
 }
 
 void shearStress::saveParams()
@@ -249,13 +255,13 @@ void shearStress::setKernelArgs()
 		BLinks::lenArr, BLinks::tauArr, BLinks::typeArr };
 
 	Par::arrName ParArrList[] = { Par::posArr, Par::numRepArr,
-		Par::typeArr, Par::depFlagArr, Par::depTimerArr, Par::locArr };
+		Par::typeArr, Par::depFlagArr, Par::depTimerArr, Par::locArr, Par::timerArr };
 
 	ind = 0;
 	cl_int2 zer2 = { {0,0} };
 	trShearRemovalKernel.set_argument(ind++, vls.C.get_buf_add());
 	vtr.BL.setBuffers(trShearRemovalKernel, ind, BLArrList, 5);
-	vtr.P.setBuffers(trShearRemovalKernel, ind, ParArrList, 6);
+	vtr.P.setBuffers(trShearRemovalKernel, ind, ParArrList, 7);
 	trShearRemovalKernel.set_argument(ind++, vtr.blDep.get_buf_add());
 	trShearRemovalKernel.setOptionInd(ind);
 	trShearRemovalKernel.set_argument(ind++, &zer2);
@@ -331,42 +337,45 @@ void shearStress::updateParRemArgs()
 	trShearRemovalKernel.reset_global_size(removalOptionVal.y);
 }
 
-void shearStress::updateShearArrays()
-{
-	if (!vtr.wallShear.calcSSFlag)
-		return;
-	bool reSizeFlag = vls.updateShearArrays();
-	if (reSizeFlag)
-	{
-		shearNodeDynSize = vls.ssArr.curFullSize();
-		shearCoeffs.reallocate_device_only(2 * shearNodeDynSize);
-		Tau.reallocate_device_only(shearNodeDynSize);
+// Moved to clVariablesFL to overcome issues associated with 
+// using std::thread to update arrays. 
 
-		clFinish(IOQUEUE);
-
-		updateSSKernel[0].set_argument(0, vls.ssArr.get_buf_add());
-
-		updateSSKernel[0].set_argument(2, shearCoeffs.get_buf_add());
-		updateSSKernel[1].set_argument(4, vls.ssArr.get_buf_add());
-		
-		nodeShearKernel.set_argument(3, shearCoeffs.get_buf_add());
-		nodeShearKernel.set_argument(5, Tau.get_buf_add());
-		nodeShearKernel.set_argument(6, vls.ssArr.get_buf_add());
-		
-		wallShearKernel.set_argument(1, Tau.get_buf_add());
-	}
-
-	shearNodeSize = vls.ssArr.curSize();
-
-	updateSSKernel[0].setOption(&shearNodeSize);
-	nodeShearKernel.setOption(&shearNodeSize);
-	
-	nodeShearKernel.reset_global_size(shearNodeSize);
-	updateSSKernel[0].reset_global_size(shearNodeSize);
-
-	updateSSKernel[0].call_kernel();
-	updateSSKernel[1].call_kernel();
-}
+//void shearStress::updateShearArrays()
+//{
+//	if (!vtr.wallShear.calcSSFlag)
+//		return;
+//	bool reSizeFlag = vls.updateShearArrays();
+//	if (reSizeFlag)
+//	{
+//		shearNodeDynSize = vls.ssArr.curFullSize();
+//		shearCoeffs.reallocate_device_only(2 * shearNodeDynSize);
+//		Tau.reallocate_device_only(shearNodeDynSize);
+//
+//		clFinish(IOQUEUE);
+//
+//		updateSSKernel[0].set_argument(0, vls.ssArr.get_buf_add());
+//
+//		updateSSKernel[0].set_argument(2, shearCoeffs.get_buf_add());
+//		updateSSKernel[1].set_argument(4, vls.ssArr.get_buf_add());
+//		
+//		nodeShearKernel.set_argument(3, shearCoeffs.get_buf_add());
+//		nodeShearKernel.set_argument(5, Tau.get_buf_add());
+//		nodeShearKernel.set_argument(6, vls.ssArr.get_buf_add());
+//		
+//		wallShearKernel.set_argument(1, Tau.get_buf_add());
+//	}
+//
+//	shearNodeSize = vls.ssArr.curSize();
+//
+//	updateSSKernel[0].setOption(&shearNodeSize);
+//	nodeShearKernel.setOption(&shearNodeSize);
+//	
+//	nodeShearKernel.reset_global_size(shearNodeSize);
+//	updateSSKernel[0].reset_global_size(shearNodeSize);
+//
+//	updateSSKernel[0].call_kernel();
+//	updateSSKernel[1].call_kernel();
+//}
 
 
 

@@ -22,39 +22,14 @@ public:
 	time_t StartTimeSys;
 	char cStartTimeSys[26];
 	unsigned int counter;
-	//OpenGL objects
-	MSG msg;
-	HGLRC         gGlCtx;
-	HDC           gHdc;
-	bool quit = false;
 
-	int down_pixel_x = 0;
-	int down_clicked = 0;
-	int down_pixel_y = 0;
-	int mouse_save = 0;
-	double t2, t1, totalElapsedTime = 0.;
-	int frameCount = 0, frameRefCount = 90;
-
-	//size of particles and lines
-	double psize = POINT_SIZES, lsize = LINE_SIZES;
-	//variables used to define window parameters
-	cl_double2 Window_Center, Window_Dims, Window_Shift;
-	void set_window(int framesPerSec);
-	void check_message();
-	int enableGLAndGetGLContext(cl_platform_id platform);
 
 	clDisplay(){ counter = 0; };
 	virtual ~clDisplay(){};
 
-	static int displayDevices(cl_platform_id platform, cl_device_type deviceType);
-
 	void finish();
 	
 	void ini(void);      
-	
-	void init_glew();
-
-	void Render_Domain();
 
 	void ShowTime(void);
 

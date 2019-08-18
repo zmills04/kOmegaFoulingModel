@@ -317,6 +317,11 @@ public:
 		set_argument<T>(optionInd, val_);
 		call_kernel(que, num_list, wait, evt);
 	}
+
+	cl_command_queue* getCommandQueue()
+	{
+		return queue;
+	}
 };
 
 class DualKernel

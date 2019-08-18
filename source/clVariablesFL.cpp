@@ -8,7 +8,7 @@
 #include "clVariablesLS.h"
 #include "clVariablesLB.h"
 #include "clVariablesFD.h"
-#include "clVariablesTR.h"
+
 
 // TODO: create function to update active indicies in vtr and set it up to
 //		only call once every updateTRActiveFreq update steps 
@@ -23,7 +23,7 @@ void clVariablesFL::allocateArrays()
 
 	blDepTot.zeros(Num_active_nodes, vtr.parP.Nd);
 	blDepTot_temp.zeros(Num_active_nodes, vtr.parP.Nd);
-	updateWallsDist.zeros(vtr.trDomainFullSizeX, vtr.trDomainSize.y);
+	
 }
 
 void clVariablesFL::allocateBuffers()
@@ -32,7 +32,6 @@ void clVariablesFL::allocateBuffers()
 	RI.allocateBuffers();
 	blDepTot.allocate_buffer_w_copy();
 	blDepTot_temp.allocate_buffer_w_copy();
-	updateWallsDist.allocate_buffer_w_copy();
 }
 
 void clVariablesFL::createKernels()
@@ -598,6 +597,7 @@ void clVariablesFL::setSourceDefines()
 	setSrcDefinePrefix "NEIGHS_PER_SIDE_SMOOTHING", vfl.neighsPerSideSmoothing);
 
 	setSrcDefinePrefix "FL_NUM_ACTIVE_NODES", static_cast<unsigned int>(Num_active_nodes));
+	setSrcDefinePrefix "FL_NUM_BL", static_cast<unsigned int>(Num_active_nodes));
 
 	double Ymin = vls.C0[0].y;
 	double Ymax = vls.C0[vls.nN - 1].y;
@@ -639,66 +639,34 @@ void clVariablesFL::updateTimeData()
 
 void clVariablesFL::update()
 {//TODO: test if case is handled when dX becomes > 1.
-	cl_event Red_T_Evt;
-	//vfd.FD_reduce_T.call_kernels(&Red_T_Evt);
-	//vfd.Sum_Temp.read_from_buffer(IOQUEUE, 1, &Red_T_Evt);
-	clReleaseEvent(Red_T_Evt);
 
-
-	//cl_event LS_Evt, Fill_Evt;
+	updateFL();
 	
-	//vfd.dX_cur.enqueue_copy_to_buffer(FDQUEUE, vfd.dX.get_buffer());
-	
-	update_FL();
-	update_LS();
+	vls.update();
 
 	// Only needs LS variables updated, so we can go ahead and
-	// spin off a thread to execute this function.
-	std::thread updateShearThread(vtr.wallShear.updateShearArrays);
+	// spin up a thread to execute this function since it is 
+	// done on host cpu.
+	std::thread updateShearThread(&clVariablesFL::updateShearArrays, this);
 
-	update_LB();
+	vlb.update();
 
-	//vls.C.read_from_buffer(IOQUEUE, 1, &LS_Evt);
-	//vls.M.read_from_buffer(IOQUEUE);
+	vls.C.read_from_buffer(IOQUEUE_REF);
+
 
 	if(p.useOpenGL)
-		update_GL();
+		vtr.glParticles.update();
 
-	update_FD(updateShearThread);
+	vfd.update();
 
 	clFlush(FDQUEUE);
 	
-	nodeI Ntemp;
-	for (int i = 0; i < MAX_BL_PER_NODE; i++)
-		Ntemp.BLind[i] = -1;
-	Ntemp.Wall_Flag = 0;
-	vtr.NodI.FillBuffer(IOQUEUE, Ntemp);
-	vtr.BLind_ind.FillBuffer(IOQUEUE, 0);
+	vtr.update();
 
-	int Num_Wnodes_temp = vtr.Num_wall_nodes_max;
-	vtr.Num_W_nodes.FillBuffer(IOQUEUE, 0, &Fill_Evt);
-
-	clFlush(IOQUEUE);
-
-	update_TR(&Fill_Evt, Num_Wnodes_temp);
-
-	p.flushQueues();
-
-	clReleaseEvent(LS_Evt);
-	clReleaseEvent(Fill_Evt);
+	updateShearThread.join();
 }
 
-inline void clVariablesFL::update_GL()
-{
-	updateGLKernel.call_kernel();
-}
-
-inline void clVariablesFL::update_FD()
-{
-	vfd.updateDerivativeArrays();
-}
-
-void clVariablesFL::update_FL()
+void clVariablesFL::updateFL()
 {
 	cl_event Evt1;
 	shiftWallsKernel.call_kernel(nullptr, 0, nullptr, &Evt1);
@@ -711,7 +679,7 @@ void clVariablesFL::update_FL()
 	rampEndsKernel.call_kernel();
 	cl_uint zer = 0;
 	vtr.blDep.FillBuffer(0, LBQUEUE_REF, 1, &Evt1);
-	
+
 	if (Smooth_timer == 0)
 	{
 		blDepTot.enqueue_copy_to_buffer(blDepTot_temp.get_buffer(), -1, IOQUEUE_REF);
@@ -721,91 +689,57 @@ void clVariablesFL::update_FL()
 }
 
 
-
-
-void clVariablesFL::update_TR(std::thread& shearUpdateThread)
+void clVariablesFL::updateShearArrays()
 {
-	cl_uint offset = vtr.Ploc(1).x;
-	cl_uint total_removal = vtr.Ploc(1).y - offset;
-	update_TR_kernel[3].set_argument(2, &offset);
-	update_TR_kernel[3].set_argument(3, &total_removal);
-
-
-	update_TR_kernel[0].call_kernel(NULL, 1, wait_fill);  ///Update Nodes
-	update_TR_kernel[1].call_kernel();  ///Update Wall Nodes
-	update_TR_kernel[2].call_kernel();	///Update Particles
-	update_TR_kernel[3].call_kernel();	///Update Wall Particles
-
-	vtr.Num_W_nodes.read_from_buffer();
-	clFlush(TRQUEUE);
-
-	clFinish(FDQUEUE);
-
-	// May or may not need to keep this (will require re-implementing method in LBsolver)
-	//vlb.update_IBB_arrays();
-	vtr.update_Shear_arrays();
-	vtr.update_trp();
-
-	clFinish(TRQUEUE);
-	vtr.Num_wall_nodes = vtr.Num_W_nodes(0);
-	//cl_event Fill_Evt;
-	//vtr.Num_W_nodes.FillBuffer(IOQUEUE, 0, &Fill_Evt);
-
-	if (Num_Wnodes_temp < vtr.Num_W_nodes(0))
+	if (!vtr.wallShear.calcSSFlag)
+		return;
+	bool reSizeFlag = vls.updateShearArrays();
+	if (reSizeFlag)
 	{
-		double gsize = (double)vtr.Num_W_nodes(0) / WORKGROUPSIZE_TR_WALL;
-		vtr.Num_wall_nodes_max = (int)(ceil(gsize)*WORKGROUPSIZE_TR_WALL);
+		vtr.wallShear.shearNodeDynSize = vls.ssArr.curFullSize();
+		vtr.wallShear.shearCoeffs.reallocate_device_only(2 * vtr.wallShear.shearNodeDynSize);
+		vtr.wallShear.Tau.reallocate_device_only(vtr.wallShear.shearNodeDynSize);
 
-		vtr.TR_Wall_Par_kernel[0].reset_global_size(vtr.Num_W_nodes(0));
-		vtr.TR_Wall_Node_kernel[0].reset_global_size(vtr.Num_W_nodes(0));
-		vtr.TR_Wall_Node_kernel[1].reset_global_size(vtr.Num_W_nodes(0));
-
-
-		vtr.Winds.reallocate(vtr.Num_wall_nodes_max);
 		clFinish(IOQUEUE);
 
-		update_TR_kernel[4].set_argument(1, vtr.Winds.get_buf_add());
+		vtr.wallShear.updateSSKernel[0].set_argument(0, vls.ssArr.get_buf_add());
 
+		vtr.wallShear.updateSSKernel[0].set_argument(2, vtr.wallShear.shearCoeffs.get_buf_add());
+		vtr.wallShear.updateSSKernel[1].set_argument(4, vls.ssArr.get_buf_add());
 
-		vtr.TR_Wall_Par_kernel[0].set_argument(7, vtr.Winds.get_buf_add());
-		vtr.TR_Wall_Node_kernel[0].set_argument(4, vtr.Winds.get_buf_add());
-		vtr.TR_Wall_Node_kernel[1].set_argument(4, vtr.Winds.get_buf_add());
+		vtr.wallShear.nodeShearKernel.set_argument(3, vtr.wallShear.shearCoeffs.get_buf_add());
+		vtr.wallShear.nodeShearKernel.set_argument(5, vtr.wallShear.Tau.get_buf_add());
+		vtr.wallShear.nodeShearKernel.set_argument(6, vls.ssArr.get_buf_add());
+
+		vtr.wallShear.wallShearKernel.set_argument(1, vtr.wallShear.Tau.get_buf_add());
 	}
 
-	vtr.TR_Wall_Par_kernel[0].set_argument(8, &vtr.Num_wall_nodes);
-	vtr.TR_Wall_Node_kernel[0].set_argument(5, &vtr.Num_wall_nodes);
-	vtr.TR_Wall_Node_kernel[1].set_argument(5, &vtr.Num_wall_nodes);
-	
-	////update_TR_kernel[4].call_kernel(1, &Fill_Evt);
-	update_TR_kernel[4].call_kernel();
+	vtr.wallShear.shearNodeSize = vls.ssArr.curSize();
 
-	clFlush(TRQUEUE);
-	//clReleaseEvent(Fill_Evt);
+	vtr.wallShear.updateSSKernel[0].setOption(&vtr.wallShear.shearNodeSize);
+	vtr.wallShear.nodeShearKernel.setOption(&vtr.wallShear.shearNodeSize);
+
+	vtr.wallShear.nodeShearKernel.reset_global_size(vtr.wallShear.shearNodeSize);
+	vtr.wallShear.updateSSKernel[0].reset_global_size(vtr.wallShear.shearNodeSize);
+
+	vtr.wallShear.updateSSKernel[0].call_kernel();
+	vtr.wallShear.updateSSKernel[1].call_kernel();
 }
 
+void clVariablesFL::saveVariables()
+{
+	vls.save2file();
+	vlb.save2file();
+	vfd.save2file();
+	vtr.save2file();
+	save2file();
 
-
-
-
-
-
-
-
-
-//void clVariablesFL::save_variables()
-//{
-//	vls.save2file();
-//	vlb.save2file();
-//	vfd.save2file();
-//	vtr.save2file();
-//	save2file();
-//
-//	vtr.saveDebug();
-//	vls.saveDebug();
-//	//vlb.saveDebug();
-//	vfd.saveDebug();
-//	vtr.P.saveFromDevice(true, trStructBase::saveTxtFl);
-//}
+	vtr.saveDebug();
+	vls.saveDebug();
+	vlb.saveDebug(0);
+	vfd.saveDebug();
+	vtr.P.saveFromDevice(true, trStructBase::saveTxtFl);
+}
 
 
 //void clVariablesFL::CallRename(char* file, const char* fol)

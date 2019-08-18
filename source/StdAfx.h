@@ -123,11 +123,11 @@ typedef struct cl_bool2
 #define SDK_EXPECTED_FAILURE 2
 
 
-#define CHECK_ALLOCATION(actual, msg) \
-if (actual == NULL) \
+#define CHECK_ALLOCATION(actual, msg, error_num) \
+if (actual == nullptr) \
 { \
 	std::cout << "Location : " << __FILE__ << ":" << __LINE__ << std::endl; \
-	return SDK_FAILURE; \
+	exit(error_num); \
 }
 
 #define CHECK_ERROR(actual, reference, msg) \
@@ -249,7 +249,11 @@ static int checkVal(
 
 enum FileMode { FileIn, FileOut, FileAppend, BinaryIn, BinaryOut };
 
-
+enum statKernelType {
+	uniformKer, triangularKer, parabolicKer,
+	quarticKer, triWeightKer, triCubeKer, gaussianKer, cosineKer,
+	logisticKer, sigmoidKer
+};
 
 #ifndef PRINT_ERROR_MESSAGES
 #define PRINT_ERROR					do {} while(0)

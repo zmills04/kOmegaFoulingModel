@@ -156,10 +156,10 @@ public:
 ////////////////////////////////////////////////////////////////////////////	
 
 	// Allocates host arrays containing data
-	void allocateArrays();
+	//void allocateArrays();
 
 	// Allocates device buffers, and copies host contents to them
-	void allocateBuffers();
+	//void allocateBuffers();
 
 	// Creates kernels from compiled openCL source code. Pointers to 
 	// these functions are passed to sourceGenerator to allow for 

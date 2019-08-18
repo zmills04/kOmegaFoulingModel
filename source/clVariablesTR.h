@@ -64,7 +64,8 @@ public:
 		reflectInfo("reflectInfo"), reflectInds("reflectInds"), 
 		updateFlag("updateFlag"), PV("PV"), RandList("RandList"), 
 		activeInds("activeInds", WORKGROUPSIZE_TR, 2),
-		wallInds("wallInds", WORKGROUPSIZE_TR, 2)
+		wallInds("wallInds", WORKGROUPSIZE_TR, 2), BL("trBL"),
+		P("trP"), NodC("trNodC"), NodI("trNodI"), updateWallsDist("updateWallsDist")
 	{
 		loadParamsPtr = std::bind(&clVariablesTR::loadParams, this);
 	};
@@ -73,12 +74,6 @@ public:
 	{
 	};
 
-
-	enum kernelType {
-		uniformKer, triangularKer, parabolicKer,
-		quarticKer, triWeightKer, triCubeKer, gaussianKer, cosineKer,
-		logisticKer, sigmoidKer
-	};
 
 	static const std::string uniformKerStr, triangularKerStr, parabolicKerStr,
 		quarticKerStr, triWeightKerStr, triCubeKerStr, gaussianKerStr, cosineKerStr,
@@ -220,6 +215,11 @@ public:
 	// updates when it crosses into a new node)
 	Array1Ds updateFlag;
 
+
+	// Used to find closest BL to a given node
+	Array2Dd updateWallsDist;
+
+
 	// indicies of wall nodes
 	DynArray1Di wallInds;
 	Array1Di wallIndsCurIndex;	// Tracks current index of wallInds array on device.
@@ -283,7 +283,7 @@ public:
 	bool calcIOFlag;		// Flag to save distribution at inlet outlet
 							// as TimeData array
 
-	kernelType kernelT;
+	statKernelType kernelT;
 
 	int maxOutputLinesIO;	// number of lines in ioDistsSave
 
@@ -469,7 +469,7 @@ public:
 	bool testRestartRun();
 
 	// called by FL class to update data
-	void update(std::thread& shearUpdateThread);
+	void update();
 
 	// Calls kernels to save time data (umean, avg density, etc) to array
 	// on device, which will eventually be saved if it reaches its max 
@@ -491,7 +491,7 @@ public:
 	//void checkNeighNode(int i, int j, int* cur_ind, int nod_loc);
 
 	// fills NodI with information from BLinks
-	void fillNodeI(int i, Array2Dd& dist2Center);
+	void fillNodeI(int i);
 
 
 
@@ -512,8 +512,8 @@ public:
 	// needs updating to handle new way BL index is handled by NodeI (i.e. legacy
 	// code stored all BL indicies in area defined by node, while new code only stores
 	// index of one closest to center.
-	void clVariablesTR::testNode(int i0, int j0, cl_double2 c0t, cl_double2 c1t,
-		int blind, Array2Dd& dist2Center);
+	void clVariablesTR::testNode(int i0, int j0, cl_double2 c0t,
+		cl_double2 c1t,	int blind);
 
 	// Generate random number between 0 and 1 from uniform distribution
 	double rand1();
@@ -521,14 +521,14 @@ public:
 	// Calculates interpolation weight using basic kernel
 	// TODO: implements various kernels, and allow for
 	//		the kernel used to be selected with input parameter
-	double weightKernelFunc(double Sval, kernelType kerT_);
+	double weightKernelFunc(double Sval, statKernelType kerT_);
 
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////            Initialization Functions           ///////////////
 ////////////////////////////////////////////////////////////////////////////
 	
-	clVariablesTR::kernelType getKernelType(std::string kername_);
+	statKernelType getKernelType(std::string kername_);
 
 	// Initializes particles
 	void iniParticles();
@@ -552,7 +552,7 @@ public:
 	void iniIndexInfo();
 
 	// adds weight kernel function to opencl source
-	void addWeightFunctionToSource(kernelType kerT_, std::string kerName_);
+	void addWeightFunctionToSource(statKernelType kerT_, std::string kerName_);
 
 
 	// Initializes arrays containing node neighbor arrays
@@ -568,7 +568,7 @@ public:
 //////////////              Updating Functions               ///////////////
 ////////////////////////////////////////////////////////////////////////////
 
-	
+	void updateWallNodes();
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////               Solving Functions               ///////////////
@@ -586,7 +586,7 @@ public:
 	// Very useful for debugging
 	void saveBox(double x1, double y1, double dx, double dy);
 
-	void saveKernelType(kernelType kerT_);
+	void saveKernelType(statKernelType kerT_);
 
 	// files that dont change after initialization (only need bin saved once)
 	// void saveRestartFilesIni();    

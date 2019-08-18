@@ -58,7 +58,7 @@ int upperBoundBinarylocal(local int* __restrict__ data_loc, int left,
 				right = mid;
 				upperBound++;
 			}
-			upperValue = data_loc[upperBound];
+			upperValue_loc = data_loc[upperBound];
 		}
 	}
 	return upperBound;
@@ -112,7 +112,7 @@ int upperBoundBinary(__global int* __restrict__ source_ptr_loc, int left, int ri
 	if (upperBound != right)
 	{
 		int mid = 0;
-		int upperValue = source_ptr_loc[upperBound];
+		int upperValue_loc = source_ptr_loc[upperBound];
 		while ((searchVal_loc == upperValue_loc) && (upperBound < right))
 		{
 			mid = (upperBound + right) / 2;
@@ -126,7 +126,7 @@ int upperBoundBinary(__global int* __restrict__ source_ptr_loc, int left, int ri
 				right = mid;
 				upperBound++;
 			}
-			upperValue = source_ptr_loc[upperBound];
+			upperValue_loc = source_ptr_loc[upperBound];
 		}
 	}
 	return upperBound;
@@ -137,9 +137,9 @@ int upperBoundBinary(__global int* __restrict__ source_ptr_loc, int left, int ri
 // Sorting of remaining arrays performed in Sort_update_loc
 kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_SORT, 1, 1)))
 void Sort_merge_global(__global int* __restrict__ source_loc,
-	__global int* __restrict__ source_ptr_orig, 
+	__global int* __restrict__ source_loc_orig, 
 	__global int* __restrict__ result_loc,
-	__global int* __restrict__ result_ptr_orig,
+	__global int* __restrict__ result_loc_orig,
 	const int srcLogicalBlockSize)
 {
 	size_t globalID = get_global_id(0);// * get_global_size(0) + get_global_id(0);
@@ -413,7 +413,7 @@ void TR_release_par(global double2* __restrict__ source_pos,
 	__global double* __restrict__ trP,
 	__global double* U_array,
 #ifdef CALC_IO_DISTS
-	__global __restrict__ uint* ioDists,
+	__global uint* __restrict__ ioDists,
 	int ioDistsInd,
 #endif
 	uint maxel,
@@ -439,7 +439,7 @@ void TR_release_par(global double2* __restrict__ source_pos,
 #endif
 
 	uint2 RandEl = RandArray[i];
-	double Umv = trP[TRP_UMAX_IND];
+	double Umv = trP[TRP_UMAX_VAL_IND];
 	double Bval = trP[TRP_BVAL_IND];
 	double2 randval;
 	RandEl = MWC64X_NextUint2(RandEl, &randval);

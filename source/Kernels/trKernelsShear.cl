@@ -24,8 +24,9 @@ void TR_shear_removal(__global double2* __restrict__ lsc,
 	__global short* __restrict__ P_Dep_Flag,
 	__global ushort* __restrict__ P_Dep_timer,
 	__global int* __restrict__ P_loc,
+	__global uint* __restrict__ P_timer,
 	__global uint* BLdep,
-	cl_int2 offsetAndMax) // offsetAndMax = {{ offset, maxel }}
+	int2 offsetAndMax) // offsetAndMax = {{ offset, maxel }}
 {
 	int i = get_global_id(0);
 
@@ -72,14 +73,14 @@ void TR_shear_removal(__global double2* __restrict__ lsc,
 	double2 vLvec = BL_vNvec[blInd];
 
 	// tangent vector = shear_direction*[vN.y, -vN.x]
-	double2 vDvec = Fdrag * double2(vLvec.y, -vLvec.x);
+	double2 vDvec = Fdrag * (double2)(vLvec.y, -vLvec.x);
 	
 	// is actually ushort2, so index is blSurf*2
 	ushort lscInd = BL_P01ind[blInd * 2];
 
 	double blLen = BL_blLen[blInd];
 	// C1 is point at center of BL slightly offset into fluid domain
-	double2 C1 = lsc[lscInd] + double2(vLvec.y, -vLvec.x) * (blLen * 0.5) + vLvec * 0.001;
+	double2 C1 = lsc[lscInd] + (double2)(vLvec.y, -vLvec.x) * (blLen * 0.5) + vLvec * 0.001;
 
 	// No longer need normal vector, so multiplied by lift magnitude to get lift vector
 	vLvec *= Flift;
@@ -102,6 +103,7 @@ void TR_shear_removal(__global double2* __restrict__ lsc,
 	// caught here, or behavior is undefined
 	P_Dep_Flag[i] = (C1.x < X_MIN_VAL || C1.x > X_MAX_VAL) ? (-2) : (-1);
 	int2 Posi = convert_int2(C1);
+	int pcur_loc = Posi.x + FULLSIZEX_TR * Posi.y;
 	P_loc[i] = (C1.x < X_MIN_VAL || C1.x > X_MAX_VAL) ? (-2) : (pcur_loc);
 	P_pos[i] = C1;
 	P_timer[i] = PAR_TIMER_START;
@@ -115,7 +117,7 @@ void TR_shear_removal(__global double2* __restrict__ lsc,
 //////////////////////////////////////////////////////////////////////
 
 // Calculates Fneq using central differences (used in calculation of wall shear)
-void calcLBDists(__local double* Fvals, double* v0, double rho, int lid)
+void calcLBDists(__local double8* Fvals, double* v0, double rho, int lid)
 {
 	double xi_3 = (v0[0]) * (v0[0]);
 	double xi_4 = rho * xi_3;
@@ -129,6 +131,8 @@ void calcLBDists(__local double* Fvals, double* v0, double rho, int lid)
 	double xi_17 = (1.0 / 9.0) * rho - ((1.0 / 6.0) * xi_14 + 0.5 * xi_8) + (1. / 3.) * xi_4;
 	double xi_24 = v0[1] * rho;
 	double xi_25 = (1. / 3.) * xi_24;
+	double xi_27 = 0.5*(v0[1] * rho * xi_3);
+	double xi_29 = rho * (1.0 / 9.0) - 0.5 * xi_8 + (1. / 3.) * xi_14 - (1.0 / 6.0) * xi_4;
 	double xi_34 = (1.0 / 12.0) * xi_9;
 	double xi_36 = xi_9 * 0.25 * v0[1];
 	double xi_37 = 0.25 * xi_11;
@@ -141,18 +145,18 @@ void calcLBDists(__local double* Fvals, double* v0, double rho, int lid)
 	double xi_44 = xi_38 + xi_39 + xi_40 + xi_41 + xi_42 + xi_43;
 
 	// calculation of equilibrium dists
-	double8 feq;
-	feq.s0 = xi_10 - xi_12 + xi_17;
-	feq.s1 = -xi_10 + xi_12 + xi_17;
-	feq.s2 = xi_25 - xi_27 + xi_29;
-	feq.s3 = -xi_25 + xi_27 + xi_29;
-	feq.s4 = xi_34 + xi_36 + xi_37 + xi_44;
-	feq.f5 = -xi_34 + xi_36 - xi_37 + xi_38 - xi_39 + xi_40 + xi_41 - xi_42 + xi_43;
-	feq.f6 = xi_34 - xi_36 + xi_37 + xi_38 - xi_39 + xi_40 + xi_41 - xi_42 + xi_43;
-	feq.f7 = -xi_34 - xi_36 - xi_37 + xi_44;
+	//double8 feq;
+	Fvals[lid].s0 -= xi_10 - xi_12 + xi_17;
+	Fvals[lid].s1 -= -xi_10 + xi_12 + xi_17;
+	Fvals[lid].s2 -= xi_25 - xi_27 + xi_29;
+	Fvals[lid].s3 -= -xi_25 + xi_27 + xi_29;
+	Fvals[lid].s4 -= xi_34 + xi_36 + xi_37 + xi_44;
+	Fvals[lid].s5 -= -xi_34 + xi_36 - xi_37 + xi_38 - xi_39 + xi_40 + xi_41 - xi_42 + xi_43;
+	Fvals[lid].s6 -= xi_34 - xi_36 + xi_37 + xi_38 - xi_39 + xi_40 + xi_41 - xi_42 + xi_43;
+	Fvals[lid].s7 -= -xi_34 - xi_36 - xi_37 + xi_44;
 
 	// Fneq = F - Feq
-	Fvals[lid] -= feq;
+	//Fvals[lid] -= feq;
 }
 
 // Calculates shear stress at LB nodes positioned along wall
@@ -176,16 +180,17 @@ void TR_shear_1(__global double* __restrict__ Ro_array,
 	uint ind = Loc[ii];
 	int lid = get_local_id(0);
 
-	Fvals[lid] = double8(FA[ind + DIST_SIZE], 
+	Fvals[lid] = (double8)(FA[ind + DIST_SIZE], 
 		FA[ind + 2 * DIST_SIZE],
 		FA[ind + 3 * DIST_SIZE],
 		FA[ind + 4 * DIST_SIZE],
 		FA[ind + 5 * DIST_SIZE],
 		FA[ind + 6 * DIST_SIZE],
-		FA[ind + 7 * DIST_SIZE]);
+		FA[ind + 7 * DIST_SIZE],
+		FA[ind + 8 * DIST_SIZE]);
 
 	double U[2] = { Ux_array[ind], Uy_array[ind] };
-	double Ro = Ro_array[indU];
+	double Ro = Ro_array[ind];
 
 	calcLBDists(Fvals, U, Ro, lid);
 	
@@ -293,7 +298,7 @@ void TR_shear_2(__global double4* __restrict__ Weights,
 	double4 weight = Weights[ii];
 	int4 i = sInd[ii];
 
-	double4 Tautemp = (double4)(nodeTau[i.x], nodeTau[i.y], nodeTau[i.z], nodeTau[i.w]);
+	double4 Tautemp = (double4)(tauArray[i.x], tauArray[i.y], tauArray[i.z], tauArray[i.w]);
 	blTau[ii] = dot(weight, Tautemp);
 }
 
@@ -317,7 +322,7 @@ void TR_Find_Shear_Coeffs1(__global int* __restrict__ ssArr,//0
 	__global double* CFSS,
 	int numBnodes)
 {
-	uint ii = get_global_id(0);
+	int ii = get_global_id(0);
 	if (ii >= numBnodes)
 		return;
 
@@ -411,7 +416,7 @@ void TR_Find_Shear_Coeffs2(__global double2* __restrict__ lsc,
 	double blLen = BL_blLen[ii]/2.;
 	double2 vNvec = BL_vNvec[ii];
 	// C1 is point at center of BL slightly offset into fluid domain
-	double2 BLmiddle = lsc[lscInds] + (blLen) * double2(vNvec.y, -vNvec.x);
+	double2 BLmiddle = lsc[lscInds] + (blLen) * (double2)(vNvec.y, -vNvec.x);
 
 	int ival = convert_int(BLmiddle.x);
 

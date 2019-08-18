@@ -328,6 +328,7 @@ void clProblem::saveSystemParams()
 	else
 		p.setParameter("Restart Run", false);
 
+	p.getParameter("Current Time", RestartTime);
 	p.setParameter("Device ID", DeviceID);
 	p.setParameter("nX", nX);
 	p.setParameter("nY", nY);

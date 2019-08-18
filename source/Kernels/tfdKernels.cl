@@ -155,7 +155,7 @@ __kernel void Update_T_Coeffs_Implicit(__global int* __restrict__ IndArr,
 	double dXe = dx_w / (dx_e * dx_c), dXw = -dx_e / (dx_w * dx_c), dXc = (dx_e - dx_w) / (dx_e * dx_w);
 	double dYn = dy_s / (dy_n * dy_c), dYs = -dy_n / (dy_s * dy_c), dYc = (dy_n - dy_s) / (dy_n * dy_s);
 
-	double dX2e = 2. / (dx_e * dx_c), d2Xw = 2. / (dx_w * dx_c), dX2c = -2. / (dx_e * dx_w);
+	double dX2e = 2. / (dx_e * dx_c), dX2w = 2. / (dx_w * dx_c), dX2c = -2. / (dx_e * dx_w);
 	double dY2n = 2. / (dy_n * dy_c), dY2s = 2. / (dy_s * dy_c), dY2c = -2. / (dy_n * dy_s);
 
 	int gidw = ((i > 0) ? -1 : (CHANNEL_LENGTH - 1)) + gid;
@@ -246,7 +246,8 @@ __kernel void Steady_State_T_Coeffs(__global int* __restrict__ IndArr,
 	__global double* __restrict__ dRhoCp,
 #endif
 	__global double* __restrict__ ivx,
-	__global double* __restrict__ ivy)
+	__global double* __restrict__ ivy,
+	double DTFD)
 {
 	int i = get_global_id(0);
 	int j = get_global_id(1);
@@ -269,7 +270,7 @@ __kernel void Steady_State_T_Coeffs(__global int* __restrict__ IndArr,
 	double dXe = dx_w / (dx_e * dx_c), dXw = -dx_e / (dx_w * dx_c), dXc = (dx_e - dx_w) / (dx_e * dx_w);
 	double dYn = dy_s / (dy_n * dy_c), dYs = -dy_n / (dy_s * dy_c), dYc = (dy_n - dy_s) / (dy_n * dy_s);
 
-	double dX2e = 2. / (dx_e * dx_c), d2Xw = 2. / (dx_w * dx_c), dX2c = -2. / (dx_e * dx_w);
+	double dX2e = 2. / (dx_e * dx_c), dX2w = 2. / (dx_w * dx_c), dX2c = -2. / (dx_e * dx_w);
 	double dY2n = 2. / (dy_n * dy_c), dY2s = 2. / (dy_s * dy_c), dY2c = -2. / (dy_n * dy_s);
 
 	int gidw = ((i > 0) ? -1 : (CHANNEL_LENGTH - 1)) + gid;
@@ -476,7 +477,7 @@ void calcAlphaBtwNodes(const double del,
 	double coeffD = k_c * ro_n * cp_n;
 
 	// calculate alpha based on harmonic mean interpolation
-	alphaVal* = k_c * k_n / (coeffA * del * del * del + coeffB * del * del * (1.0 - del) +
+	*alphaVal = k_c * k_n / (coeffA * del * del * del + coeffB * del * del * (1.0 - del) +
 		coeffC * del * (1.0 - del) * (1.0 - del) + coeffD * (1.0 - del) * (1.0 - del) * (1.0 - del));
 
 }
@@ -530,7 +531,7 @@ __kernel void updateDerivativeArrays(__global NTYPE_TYPE* __restrict__ Map,
 	rhoCpDer[gid*2] = (2. * dxw * rhoCp_e / (dxe * (dxe + dxw)) - 2. * dxe * rhoCp_w / (dxw * (dxe + dxw))) / roCp_c +
 		2. * (dxe - dxw) / (dxe * dxw);
 
-	rhoCpDer[gid*2+1] = (2. * dys * rhoCp_n / (dyn * (dyn + dys)) - 2. * dyn * rhoCp_s / (dys * (dyn + dys)) / roCp_c +
+	rhoCpDer[gid*2+1] = (2. * dys * rhoCp_n / (dyn * (dyn + dys)) - 2. * dyn * rhoCp_s / (dys * (dyn + dys))) / roCp_c +
 		2. * (dyn - dys) / (dyn * dys);
 
 #endif
@@ -538,7 +539,7 @@ __kernel void updateDerivativeArrays(__global NTYPE_TYPE* __restrict__ Map,
 
 	calcAlphaBtwNodes(dX0Arr[gid + DIST_SIZE] / dxw, ntype, Map[gidw], &alpha_w);
 
-	calcAlphaBtwNodes(dX0Arr[gid + DIST_SIZE * 2] / d_n, ntype,
+	calcAlphaBtwNodes(dX0Arr[gid + DIST_SIZE * 2] / dyn, ntype,
 		Map[gid + CHANNEL_LENGTH_FULL], &alpha_n);
 
 	calcAlphaBtwNodes(dX0Arr[gid + DIST_SIZE * 3] / dys, ntype,
@@ -585,7 +586,7 @@ bool nuFindIntersectionNormal(double2* vC, double* dist, double2 vL0,
 {
 	double2 vP10 = vP1 - vP0;
 	double2 vLd = vL0 - vP0;
-	double2 vNm = double2(-vP10.y, vP10.x);
+	double2 vNm = (double2)(-vP10.y, vP10.x);
 	double2 vN = normalize(vNm);
 	*dist = dot(vLd, vN);
 	double2 vNdist = vN * (*dist);
@@ -609,30 +610,30 @@ void nuFindNearestNode(__global double2* __restrict__ Cvals,
 	__global double* __restrict__ nuDist,
 	const ushort2 BLind, const int shiftInd)
 {
-	double2 C0 = Cvals[BLind.x], C1 = vls.C[BLind.y];
+	double2 C0 = Cvals[BLind.x], C1 = Cvals[BLind.y];
 	int2 C0i = convert_int2_rtz(fmin(C0, C1));
 	int2 C1i = convert_int2_rtp(fmax(C0, C1));
 	C0i -= 1;
 	C1i += 1;
-	C0i = max(C0i, int2(TR_X_IND_START, 0));
-	C1i = min(C1i, int2(TR_X_IND_STOP - 1, CHANNEL_HEIGHT - 1));
+	C0i = max(C0i, (int2)(TR_X_IND_START, 0));
+	C1i = min(C1i, (int2)(TR_X_IND_STOP - 1, CHANNEL_HEIGHT - 1));
 	if ((C0i.x >= TR_X_IND_STOP) || C1i.x < TR_X_IND_START)
 		return;
 	
 	double dist;
-	double2 vCcut, vN;
+	double2 vCcut;
 
 	for (int ii = C0i.x; ii <= C1i.x; ii++)
 	{
 		for (int jj = C0i.y; jj <= C1i.y; jj++)
 		{
-			if (nType(GET_GLOBAL_IDX(ii,jj)) & M_SOLID_NODE)
+			if (nType[GET_GLOBAL_IDX(ii,jj)] & M_SOLID_NODE)
 				continue;
 
-			double2 L0 = double2((double)ii, (double)jj);
+			double2 L0 = (double2)((double)ii, (double)jj);
 			if(nuFindIntersectionNormal(&vCcut, &dist, L0, C0, C1))
 			{
-				if(AtomicMin(&nuDist[ii - shiftInd], dist)
+				if(AtomicMin(&nuDist[ii - shiftInd], dist))
 				{
 					nuDistVec[ii - shiftInd] = vCcut;
 					nuYInds[ii - shiftInd] = jj;
@@ -665,10 +666,10 @@ void updateNuCoeff1(__global double2* __restrict__ Cvals,
 		return;
 
 	nuFindNearestNode(Cvals, nType, nuYInds, nuDistVec,
-		nuDist, BLind[i + MIN_BL_BOT], TR_X_IND_START);
+		nuDist, BLinds[i + MIN_BL_BOT], TR_X_IND_START);
 
 	nuFindNearestNode(Cvals, nType, nuYInds, nuDistVec,
-		nuDist, BLind[i + MIN_BL_TOP], TR_X_IND_START - NU_NUM_NODES);
+		nuDist, BLinds[i + MIN_BL_TOP], TR_X_IND_START - NU_NUM_NODES);
 
 }
 
@@ -694,21 +695,21 @@ void updateNuCoeff2(__global int* __restrict__ nuYInds,
 			nodeType |= 0x2;
 		}
 	}
-	nuYInds[i] = (nuYInds(i) << 2) | nodeType;
+	nuYInds[i] = (nuYInds[i] << 2) | nodeType;
 }
 
 
 // Calculates bulk mean temperature
-double getTbm(__global double* __restict__ T_array,
-	__global double* __restict__ Ux_array,
-	__global double* __restict__ Uy_array,
+double getTbm(__global double* __restrict__ T_array,
+	__global double* __restrict__ Ux_array,
+	__global double* __restrict__ Uy_array,
 	int ival)
 {
 	double Um = 0.;
 	double Tm = 0.;
 	for (int j = 0; j < FULLSIZEY; j++)
 	{
-		int linInd = ival + j * FULLSIZE_Y;
+		int linInd = ival + j * CHANNEL_HEIGHT;
 		double Uval = sqrt(Ux_array[linInd] * Ux_array[linInd] + Uy_array[linInd] * Uy_array[linInd]);
 		Um += Uval;
 		Tm += Uval * T_array[linInd];
@@ -725,7 +726,7 @@ double getTandDT(__global double* __restrict__ Tvals,
 	double2 vNorm, int linInd, int nType, double* dTval)
 {
 	double Tnode = Tvals[linInd];
-	double Tdiff, dx, dy;
+	double Tdiff, dx, dx0;
 	if (nType & 0x1)
 	{
 		Tdiff = Tvals[linInd + 1] - Tnode; // east neigh
@@ -734,7 +735,7 @@ double getTandDT(__global double* __restrict__ Tvals,
 	}
 	else
 	{
-		Tneigh = Tnode - Tvals[linInd - 1]; // west neigh
+		Tdiff = Tnode - Tvals[linInd - 1]; // west neigh
 		dx = dXvals[linInd * 8 + 1]; // dxw
 		dx0 = dX0vals[linInd * 8 + 1];
 	}
@@ -795,7 +796,7 @@ void FD_calc_Nu(__global double* __restrict__ T_array,
 	int nType = (jj & 0x3);
 	jj = jj >> 2;
 
-	double2 dTdn = 0.;
+	double dTdn[2] = { 0. };
 	double2 Ts = 0.;
 
 	if (jj != -1)
@@ -804,7 +805,7 @@ void FD_calc_Nu(__global double* __restrict__ T_array,
 		double2 vNorm = nuDist[ix];
 
 		Ts.x = getTandDT(T_array, dXvals, dX0vals,
-			vNorm, linInd, nType, &(dTdn.x));
+			vNorm, linInd, nType, &dTdn[0]);
 	}
 
 	jj = nuYInds[ix + FULLSIZEX_TR];
@@ -818,16 +819,16 @@ void FD_calc_Nu(__global double* __restrict__ T_array,
 		double2 vNorm = nuDist[ix + FULLSIZEX_TR];
 
 		Ts.y = getTandDT(T_array, dXvals, dX0vals,
-			vNorm, linInd, nType, &(dTdn.y));
+			vNorm, linInd, nType, &dTdn[1]);
 	}
 
 	timeIndex *= NU_NUM_NODES_FULLSIZE;
 	
-	Nu_Array[shiftval + ix * 5]		= dTdn.x;
-	Nu_array[shiftval + ix * 5 + 1] = Ts.x;
-	Nu_array[shiftval + ix * 5 + 2] = dTdn.y;
-	Nu_array[shiftval + ix * 5 + 3] = Ts.y;
-	Nu_array[shiftval + ix * 5 + 4] = Tm;
+	Nu_array[timeIndex + ix * 5]		= dTdn[0];
+	Nu_array[timeIndex + ix * 5 + 1] = Ts.x;
+	Nu_array[timeIndex + ix * 5 + 2] = dTdn[1];
+	Nu_array[timeIndex + ix * 5 + 3] = Ts.y;
+	Nu_array[timeIndex + ix * 5 + 4] = Tm;
 }
 
 // Calculates Bulk Mean at beginning of each period

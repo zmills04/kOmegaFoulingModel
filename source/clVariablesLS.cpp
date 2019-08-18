@@ -37,6 +37,7 @@ void clVariablesLS::allocateArrays()
 
 	Masses.allocate(2);
 
+	bFlag.zeros(p.nX, p.nY);
 #ifndef IN_KERNEL_IBB
 	ibbArrCurIndex.zeros(1);
 #endif
@@ -228,9 +229,14 @@ void clVariablesLS::bcFindNodes(int bl, int findtype)
 	if (vCmax.y < 0) return;
 	if (vCmax.y > p.nY - 1) vCmax.y = p.nY - 1;
 
-
+#ifdef IN_KERNEL_IBB
 	for (int dir = 1; dir < 9; dir += 2)
+#else
+	for (int dir = 1; dir < 4; dir += 2)
+#endif
+	{
 		bcFindDirection(dir, bl, vC0, vC1, vCn, vCmin, vCmax, findtype);
+	}
 }
 
 void clVariablesLS::bcSetdXArr(cl_int2 ii0, cl_int2 ii1, int dir, double dist,
@@ -390,6 +396,7 @@ void clVariablesLS::setKernelArgs()
 	updateNType.set_argument(7, vlb.kOmegaClass.Kappa.get_add_b());
 	updateNType.set_argument(8, vlb.kOmegaClass.Omega.get_add_A());
 	updateNType.set_argument(9, vlb.kOmegaClass.Omega.get_add_b());
+	updateNType.set_argument(9, vlb.kOmegaClass.Nut_array.get_buf_add());
 	updateNType.set_argument(10, vlb.kOmegaClass.Omega.get_add_IndArr());
 
 
@@ -553,8 +560,10 @@ void clVariablesLS::ini()
 	iniFillMap0();
 	iniFillMap();
 
+	sourceGenerator::SourceInstance()->addFile2Kernel("lsKernels.cl");
+
 	// Copy contents of nType to nTypePrev before calling iniNodeBoundaryInfo
-	memcpy(nTypePrev.get_array(), nType.get_array(), nType.getFullSize() * sizeof(double));
+	std::memcpy(nTypePrev.get_array(), nType.get_array(), nType.getFullSize() * sizeof(NTYPE_TYPE));
 
 	iniCountSolid();
 	inidXArrays();
@@ -942,8 +951,14 @@ void clVariablesLS::iniNodeBoundaryInfo()
 					else
 						printf("dir at (%d,%d) points to solid node, but dx = 1\n", i, j);
 #else
-					if (vls.dXArr(i, j, m - 1) == 1.0)
-						printf("dir at (%d,%d) points to solid node, but dx = 1\n", i, j);
+					// Only tracking dX for E,W,N,S so checking diagonals will access OOB
+					if (m < 5)
+					{
+						if (vls.dXArr(i, j, m - 1) == 1.0)
+						{
+							printf("dir at (%d,%d) points to solid node, but dx = 1\n", i, j);
+						}
+					}
 #endif
 				}
 			}

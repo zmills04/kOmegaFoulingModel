@@ -239,7 +239,7 @@ void clVariablesFD::iniDerivativeArrays()
 		int iw = MODFAST(i - 1, p.nX);
 
 		// no fluid nodes should be found on y = 0 or nY-1
-		for (int j = 1; i < p.nY - 1; j++)
+		for (int j = 1; j < p.nY - 1; j++)
 		{
 			if (vls.nType(i, j) & M0_SOLID_NODE)
 				continue;
@@ -648,11 +648,18 @@ void clVariablesFD::setSourceDefines()
 	{
 		SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "USING_CHT_SOURCE_CORRECTION");
 	}
-	if (calcNuFlag)
+
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "WAVY_SECTION_START", p.xWavyStart);
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "WAVY_PERIOD_LENGTH", p.wavyPeriodLen);
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "NUM_NU_LOCS", p.numWavyPeriods+1);
+
+	// These are set when iniNuCoeffs is called later, but if not using Nu this function will not be called,
+	// so dummy values need to be set to ensure that opencl source compiles
+	if (!calcNuFlag)
 	{
-		SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "WAVY_SECTION_START", p.xWavyStart);
-		SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "WAVY_PERIOD_LENGTH", p.wavyPeriodLen);
-		SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "NUM_NU_LOCS", p.numWavyPeriods+1);
+		SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "NU_NUM_NODES", 0);
+		SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "NU_NUM_NODES_FULLSIZE", 0);
+		SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "NU_BL_PER_SIDE_NU", 0);
 	}
 
 
@@ -742,6 +749,11 @@ bool clVariablesFD::testRestartRun()
 	}
 
 	return restartRunFlag;
+}
+
+void clVariablesFD::update()
+{
+	updateDerivativeArrays();
 }
 
 void clVariablesFD::updateDerivativeArrays()

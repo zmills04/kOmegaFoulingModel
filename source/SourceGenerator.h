@@ -63,8 +63,8 @@ private:
 		pType = ptype_;
 		setupGenerator();
 		addFile2Kernel("Heading.cl");
-		addFile2Kernel("Structures.cl");
-		addFile2Kernel("outputKernels.cl");
+		//addFile2Kernel("Structures.cl");
+		//addFile2Kernel("outputKernels.cl");
 	}
 
 	sourceGenerator()

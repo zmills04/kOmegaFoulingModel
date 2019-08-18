@@ -19,7 +19,7 @@
 void kOmega::allocateArrays()
 {
 	if (!kOmegaSolverFlag)
-		return
+		return;
 	Kappa_array.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
 	Omega_array.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
 
@@ -33,6 +33,8 @@ void kOmega::allocateArrays()
 	//////// Coefficients calculated in first update step
 	Fval_array.zeros(p.nX, p.XsizeFull, p.nY, p.nY); //F1
 	dKdO_array.zeros(p.nX, p.XsizeFull, p.nY, p.nY, 2, 2); //2*(1-f1)*sigma_w2/omega*dk/dxi
+
+	WallD.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
 }
 
 void kOmega::allocateBuffers()

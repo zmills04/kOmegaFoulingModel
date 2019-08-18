@@ -140,7 +140,8 @@ public:
 
 	enum arrName { posArr, numRepArr, typeArr, depFlagArr, depTimerArr, timerArr, locArr };
 
-	Par(std::string name_ = "") {}
+	Par(std::string name_ = "") : trStructBase(name_)
+	{}
 
 	~Par() {}
 
@@ -257,7 +258,8 @@ public:
 
 	enum arrName { qaPrimeArr, qaArr, tauCritArr, dpArr, mpArr, kthArr, distArr, dCoeffArr, lCoeffArr };
 
-	PParam(std::string name_ = "") {}
+	PParam(std::string name_ = "") : trStructBase(name_)
+	{}
 
 	~PParam() {}
 
@@ -320,7 +322,8 @@ public:
 						// 2 if top wall nearby
 
 
-	NodeI(std::string name_ = "") {}
+	NodeI(std::string name_ = "") : trStructBase(name_) 
+	{}
 
 	~NodeI() {}
 
@@ -375,7 +378,8 @@ public:
 
 	Array2Di ii00, ii10, ii01, ii11;
 
-	Neighs(std::string name_ = "") {}
+	Neighs(std::string name_ = "") : trStructBase(name_)
+	{}
 
 	~Neighs() {}
 
@@ -432,12 +436,13 @@ public:
 	Array1Dd fVals;
 
 
-	TrParam(std::string name_ = "") 
+	TrParam(std::string name_ = "") : trStructBase(name_)
 	{
 		xSize = 5;
 		ySize = 1;
 		xSizeFull = 5;
 		fullSize = ySize * xSizeFull;
+		allocateArrays();
 	}
 
 	~TrParam() {}
@@ -505,7 +510,8 @@ public:
 	void setTempBuffers(Kernel& ker, int& curind);
 	void setVelBuffers(Kernel& ker, int& curind);
 
-	NodeC(std::string name_ = "") {}
+	NodeC(std::string name_ = "") : trStructBase(name_)
+	{}
 
 	~NodeC() {}
 
@@ -554,7 +560,8 @@ public:
 	Array2Dv2d U10;
 	Array2Dv2d U01;
 	Array2Dv2d U11;
-	NodeV(std::string name_ = "") {}
+	NodeV(std::string name_ = "") : trStructBase(name_)
+	{}
 
 	~NodeV() {}
 
@@ -616,7 +623,8 @@ public:
 
 	bool glFlag = false;
 	
-	BLinks(std::string name_ = "") {}
+	BLinks(std::string name_ = "") : trStructBase(name_)
+	{}
 
 	~BLinks() {}
 

@@ -2020,6 +2020,8 @@ public:
 	int curSize() { return curEl; }
 	int* curSizeAdd() { return &curEl; }
 	int curFullSize() { return FullSize; }
+	int* curFullSizeAdd() { return &FullSize; }
+	int* curBufferSizeAdd() { return &BufferFullSize; }
 
 };
 
@@ -2767,33 +2769,35 @@ private:
 			printf("Accessing element %d, which is > SizeX (%d), but within FullSizeX bounds (%d)\n", n1, ArrayBase<T>::SizeX, ArrayBase<T>::FullSizeX);
 		}
 #endif
-		if (0 > n1 || n1 >= ArrayBase<T>::FullSizeX)
-		{
-			printf("Error in 3D array! Index n1=%d out of range [0...%d]", n1, ArrayBase<T>::SizeX - 1);
-			exit(0);
-		}
+		CHECK_ARRAY_ERROR((0 > n1 || n1 >= ArrayBase<T>::FullSizeX),
+			("Tried to access element n1 = " + std::to_string(n1) +
+				" in X dim of array of size [" + std::to_string(SizeX) +
+				", " + std::to_string(SizeY) + ", " + std::to_string(SizeZ) +
+				"]"), ERROR_MEMORY_OUT_OF_BOUNDS);
+
 #ifdef WARN_OUTSIDE_MAIN_BOUNDS
 		if (n2 >= ArrayBase<T>::SizeY && n2 < ArrayBase<T>::FullSizeY)
 		{
 			printf("Accessing element %d, which is > SizeY (%d), but within FullSizeY bounds (%d)\n", n2, ArrayBase<T>::SizeY, ArrayBase<T>::FullSizeY);
 		}
 #endif
-		if (0 > n2 || n2 >= ArrayBase<T>::FullSizeY)
-		{
-			printf("Error in 3D array! Index n2=%d out of range [0...%d]", n2, ArrayBase<T>::SizeY - 1);
-			exit(0);
-		}
+		CHECK_ARRAY_ERROR((0 > n2 || n2 >= ArrayBase<T>::FullSizeY),
+			("Tried to access element n2 = " + std::to_string(n2) +
+				" in X dim of array of size [" + std::to_string(SizeX) +
+				", " + std::to_string(SizeY) + ", " + std::to_string(SizeZ) +
+				"]"), ERROR_MEMORY_OUT_OF_BOUNDS);
+
 #ifdef WARN_OUTSIDE_MAIN_BOUNDS
 		if (n3 >= ArrayBase<T>::SizeZ && n3 < ArrayBase<T>::FullSizeZ)
 		{
 			printf("Accessing element %d, which is > SizeZ (%d), but within FullSizeZ bounds (%d)\n", n3, ArrayBase<T>::SizeZ, ArrayBase<T>::FullSizeZ);
 		}
 #endif
-		if (0 > n3 || n3 >= ArrayBase<T>::FullSizeZ)
-		{
-			printf("Error in 3D array! Index n3=%d out of range [0...%d]", n3, ArrayBase<T>::SizeZ - 1);
-			exit(0);
-		}
+		CHECK_ARRAY_ERROR((0 > n3 || n3 >= ArrayBase<T>::FullSizeZ),
+			("Tried to access element n3 = " + std::to_string(n3) +
+				" in X dim of array of size [" + std::to_string(SizeX) +
+				", " + std::to_string(SizeY) + ", " + std::to_string(SizeZ) +
+				"]"), ERROR_MEMORY_OUT_OF_BOUNDS);
 	}
 
 public:

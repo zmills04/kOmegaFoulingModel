@@ -219,8 +219,8 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int* __restrict__ IndArr,
 	double Yn_coeff = dy_s / (dy_n * dy_c), Ys_coeff = -dy_n / (dy_s * dy_c), Yc_coeff = (dy_n - dy_s) / (dy_n * dy_s);
 
 
-	double Xe2_coeff = 2. / (dx_e * dx), Xw2_coeff = 2. / (dx_w * dx), Xc2_coeff = -2. / (dx_e * dx_w);
-	double Yn2_coeff = 2. / (dy_n * dy), Ys2_coeff = 2. / (dy_s * dy), Yc2_coeff = -2. / (dy_n * dy_s);
+	double Xe2_coeff = 2. / (dx_e * dx_c), Xw2_coeff = 2. / (dx_w * dx_c), Xc2_coeff = -2. / (dx_e * dx_w);
+	double Yn2_coeff = 2. / (dy_n * dy_c), Ys2_coeff = 2. / (dy_s * dy_c), Yc2_coeff = -2. / (dy_n * dy_s);
 
 	int gidw = (i > 0) ? gid - 1 : (CHANNEL_LENGTH - 1 + j * CHANNEL_LENGTH_FULL);
 	int gide = (i < CHANNEL_LENGTH - 1) ? gid + 1 : (j * CHANNEL_LENGTH_FULL);
@@ -305,7 +305,7 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int* __restrict__ IndArr,
 		// get yplus value = sqrt(tau_wall/rho)*wall_distance/nu
 		double fricVel = sqrt(fabs(wallShearArr[ssIndMap[gid]]) / Rho);
 		double yplus = WallD[gid] * fricVel / MU_NUMBER;
-		double omegaVis = (6. * MU_NUMBER / 0.75) / pown(yplus);
+		double omegaVis = (6. * MU_NUMBER / 0.75) / pown(yplus,2);
 		double omegaLog = (1. / (0.3 * KO_KAPPA)) * fricVel / yplus;
 		omegaval = sqrt(omegaVis * omegaVis + omegaLog * omegaLog);
 	}
@@ -634,7 +634,7 @@ double findMinDist(int2 botSearchInds, int2 topSearchInds, double2* nLoc,
 		double dtemp = fabs(vT.y * (*nLoc).x - vT.x * (*nLoc).y + P1.x * P0.y - P1.y * P0.x) / vTmag;
 		
 		vT /= vTmag;
-		double2 vN = double2(-vT.y, vT.x);
+		double2 vN = (double2)(-vT.y, vT.x);
 
 		double2 Pcut = (*nLoc) - dtemp*vN;
 		
@@ -660,7 +660,7 @@ double findMinDist(int2 botSearchInds, int2 topSearchInds, double2* nLoc,
 		double dtemp = fabs(vT.y * (*nLoc).x - vT.x * (*nLoc).y + P1.x * P0.y - P1.y * P0.x) / vTmag;
 
 		vT /= vTmag;
-		double2 vN = double2(-vT.y, vT.x);
+		double2 vN = (double2)(-vT.y, vT.x);
 
 		double2 Pcut = (*nLoc) - dtemp * vN;
 
@@ -700,13 +700,13 @@ __kernel void updateWallD(__global double *__restrict__ WallD,
 	if (!(type & M_SOLID_NODE))
 	{
 
-		int2 botSearchInds = int2(max(lsMap[gx] - WALLD_SEARCH_RADIUS, 0),
+		int2 botSearchInds = (int2)(max(lsMap[gx] - WALLD_SEARCH_RADIUS, 0),
 			min(lsMap[gx] + WALLD_SEARCH_RADIUS, LSC_NN / 2 - 1));
-		int2 topSearchInds = int2(max(lsMap[gx + CHANNEL_LENGTH_FULL] - WALLD_SEARCH_RADIUS, LSC_NN / 2),
+		int2 topSearchInds = (int2)(max(lsMap[gx + CHANNEL_LENGTH_FULL] - WALLD_SEARCH_RADIUS, LSC_NN / 2),
 			min(lsMap[gx + CHANNEL_LENGTH_FULL] + WALLD_SEARCH_RADIUS, LSC_NN - 1));
 
-		double2 nLoc = double2((double)gx, (double)gy);
-		wallDistTemp = findMinDist(botSearchInds, topSearchInds, &nLoc);
+		double2 nLoc = (double2)((double)gx, (double)gy);
+		wallDistTemp = findMinDist(botSearchInds, topSearchInds, &nLoc, Cvals);
 	}
 	WallD[gi] = wallDistTemp;
 }

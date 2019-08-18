@@ -11,7 +11,7 @@ typedef struct legacyRampInfo
 	double Coeff;
 	cl_uint IOind; //Index of LS nodes at beginning and end of TR areatypename
 	cl_uint Cind; //direction traversed from IO_end when creating ramp
-} legacyFoulInfo;
+} legacyRampInfo;
 
 class rampI : public trStructBase
 {
@@ -22,7 +22,8 @@ public:
 
 
 
-	rampI(std::string name_ = "") {}
+	rampI(std::string name_ = "") : trStructBase(name_)
+	{}
 
 	~rampI() {}
 
@@ -107,7 +108,7 @@ legacyRampInfo getStruct(const int i)
 
 	bool load()
 	{
-		int ret = true;
+		bool ret = true;
 		ret &= Ybegin.load("load" SLASH + Ybegin.getName());
 		ret &= Coeff.load("load" SLASH + Coeff.getName());
 		ret &= IOind.load("load" SLASH + IOind.getName());
@@ -118,7 +119,7 @@ legacyRampInfo getStruct(const int i)
 	bool save(bool saveAll = false, saveFlags saveFlag_ = saveFl)
 	{
 		bool ret = true;
-		switch (saveFlag_)
+		if(!saveAll)
 		{
 			std::cout << "Warning: to save RampI, set saveAll to true when calling save\n";
 		}
@@ -160,7 +161,7 @@ legacyRampInfo getStruct(const int i)
 		cl_command_queue* que_ = nullptr)
 	{
 		bool ret = true;
-		switch (saveFlag_)
+		if(!saveAll)
 		{
 			std::cout << "Warning: to save foulI from device, set saveAll to true when calling saveFromDevice\n";
 		}
@@ -228,7 +229,8 @@ public:
 	Array1Dd disp;
 	Array1Du blInd, cInd;
 
-	foulI(std::string name_ = "") {}
+	foulI(std::string name_ = "") : trStructBase(name_)
+	{}
 
 	~foulI() {}
 
@@ -360,7 +362,7 @@ public:
 
 	bool load()
 	{
-		int ret = true;
+		bool ret = true;
 		ret &= weightsL.load("load" SLASH + weightsL.getName());
 		ret &= weightsR.load("load" SLASH + weightsR.getName());
 		ret &= vN.load("load" SLASH + vN.getName());
@@ -373,7 +375,7 @@ public:
 	bool save(bool saveAll = false, saveFlags saveFlag_ = saveFl)
 	{
 		bool ret = true;
-		switch (saveFlag_)
+		if(!saveAll)
 		{
 			std::cout << "Warning: to save foulI, set saveAll to true when calling save\n";
 		}
@@ -421,7 +423,7 @@ public:
 		cl_command_queue* que_ = nullptr)
 	{
 		bool ret = true;
-		switch (saveFlag_)
+		if(!saveAll)
 		{
 			std::cout << "Warning: to save foulI from device, set saveAll to true when calling saveFromDevice\n";
 		}

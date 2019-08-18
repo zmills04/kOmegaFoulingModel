@@ -42,7 +42,7 @@
 
 
 
-void clVariablesTR::addWeightFunctionToSource(kernelType kerT_, std::string kerName_)
+void clVariablesTR::addWeightFunctionToSource(statKernelType kerT_, std::string kerName_)
 {
 	std::string ker2Add;
 	switch (kerT_)
@@ -151,6 +151,7 @@ void clVariablesTR::allocateArrays()
 		ioDistsSave.createTimeArray();
 	}
 
+	updateWallsDist.zeros(vtr.trDomainFullSizeX, vtr.trDomainSize.y);
 
 	// Not sure if these will be used, so keeping commented for now
 	// blIndInd;
@@ -204,6 +205,8 @@ void clVariablesTR::allocateBuffers()
 	parSort.allocateBuffers();
 	wallShear.allocateBuffers();
 	parP.allocateBuffers();
+
+	updateWallsDist.allocate_buffer_w_copy();
 }
 
 void clVariablesTR::createKernels()
@@ -277,7 +280,7 @@ void clVariablesTR::createKernels()
 	parSort.createKernels();
 }
 
-void clVariablesTR::fillNodeI(int i, Array2Dd& dist2Center)
+void clVariablesTR::fillNodeI(int i)
 {
 	int n0 = static_cast<int>(BL.P01ind(i).x);
 	int n1 = static_cast<int>(BL.P01ind(i).y);
@@ -304,10 +307,19 @@ void clVariablesTR::fillNodeI(int i, Array2Dd& dist2Center)
 		trCmin.x = 0;
 		Cmin.x = trDomainXBounds.x;
 	}
-	if (trCmax.x >= trDomainXBounds.y)
+	else if (trCmin.x >= trDomainSize.x)
 	{
-		trCmin.x = trDomainXBounds.y - 1;
-		Cmin.x = trDomainXBounds.y - 1 + trDomainXBounds.x;
+		return;
+	}
+
+	if (trCmax.x >= trDomainSize.x)
+	{
+		trCmax.x = trDomainSize.x - 1;
+		Cmax.x = trDomainXBounds.y - 1;
+	}
+	else if (trCmax.x < 0)
+	{
+		return;
 	}
 
 	if (Cmin.y < 0)
@@ -315,18 +327,25 @@ void clVariablesTR::fillNodeI(int i, Array2Dd& dist2Center)
 		Cmin.y = 0;
 		trCmin.y = 0;
 	}
+	else if (Cmin.y >= trDomainSize.y)
+	{
+		return;
+	}
 
 	if (Cmax.y >= trDomainSize.y)
 	{
 		Cmax.y = trDomainSize.y - 1;
 		trCmax.y = Cmax.y;
 	}
-
+	else if (Cmax.y < 0)
+	{
+		return;
+	}
 	for (int i0 = trCmin.x; i0 < trCmax.x; i0++)
 	{
 		for (int j0 = trCmin.y; j0 < trCmax.y; j0++)
 		{
-			testNode(i0, j0, c0t, c1t, i, dist2Center);
+			testNode(i0, j0, c0t, c1t, i);
 		}
 	}
 }
@@ -400,12 +419,12 @@ void clVariablesTR::ini()
 	iniRand();
 
 	// If not a restart, initialize Particles
-	if (!restartRunFlag)
-	{
-		iniParticles();
-		//call necessary restart functions
-		parSort.sortTimer = 0;
-	}
+	//if (!restartRunFlag)
+	//{
+	//	iniParticles();
+	//	//call necessary restart functions
+	//	parSort.sortTimer = 0;
+	//}
 
 
 	// Initialize wallFlag in NodI,
@@ -504,15 +523,14 @@ void clVariablesTR::iniBLandNodI()
 
 	}
 
-	Array2Dd dist2Center(trDomainSize.x, trDomainSize.y, "Dist2Center");
-	dist2Center.fill(100.);
+	updateWallsDist.fill(100.);
 	NodI.BLind.fill(-1);
 
 	//Fill NodI array with BL info from bottom wall
 	for (int i = Bounds.MIN_BL_BOT; i < Bounds.MAX_BL_BOT; i++)
 	{
-		fillNodeI(i, dist2Center);
-		fillNodeI(i + vls.nBL / 2, dist2Center);
+		fillNodeI(i);
+		fillNodeI(i + vls.nBL / 2);
 	}
 }
 
@@ -640,10 +658,10 @@ void clVariablesTR::iniIndexInfo()
 	{
 		for (int j = 0; j < trDomainSize.y; j++)
 		{
-			if (NodI.wallFlag(i, j) & WF_WALL)
+			if (NodI.wallFlag(i - trDomainXBounds.x, j) & WF_WALL)
 				wallInds.append(i + trDomainFullSizeX * j);
 
-			if (NodI.wallFlag(i, j) & WF_FLUID)
+			if (NodI.wallFlag(i - trDomainXBounds.x, j) & WF_FLUID)
 				activeInds.append(i + trDomainFullSizeX * j);
 		}
 	}
@@ -1297,11 +1315,16 @@ void clVariablesTR::loadParams()
 
 	kernelT = getKernelType(TR_WEIGHT_KERNEL);
 
+	// Load Parameters in subclasses
+	glParticles.loadParams();
+	parP.loadParams();
+	parSort.loadParams();
+	wallShear.loadParams();
 
 	testRestartRun();
 }
 
-clVariablesTR::kernelType clVariablesTR::getKernelType(std::string kername_)
+statKernelType clVariablesTR::getKernelType(std::string kername_)
 {
 	std::string weightker_ = p.getParameter<std::string>("Weight Kernel", kername_);
 	std::transform(weightker_.begin(), weightker_.end(), weightker_.begin(), ::tolower);
@@ -1570,7 +1593,7 @@ void clVariablesTR::saveParams()
 	glParticles.saveParams();
 }
 
-void clVariablesTR::saveKernelType(kernelType kerT_)
+void clVariablesTR::saveKernelType(statKernelType kerT_)
 {
 	switch (kernelT)
 	{
@@ -1700,6 +1723,7 @@ void clVariablesTR::setKernelArgs()
 	trWallParKernel[2].set_argument(ind++, P.pos.get_buf_add());
 	trWallParKernel[2].set_argument(ind++, P.type.get_buf_add());
 	trWallParKernel[2].set_argument(ind++, P.Dep_Flag.get_buf_add());
+	trWallParKernel[2].set_argument(ind++, P.loc.get_buf_add());
 	trWallParKernel[2].set_argument(ind++, BL.vNvec.get_buf_add());
 	trWallParKernel[2].set_argument(ind++, BL.Tau.get_buf_add());
 	trWallParKernel[2].set_argument(ind++, BL.int_type.get_buf_add());
@@ -1761,7 +1785,7 @@ void clVariablesTR::setKernelArgs()
 	ind = 0;
 	updateTRWallNodesKernel.set_argument(ind++, BL.P01ind.get_buf_add());
 	updateTRWallNodesKernel.set_argument(ind++, vls.C.get_buf_add());
-	updateTRWallNodesKernel.set_argument(ind++, vfl.updateWallsDist.get_buf_add());
+	updateTRWallNodesKernel.set_argument(ind++, updateWallsDist.get_buf_add());
 	updateTRWallNodesKernel.set_argument(ind++, NodI.wallFlag.get_buf_add());
 	updateTRWallNodesKernel.set_argument(ind++, NodI.BLind.get_buf_add());
 
@@ -1787,9 +1811,9 @@ void clVariablesTR::setKernelArgs()
 	findTRWallNodesKernel.set_argument(ind++, wallInds.get_buf_add());
 	findTRWallNodesKernel.set_argument(ind++, wallIndsCurIndex.get_buf_add());
 	findTRWallNodesKernel.set_argument(ind++, activeInds.get_buf_add());
-	findTRWallNodesKernel.set_argument(ind++, &nActiveNodes);
 	findTRWallNodesKernel.setOptionInd(ind);
-	findTRWallNodesKernel.set_argument(ind++, &Num_wall_nodes);
+	findTRWallNodesKernel.set_argument(ind++, &nActiveNodes);
+	findTRWallNodesKernel.set_argument(ind++, wallInds.curBufferSizeAdd());
 
 	parSort.setKernelArgs();
 	wallShear.setKernelArgs();
@@ -1887,8 +1911,8 @@ bool clVariablesTR::testCross(cl_double2 vL0, cl_double2 vLd, cl_double2 vP0, cl
 	return false;
 }
 
-void clVariablesTR::testNode(int i0, int j0, cl_double2 c0t, cl_double2 c1t,
-	int blind, Array2Dd& dist2Center)
+void clVariablesTR::testNode(int i0, int j0, cl_double2 c0t,
+	cl_double2 c1t, int blind)
 {
 	int nind = i0 + trDomainFullSizeX * j0;
 	cl_double2 nCenter = { {(double)(i0 +
@@ -1900,7 +1924,7 @@ void clVariablesTR::testNode(int i0, int j0, cl_double2 c0t, cl_double2 c1t,
 
 
 
-	if (distTemp < dist2Center(i0, j0))
+	if (distTemp < updateWallsDist(i0, j0))
 	{
 		NodI.BLind(i0, j0) = blind;
 		NodI.wallFlag(i0, j0) |= (blind > vls.nBL / 2) ? WF_TOP_WALL : WF_BOT_WALL;
@@ -1912,8 +1936,98 @@ void clVariablesTR::testNode(int i0, int j0, cl_double2 c0t, cl_double2 c1t,
 // TODO: fill in necessary stuff in this function
 bool clVariablesTR::testRestartRun()
 {
-	return true;
+	allocateArrays();
+
+	restartRunFlag = p.getParameter("Restart Run", false);
+	if (!restartRunFlag)
+	{
+		iniParticles();
+		parSort.sortTimer = 0;
+		return false;
+	}
+
+	restartRunFlag |= P.load();
+	restartRunFlag |= blDep.load();
+
+	restartRunFlag |= glParticles.testRestartRun();
+	restartRunFlag |= parP.testRestartRun();
+	restartRunFlag |= parSort.testRestartRun();
+	restartRunFlag |= wallShear.testRestartRun();
+
+	return restartRunFlag;
 }
+
+
+//// updateTRKernel[0]
+//updateTrCoeffsKernel.
+//// updateTRKernel[1]
+//updateTRWallNodesKernel.
+//// updateTRKernel[4]
+//findTRWallNodesKernel.
+//// updateTRKernel[2]
+//shiftParticlesKernel[0].
+//// updateTRKernel[3]
+//shiftParticlesKernel[1]
+
+void clVariablesTR::update()
+{
+	cl_event fillEvt;
+	NodI.wallFlag.FillBuffer(static_cast<cl_short>(0), IOQUEUE_REF, 0, nullptr, &fillEvt);
+	
+	clFlush(IOQUEUE);
+
+
+
+
+	int offset = vtr.parSort.Ploc(1).x;
+	int total_removal = vtr.parSort.Ploc(1).y - offset;
+	shiftParticlesKernel[1].setOption(&offset);
+	shiftParticlesKernel[1].setOption(&total_removal, 1);
+
+	updateTrCoeffsKernel.call_kernel(nullptr, 1, &fillEvt);  ///Update Nodes
+	updateTRWallNodesKernel.call_kernel();  ///Update Wall Nodes
+	shiftParticlesKernel[0].call_kernel();	///Update Particles
+	shiftParticlesKernel[1].call_kernel();	///Update Wall Particles
+
+	parSort.updateTrp();
+
+}
+
+void clVariablesTR::updateWallNodes()
+{
+	findTRWallNodesKernel.setOption(&activeInds);
+	findTRWallNodesKernel.call_kernel();
+	wallIndsCurIndex.read_from_buffer(findTRWallNodesKernel.getCommandQueue());
+
+	bool resizeFlag = false;
+	if (wallIndsCurIndex(0) >= wallInds.getBufferFullSize())
+	{
+		wallIndsCurIndex.FillBuffer(0, LBQUEUE_REF);
+		resizeFlag = true;
+		wallInds.resize_device_dynamic();
+		
+		findTRWallNodesKernel.set_argument(1, wallInds.get_buf_add());
+
+		findTRWallNodesKernel.setOption(wallInds.curBufferSizeAdd(), 1);
+		
+		findTRWallNodesKernel.call_kernel();
+		wallIndsCurIndex.read_from_buffer(findTRWallNodesKernel.getCommandQueue());
+	}
+
+	int wallNodesNum_ = wallIndsCurIndex(0);
+	trWallParKernel[0].setOption(&wallNodesNum_);
+
+
+	// dont need to update these kernels until after updateIBBOnly
+	// has finished updating ibb arrays since they will not be
+	// called again until next update step.
+	// TODO: make sure that all kernels which use wallInds have new buffer set here
+	if (resizeFlag)
+	{
+		trWallParKernel[0].set_argument(0, wallInds.get_buf_add());
+	}
+}
+
 
 void clVariablesTR::updateTimeData()
 {
@@ -1991,7 +2105,7 @@ void clVariablesTR::updateWallParticles()
 	reflectInds.FillBuffer(0, TRQUEUE_REF);
 }
 
-double clVariablesTR::weightKernelFunc(double Sval, kernelType kerT_)
+double clVariablesTR::weightKernelFunc(double Sval, statKernelType kerT_)
 {
 	switch (kerT_)
 	{
@@ -2062,85 +2176,95 @@ double clVariablesTR::weightKernelFunc(double Sval, kernelType kerT_)
 /// Strings containing weighting kernels to append to opencl source code
 
 const std::string clVariablesTR::uniformKerStr = R"(
-double REPLACE_NAME(double Sval)
+double (REPLACE_NAME)(double Sval)
 {
 	if (fabs(Sval) <= 1.)
 		return 0.5;
 	else
 		return 0.;
-}\n\n
+}
+
 )";
 const std::string clVariablesTR::triangularKerStr = R"(
-double REPLACE_NAME(double Sval)
+double (REPLACE_NAME)(double Sval)
 {
 	if (fabs(Sval) <= 1.)
 		return 1. - fabs(Sval);
 	else
 		return 0.;
-}\n\n
+}
+
 )";
 const std::string clVariablesTR::parabolicKerStr = R"(
-double REPLACE_NAME(double Sval)
+double (REPLACE_NAME)(double Sval)
 {
 	if (fabs(Sval) <= 1.)
 		return 0.75 * (1. - Sval*Sval);
 	else
 		return 0.;
-}\n\n
+}
+
 )";
 const std::string clVariablesTR::quarticKerStr = R"(
-double REPLACE_NAME(double Sval)
+double (REPLACE_NAME)(double Sval)
 {
 	if (fabs(Sval) <= 1.)
 		return 15. / 16. * pow(1. - Sval * Sval, 2);
 	else
 		return 0.;
-}\n\n
+}
+
 )";
 const std::string clVariablesTR::triWeightKerStr = R"(
-double REPLACE_NAME(double Sval)
+double (REPLACE_NAME)(double Sval)
 {
 	if (fabs(Sval) <= 1.)
 		return 35. / 32. * pow(1. - Sval * Sval, 3);
 	else
 		return 0.;
-}\n\n
+}
+
 )";
 const std::string clVariablesTR::triCubeKerStr = R"(
-double REPLACE_NAME(double Sval)
+double (REPLACE_NAME)(double Sval)
 {
 	if (fabs(Sval) <= 1.)
 		return 70. / 81. * pow(1. - pow(fabs(Sval),3), 3);
 	else
 		return 0.;
-}\n\n
+}
+
 )";
 const std::string clVariablesTR::gaussianKerStr = R"(
-double REPLACE_NAME(double Sval)
+double (REPLACE_NAME)(double Sval)
 {
-	return (1. / sqrt(2. * p.Pi) * exp(-0.5 * Sval * Sval));
-}\n\n
+	return (1. / sqrt(2. * M_PI_F) * exp(-0.5 * Sval * Sval));
+}
+
 )";
 const std::string clVariablesTR::cosineKerStr = R"(
-double REPLACE_NAME(double Sval)
+double (REPLACE_NAME)(double Sval)
 {
 	if (fabs(Sval) <= 1.)
-		return p.Pi/4. * cos(p.Pi*Sval/2.);
+		return M_PI_F/4. * cos(M_PI_F*Sval/2.);
 	else
 		return 0.;
-}\n\n
+}
+
 )";
 const std::string clVariablesTR::logisticKerStr = R"(
-double REPLACE_NAME(double Sval)
+double (REPLACE_NAME)(double Sval)
 {
 	return 1. / (exp(Sval) + 2. + exp(-Sval));
-}\n\n
+}
+
 )";
 const std::string clVariablesTR::sigmoidKerStr = R"(
-double REPLACE_NAME(double Sval)
+double (REPLACE_NAME)(double Sval)
 {
-		return 2. / p.Pi / (exp(Sval) + exp(-Sval));
-}\n\n
+		return 2. / M_PI_F / (exp(Sval) + exp(-Sval));
+}
+
 )";
 
 

@@ -22,7 +22,10 @@
 // lsMap - not updated
 
 
-
+double Cross2(double2 v1, double2 v2)
+{//absolute value of cross product
+	return fabs(v1.x * v2.y - v1.y * v2.x);
+}
 
 int test_inside(double2 P0, double2 P1, double2 P2, double2 L0)
 {
@@ -48,6 +51,7 @@ void updateNType(__global NTYPE_TYPE * __restrict__ Map,
 	__global double* __restrict__ kbmat,
 	__global double* __restrict__ oAmat,
 	__global double* __restrict__ obmat,
+	__global double* __restrict__ nutArray,
 	__global int* __restrict__ IndArr)
 {
 	int i = get_global_id(0);
@@ -57,8 +61,8 @@ void updateNType(__global NTYPE_TYPE * __restrict__ Map,
 
 	double2 P0 = C0[i], P1 = C0[i + 1], P2 = C[i], P3 = C[i + 1];
 
-	bool neq02 = EQUALS(P0, P2);
-	bool neq13 = EQUALS(P1, P3);
+	bool neq02 = EQUALS2D(P0, P2);
+	bool neq13 = EQUALS2D(P1, P3);
 
 	if (neq02 && neq13)
 		return;
@@ -108,8 +112,9 @@ void updateNType(__global NTYPE_TYPE * __restrict__ Map,
 				type &= !M_FLUID_NODE;
 				type |= M_SOLID_NODE;
 
-
-				if (!(type&)
+				// Not sure about this. Cannot figure out why this was included.
+				// Maybe not needed, or possible incorrect implementation. 
+				if (!(type & M_FOUL_NODE))
 					Map[gid] = type;
 
 					// Set A matrix C location to 1. and rest of terms
@@ -135,8 +140,8 @@ void updateNType(__global NTYPE_TYPE * __restrict__ Map,
 				kAmat[KOind] = 0.;
 				oAmat[KOind] = 0.;
 
-				kbvec[gid] = 0.;
-				obvec[gid] = 0.;
+				kbmat[gid] = 0.;
+				obmat[gid] = 0.;
 
 				nutArray[gid] = 0.;
 
@@ -176,8 +181,8 @@ void updateNType(__global NTYPE_TYPE * __restrict__ Map,
 				kAmat[KOind] = 0.;
 				oAmat[KOind] = 0.;
 
-				kbvec[gid] = 0.;
-				kovec[gid] = 0.;
+				kbmat[gid] = 0.;
+				obmat[gid] = 0.;
 
 				nutArray[gid] = 0.;
 
@@ -256,7 +261,7 @@ void updateBoundaryNodes(__global ushort* __restrict__ BL_P01ind,
 	__global double* dXArr
 #ifndef IN_KERNEL_IBB
 	, __global int* __restrict__ ibbArr,
-	__global double* __restrict__ ibbDistArr
+	__global double* __restrict__ ibbDistArr,
 	__global int* ibbIndCount,
 	int ibbArrSize
 #endif
@@ -277,14 +282,19 @@ void updateBoundaryNodes(__global ushort* __restrict__ BL_P01ind,
 	double2 CenterDist = vC0 + vT / 2. - vC0not - vTnot / 2.;
 	BL_intType[i] = (length(CenterDist) >= FOUL_SIZE_SWITCH_SOOT2) ? ((ushort)1) : ((ushort)0);
 
-	blLen = length(vT);
+	double blLen = length(vT);
+	BL_blLen[i] = blLen;
 	vT /= blLen;
-	double2 vCn = double2(-vT.y, vT.x);
+	double2 vCn = (double2)(-vT.y, vT.x);
 	BL_vNvec[i] = vCn;
 
-	double2 centpos = vP0 + vTvec * blLen / 2.;
+	double2 centpos = vC0 + vT * blLen / 2.;
 	int2 blind = convert_int2(centpos);
-	BL_blInd[i] = (blind.x - TR_X_IND_START) + (FULLSIZEX_TR_PADDED)* blind.y;
+
+	// Not sure about this. Cannot figure out it this is something new I was
+	// trying to implemement, or if it was from legacy code. Keeping here, but
+	// commented just in case it is needed and just has a bug in implementation.
+	//BL_blInd[i] = (blind.x - TR_X_IND_START) + (FULLSIZEX_TR_PADDED)* blind.y;
 
 	BL_nodeLoc[i] = (blind.x >= TR_X_IND_START && blind.x < TR_X_IND_STOP) ?
 		((blind.x - TR_X_IND_START) + (FULLSIZEX_TR_PADDED)* blind.y) : -1;
@@ -302,7 +312,7 @@ void updateBoundaryNodes(__global ushort* __restrict__ BL_P01ind,
 	if (vCmax.y >= CHANNEL_HEIGHT) vCmax.y = CHANNEL_HEIGHT-1;
 
 
-	for (int ii = vCmin.x; ii <= vCmax.x; jj++)
+	for (int ii = vCmin.x; ii <= vCmax.x; ii++)
 	{
 		for (int jj = vCmin.y; jj <= vCmax.y; jj++)
 		{
@@ -316,7 +326,7 @@ void updateBoundaryNodes(__global ushort* __restrict__ BL_P01ind,
 
 			int dir = 0;
 			double2 Cdir = (double2)(1., 0.);
-			double2 vL0 = convert_double2(ii, jj);
+			double2 vL0 = convert_double2((int2)(ii, jj));
 			
 			if (bcFindIntersectionLS(&dist, &dir, vL0, &Cdir,
 				vC0, vC1, blLen, vCn))
@@ -478,7 +488,7 @@ __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_UPDATEFD, 1, 1)))
 void updateIBBOnly(__global double2* C,
 	__global NTYPE_TYPE* Map,
 	__global int* __restrict__ ibbArr,
-	__global double* __restrict__ ibbDistArr
+	__global double* __restrict__ ibbDistArr,
 	__global int* ibbIndCount,
 	int ibbArrSize)
 {
@@ -491,9 +501,9 @@ void updateIBBOnly(__global double2* C,
 
 	double2 vT = vC1 - vC0;
 
-	blLen = length(vT);
+	double blLen = length(vT);
 	vT /= blLen;
-	double2 vCn = double2(-vT.y, vT.x);
+	double2 vCn = (double2)(-vT.y, vT.x);
 
 
 	int2 vCmin = min2(vC0, vC1), vCmax = max2(vC0, vC1);
@@ -509,7 +519,7 @@ void updateIBBOnly(__global double2* C,
 	if (vCmax.y >= CHANNEL_HEIGHT) vCmax.y = CHANNEL_HEIGHT - 1;
 
 
-	for (int ii = vCmin.x; ii <= vCmax.x; jj++)
+	for (int ii = vCmin.x; ii <= vCmax.x; ii++)
 	{
 		for (int jj = vCmin.y; jj <= vCmax.y; jj++)
 		{
@@ -519,8 +529,7 @@ void updateIBBOnly(__global double2* C,
 			if (ntype & M_SOLID_NODE)
 				continue;
 
-			double dist;
-			double2 vL0 = convert_double2(ii, jj);
+			double2 vL0 = convert_double2((int2)(ii, jj));
 
 			for(int dir = 0; dir < 8; dir+=2)
 			{

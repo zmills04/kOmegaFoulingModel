@@ -86,17 +86,17 @@ void trGetWallNodeTempVel(__global double* __restrict__ UxVals,
 		Tvals[iTRLin + CHANNEL_LENGTH_FULL + 1]);
 
 
-	UV00[lid] = (double2)(dot(CoeffU00[iTRLin], Uvel),
-		dot(CoeffU00[iTRLin], Vvel));
-	UV10[lid] = (double2)(dot(CoeffU10[iTRLin], Uvel),
-		dot(CoeffU10[iTRLin], Vvel));
-	UV01[lid] = (double2)(dot(CoeffU01[iTRLin], Uvel),
-		dot(CoeffU01[iTRLin], Vvel));
-	UV11[lid] = (double2)(dot(CoeffU11[iTRLin], Uvel),
-		dot(CoeffU11[iTRLin], Vvel));
+	UV00[lid] = (double2)(dot(nodeCU00[iTRLin], Uvel),
+		dot(nodeCU00[iTRLin], Vvel));
+	UV10[lid] = (double2)(dot(nodeCU10[iTRLin], Uvel),
+		dot(nodeCU10[iTRLin], Vvel));
+	UV01[lid] = (double2)(dot(nodeCU01[iTRLin], Uvel),
+		dot(nodeCU01[iTRLin], Vvel));
+	UV11[lid] = (double2)(dot(nodeCU11[iTRLin], Uvel),
+		dot(nodeCU11[iTRLin], Vvel));
 
-	TNode[lid] = (double4)(dot(CoeffT00, Tval), dot(CoeffT10, Tval),
-		dot(CoeffT01, Tval), dot(CoeffT11, Tval));
+	TNode[lid] = (double4)(dot(nodeCT00[iTRLin], Tval), dot(nodeCT10[iTRLin], Tval),
+		dot(nodeCT01[iTRLin], Tval), dot(nodeCT11[iTRLin], Tval));
 
 	TNode[lid] *= TDIFF;
 
@@ -106,19 +106,19 @@ void trGetWallNodeTempVel(__global double* __restrict__ UxVals,
 // finds intersection of two lines (in this case, used to find 
 // intersection of tracer trajectory and BL). Name comes from legacy
 // code which was 3D.
-bool bcFindIntersectionLinePlane(double2* vC, double* dist, double2* vL0,
-	double2* vLd, double2* vP0, double2* vP1, double2* vN, double blLen)
+bool bcFindIntersectionLinePlane(double2* vC, double* dist, double2 vL0,
+	double2 vLd, double2 vP0, double2 vP1, double2 vN, double blLen)
 {
-	double den = dot(*vN, *vLd);
+	double den = dot(vN, vLd);
 	if (den == 0.)
 		return false;
 
-	*dist = dot(*vN, (*vP0 - *vL0)) / den;
-	*vC = (*vL0) + (*vLd) * (*dist);
+	*dist = dot(vN, (vP0 - vL0)) / den;
+	*vC = vL0 + vLd * (*dist);
 
 	if ((*dist) >= 0. && (*dist) <= 1.)
 	{
-		double vd0 = distance(*vC, *vP0), vd1 = distance(*vC, *vP1);
+		double vd0 = distance(*vC, vP0), vd1 = distance(*vC, vP1);
 		if (fabs(blLen - vd0 - vd1) < CEPS)
 			return true;
 	}
@@ -166,8 +166,8 @@ int find_intersection(__global double2* __restrict__ Cvals,
 	{
 		ushort2 p01 = P01ind[k];
 
-		if (bcFindIntersectionLinePlane(&vCcut, &dist, C1,
-			dC, &Cvals[p01.x], &Cvals[p01.y], &vNvals[k],
+		if (bcFindIntersectionLinePlane(&vCcut, &dist, *C1,
+			*dC, Cvals[p01.x], Cvals[p01.y], vNvals[k],
 			blLen[k]) == true)
 		{
 			if (dist < dist_use)
@@ -281,7 +281,7 @@ void TR_update_par_along_wall(
 	__global double* __restrict__ TVals, //macroscopic temp
 	__global double2* __restrict__ Cvals, // vls.C array
 	__global int2* Ploc_array, // sort info for particles
-	__global short* update_flag, // used to ensure particles only updated once
+	__global short* updateFlag, // used to ensure particles only updated once
 	__global int* Out_array, // index info of particles crossing bl
 	__global double2* PV, // displacement info of particles crossing bl
 	__global uint* index, // tracks current index of PV/Out_array to save to
@@ -302,15 +302,15 @@ void TR_update_par_along_wall(
 
 	int lid = get_local_id(0);
 
-	__local UV00[WORKGROUPSIZE_TR_WALL];
-	__local UV10[WORKGROUPSIZE_TR_WALL];
-	__local UV01[WORKGROUPSIZE_TR_WALL];
-	__local UV11[WORKGROUPSIZE_TR_WALL];
-	__local nodeT[WORKGROUPSIZE_TR_WALL];
+	__local double2 UV00[WORKGROUPSIZE_TR_WALL];
+	__local double2 UV10[WORKGROUPSIZE_TR_WALL];
+	__local double2 UV01[WORKGROUPSIZE_TR_WALL];
+	__local double2 UV11[WORKGROUPSIZE_TR_WALL];
+	__local double4 nodeT[WORKGROUPSIZE_TR_WALL];
 
 	// get corrected wall velocity and temperature values
 	// for this trNode
-	trGetWallNodeTempVel(UxVals, UyVals, Tvals, nodeCU00,
+	trGetWallNodeTempVel(UxVals, UyVals, TVals, nodeCU00,
 		nodeCU01, nodeCU10, nodeCU11, nodeCT00, nodeCT01,
 		nodeCT10, nodeCT11, UV00, UV10, UV01, UV11,
 		nodeT, i, j, lid);
@@ -324,8 +324,8 @@ void TR_update_par_along_wall(
 	// calculations without remaining idle waiting for other
 	// cores to complete a loop. THis is at the expense of extra
 	// integer calculations to calculate the next index.
-	int imin = min(i - 1, 0), imax = (i + 2, FULLSIZEX_TR);
-	int jmin = min(j - 1, 0), jmax = (j + 2, FULLSIZEY_TR);
+	int imin = min(i - 1, 0), imax = max(i + 2, FULLSIZEX_TR);
+	int jmin = min(j - 1, 0), jmax = max(j + 2, FULLSIZEY_TR);
 	int iNeigh = imin, jNeigh = jmin;
 	int neighLin = GET_TR_GLOBAL_IDX(iNeigh, jNeigh);
 	int2 ploc = Ploc_array[neighLin + 2];
@@ -359,7 +359,7 @@ void TR_update_par_along_wall(
 		int kk = ploc.x;
 		ploc.x++;
 
-		if (parLoc[kk] != ii || updateFlag[kk])
+		if (parLoc[kk] != iLin || updateFlag[kk])
 			continue;
 
 		// set flag to indicate that this particle was updated just in
@@ -398,7 +398,7 @@ void TR_update_par_along_wall(
 		if (pos.x >= X_MAX_VAL || pos.x < X_MIN_VAL)
 		{
 			parLoc[kk] = -2;
-			parDepFlag[kk] = (Ppos.x >= X_MAX_VAL) ? -3 : -2;
+			parDepFlag[kk] = (pos.x >= X_MAX_VAL) ? -3 : -2;
 			continue;
 		}
 		parPos[kk] = pos;
@@ -491,7 +491,7 @@ void TR_reflect_particles(
 	if (pPos.x >= X_MAX_VAL || pPos.x < (X_MIN_VAL) ||
 		pPos.y < Y_MIN_VAL || pPos.y >= Y_MAX_VAL)
 	{
-		parDepFlag[par_ind] = (Ppos.x >= X_MAX_VAL) ? -3 : -2;
+		parDepFlag[par_ind] = (pPos.x >= X_MAX_VAL) ? -3 : -2;
 		parLoc[par_ind] = -2;
 		return;
 	}
@@ -519,6 +519,8 @@ void TR_update_par_contact_wall(
 	__global double2* __restrict__ parPos,
 	__global short* __restrict__ parType,
 	__global int* __restrict__ parDepFlag,
+	__global int* __restrict__ parLoc,
+
 	// BL arrays
 	__global double2* __restrict__ vNvals,
 	__global double* __restrict__ blTau,
@@ -552,7 +554,7 @@ void TR_update_par_contact_wall(
 	if (pPos.x >= X_MAX_VAL || pPos.x < (X_MIN_VAL) ||
 		pPos.y < Y_MIN_VAL || pPos.y > Y_MAX_VAL)
 	{
-		parDepFlag[par_ind] = (Ppos.x >= X_MAX_VAL) ? -3 : -2;
+		parDepFlag[par_ind] = (pPos.x >= X_MAX_VAL) ? -3 : -2;
 		parLoc[par_ind] = -2;
 		return;
 	}
@@ -608,7 +610,7 @@ void TR_update_par_contact_wall(
 		// of rebounded particle
 		Vreb2 = sqrt(Vreb2) * DTTR_WALL;
 		double2 dC = PV[REFLECT_INFO_OFFSET + ii * 2];
-		double2 C1 = Pcur.pos - dC;
+		double2 C1 = pPos - dC;
 		reflect_across_bl(PV[REFLECT_INFO_OFFSET + ii * 2 + 1], vNvals[par_ind], &C1, pPos, &dC);
 
 
@@ -675,7 +677,7 @@ void TR_update_par_contact_wall2(
 	if (pPos.x >= X_MAX_VAL || pPos.x < (X_MIN_VAL) ||
 		pPos.y < Y_MIN_VAL || pPos.y > Y_MAX_VAL)
 	{
-		parDepFlag[par_ind] = (Ppos.x >= X_MAX_VAL) ? -3 : -2;
+		parDepFlag[par_ind] = (pPos.x >= X_MAX_VAL) ? -3 : -2;
 		parLoc[par_ind] = -2;
 		return;
 	}
@@ -693,7 +695,7 @@ void TR_update_par_contact_wall2(
 
 	// test to see if particle crossed neighboring bl
 	if (bcFindIntersectionLinePlane(&vCcut, &dist, C1[lid], 
-		dC[lid], &Cvals[p01.x], &Cvals[p01.y], &vNvals[bl],	blLen[bl])
+		dC[lid], Cvals[p01.x], Cvals[p01.y], vNvals[bl], blLen[bl]))
 	{
 		// if crossed neighboring BL, save necessary info for an additional iteration
 		int ind_temp = atomic_inc(&index[1]);
@@ -774,9 +776,9 @@ void TR_deposit_particles_on_wall(
 void trGetNodeTempVel(__global double* __restrict__ UxVals,
 	__global double* __restrict__ UyVals,
 	__global double* __restrict__ Tvals,
-	double2* UV00, double2* UV10, double2* UV01,
-	double2* UV11, double4* TNode,
-	int i, int j)
+	__local double2* UV00, __local double2* UV10,
+	__local double2* UV01, __local double2* UV11,
+	__local double4* TNode,	int i, int j, int lid)
 {
 	// x index in full domain
 	int iLB = i + TR_X_IND_START;
@@ -784,21 +786,21 @@ void trGetNodeTempVel(__global double* __restrict__ UxVals,
 	// linear index in full domain
 	int iLBLin = GET_GLOBAL_IDX(iLB, j);
 
-	*UV00 = (double2)(UxVals[iLBLin], UyVals[iLBLin]);
-	*UV10 = (double2)(UxVals[iLBLin + 1], UyVals[iLBLin + 1]);
-	*UV01 = (double2)(UxVals[iLBLin + CHANNEL_LENGTH_FULL],
+	UV00[lid] = (double2)(UxVals[iLBLin], UyVals[iLBLin]);
+	UV10[lid] = (double2)(UxVals[iLBLin + 1], UyVals[iLBLin + 1]);
+	UV01[lid] = (double2)(UxVals[iLBLin + CHANNEL_LENGTH_FULL],
 					  UyVals[iLBLin + CHANNEL_LENGTH_FULL]);
-	*UV11 = (double2)(UxVals[iLBLin + CHANNEL_LENGTH_FULL + 1],
+	UV11[lid] = (double2)(UxVals[iLBLin + CHANNEL_LENGTH_FULL + 1],
 					  UyVals[iLBLin + CHANNEL_LENGTH_FULL + 1]);
 
-	*TNode = (double4)(Tvals[iLBLin],
+	TNode[lid] = (double4)(Tvals[iLBLin],
 		Tvals[iLBLin + 1],
-		Tvals[iTRLin + CHANNEL_LENGTH_FULL],
-		Tvals[iTRLin + CHANNEL_LENGTH_FULL + 1]);
+		Tvals[iLBLin + CHANNEL_LENGTH_FULL],
+		Tvals[iLBLin + CHANNEL_LENGTH_FULL + 1]);
 
-	*TNode *= TDIFF;
+	TNode[lid] *= TDIFF;
 
-	*TNode += TMIN;
+	TNode[lid] += TMIN;
 }
 
 
@@ -831,12 +833,12 @@ void TR_update_par_no_wall(
 	__global double* __restrict__ TVals, //macroscopic temp
 	__global double2* __restrict__ Cvals, // vls.C array
 	__global int2 *__restrict__ Ploc_array,
-	__global short *__restrict__ update_flag,
+	__global short *__restrict__ updateFlag,
 	__global int* __restrict__ activeNodes,
 	uint nActiveNodes)
 {
-	int i = get_global_id(0);
-	if (i >= nActiveNodes)
+	int i0 = get_global_id(0);
+	if (i0 >= nActiveNodes)
 	{
 		return;
 	}
@@ -846,7 +848,7 @@ void TR_update_par_no_wall(
 
 	//activeNodes contains wall nodes as well, which are handled by wall 
 	//kernels, so we can skip those nodes
-	if (wallFlag[neighLin] & (WF_WALL || WF_SOLID))
+	if (wallFlag[iLin] & (WF_WALL || WF_SOLID))
 		return;
 
 	int i, j;
@@ -855,15 +857,15 @@ void TR_update_par_no_wall(
 
 	int lid = get_local_id(0);
 
-	__local UV00[WORKGROUPSIZE_TR_WALL];
-	__local UV10[WORKGROUPSIZE_TR_WALL];
-	__local UV01[WORKGROUPSIZE_TR_WALL];
-	__local UV11[WORKGROUPSIZE_TR_WALL];
-	__local nodeT[WORKGROUPSIZE_TR_WALL];
+	__local double2 UV00[WORKGROUPSIZE_TR_WALL];
+	__local double2 UV10[WORKGROUPSIZE_TR_WALL];
+	__local double2 UV01[WORKGROUPSIZE_TR_WALL];
+	__local double2 UV11[WORKGROUPSIZE_TR_WALL];
+	__local double4 nodeT[WORKGROUPSIZE_TR_WALL];
 
 	// get wall velocities and temperatures for interpolation
-	trGetNodeTempVel(UxVals, UyVals, Tvals, uble2 * UV00,
-		UV10, UV01, UV11, TNode, i, j);
+	trGetNodeTempVel(UxVals, UyVals, TVals, UV00,
+		UV10, UV01, UV11, nodeT, i, j, lid);
 
 	// This seems a bit convoluted and would be easier to
 	// implement with 2 for loops and a while loop, but this
@@ -873,8 +875,8 @@ void TR_update_par_no_wall(
 	// calculations without remaining idle waiting for other
 	// cores to complete a loop. THis is at the expense of extra
 	// integer calculations to calculate the next index.
-	int imin = min(i - 1, 0), imax = (i + 2, FULLSIZEX_TR);
-	int jmin = min(j - 1, 0), jmax = (j + 2, FULLSIZEY_TR);
+	int imin = min(i - 1, 0), imax = max(i + 2, FULLSIZEX_TR);
+	int jmin = min(j - 1, 0), jmax = max(j + 2, FULLSIZEY_TR);
 	int iNeigh = imin, jNeigh = jmin;
 	int neighLin = GET_TR_GLOBAL_IDX(iNeigh, jNeigh);
 	int2 ploc = Ploc_array[neighLin + 2];
@@ -909,11 +911,11 @@ void TR_update_par_no_wall(
 		int kk = ploc.x;
 		ploc.x++;
 
-		if (parLoc[kk] != ii || updateFlag[kk])
+		if (parLoc[kk] != iLin || updateFlag[kk])
 			continue;
 
 		// set flag to indicate that this particle was updated just in
-		// case it end up in another node
+		// case it ends up in another node
 		updateFlag[kk] = 1;
 
 		// Check to see if parTimer has reached zero, 
@@ -935,7 +937,7 @@ void TR_update_par_no_wall(
 
 		double2 dC = (Uadv)* DTTR;
 
-		double2 C1 = pos;
+		//double2 C1 = pos;
 
 		pos += dC;
 		parPos[kk] = pos;
@@ -946,7 +948,7 @@ void TR_update_par_no_wall(
 			parLoc[kk] = -2;
 			continue;
 		}
-		int2 Posi = convert_int2(Pcur.pos);
+		int2 Posi = convert_int2(pos);
 		parLoc[kk] = Posi.x + FULLSIZEX_TR * Posi.y;
 	}
 }

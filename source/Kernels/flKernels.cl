@@ -18,8 +18,8 @@ void Shift_walls(__global uint* __restrict__ BLdep,
 
 	uint BLstart = blInds[i];
 	
-	double4 WeightL = vloadn(i,weightsL);
-	double4 WeightR = vloadn(i, weightsR);
+	double4 WeightL = vload4(i,weightsL);
+	double4 WeightR = vload4(i, weightsR);
 
 	double disp = 0.;
 
@@ -50,7 +50,7 @@ void Smooth_walls1(__global double* __restrict__ BLdep_tot,
 	if (i >= FL_NUM_BL)
 		return;
 
-	int2 startstop = (i < FL_NUM_BL / 2) ? (int2(0, FL_NUM_ACTIVE_NODES/2)) : (int2(FL_NUM_ACTIVE_NODES/2, FL_NUM_ACTIVE_NODES));
+	int2 startstop = (i < FL_NUM_BL / 2) ? ((int2)(0, FL_NUM_ACTIVE_NODES/2)) : ((int2)(FL_NUM_ACTIVE_NODES/2, FL_NUM_ACTIVE_NODES));
 	int kkstart = MAX(i - NEIGHS_PER_SIDE_SMOOTHING, startstop.x);
 	int kkstop = MIN(i + 1 + NEIGHS_PER_SIDE_SMOOTHING, startstop.y);
 	double num_locs = convert_double(kkstop - kkstart);

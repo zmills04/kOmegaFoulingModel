@@ -19,8 +19,9 @@
 #include "Array.h"
 #include "clProblem.h"
 #include "foulStructs.h"
+#include "clVariablesTR.h"
 
-
+class clVariablesTR;
 
 class clVariablesFL
 {
@@ -76,7 +77,7 @@ public:
 	rampI RI;
 	Array2Dd blDepTot, blDepTot_temp;
 	Array1Dd IO_ind_dist;
-	Array2Dd updateWallsDist; //used to track current minimum distance when updating wall
+	
 	//Array1Dd Sum_M_temp;
 	//Array1Dd Debug_out;
 	
@@ -131,7 +132,7 @@ public:
 	int SaveStepNum = 0;
 	double smoothingPct;
 	int updateTRActiveFreq;
-	clVariablesTR::kernelType kernelT;
+	statKernelType kernelT;
 
 
 	////////////////////////////////////////////////////////////////////////////	
@@ -245,8 +246,11 @@ public:
 	////////////////////////////////////////////////////////////////////////////
 
 	void update();
+	void updateFL();
 
-
+	// Updates arrays used in the calculation of shear stress at boundary nodes
+	// and, following this, at boundary links
+	void updateShearArrays();
 
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////               Solving Functions               ///////////////
@@ -256,13 +260,15 @@ public:
 	//////////////                Output Functions               ///////////////
 	////////////////////////////////////////////////////////////////////////////
 
+	void saveVariables();
+
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////                Display Functions              ///////////////
 	////////////////////////////////////////////////////////////////////////////
 
 
 	//void ini_group_sizes();
-	//void save_variables();
+	//
 	////saves variables necessary for debugging
 	//bool test_bounds();
 	//bool Restart_Run();

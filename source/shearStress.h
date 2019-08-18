@@ -262,9 +262,9 @@ public:
 	//////////////              Updating Functions               ///////////////
 	////////////////////////////////////////////////////////////////////////////
 	
-	// Updates arrays used in the calculation of shear stress at boundary nodes
-	// and, following this, at boundary links
-	void updateShearArrays();
+	// Moved to clVariablesFL to overcome issues associated with 
+	// using std::thread to update arrays. 
+	//void updateShearArrays();
 
 	// This function is called after sort, and it will update the kernel
 	// arguments used in trShearRemovalKernel until the next sort.

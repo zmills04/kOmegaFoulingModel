@@ -22,10 +22,12 @@ void particleSort::allocateArrays()
 {
 	Ploc.allocate(vtr.trDomainSize.x*vtr.trDomainSize.y + 2);
 	Ptemp.setSizes(vtr.nN, vtr.nN, 1);
+	trP.allocateArrays();
 }
 
 void particleSort::allocateBuffers()
 {
+	trP.allocateBuffers();
 	Ploc.allocate_buffer_w_copy();
 	int status;
 	
@@ -344,6 +346,8 @@ void particleSort::iniTrp()
 	
 	trP[TRP_BOT_LOC_IND] = ceil(trP[TRP_OFFSET_Y_IND]) - trP[TRP_OFFSET_Y_IND];
 	trP[TRP_TOP_LOC_IND] = floor(Xtop_val) - trP[TRP_OFFSET_Y_IND];
+
+	trP.copyToDevice();
 }
 
 // Legacy code. Not sure how this differs from a regular sort
@@ -560,8 +564,8 @@ void particleSort::setSourceDefines()
 	// BL and LSC info
 	setSrcDefinePrefix, "BL_REL_BOT", BL_rel_bot);
 	setSrcDefinePrefix, "BL_REL_TOP", BL_rel_top);
-	setSrcDefinePrefix, "BL_STOP_BOT", BL_stop_bot);
-	setSrcDefinePrefix, "BL_STOP_TOP", BL_stop_top);
+	setSrcDefinePrefix, "BL_BOT_STOP", BL_stop_bot);
+	setSrcDefinePrefix, "BL_TOP_STOP", BL_stop_top);
 	setSrcDefinePrefix, "LSC_REL_BOT", LSC_rel_bot);
 	setSrcDefinePrefix, "LSC_REL_TOP", LSC_rel_top);
 	setSrcDefinePrefix, "LSC_STOP_BOT", LSC_stop_bot);
