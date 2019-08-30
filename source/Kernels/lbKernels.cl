@@ -365,7 +365,7 @@ __kernel void LB_collision_SRT_Fluid_w_kOmega(__global double* __restrict__ rho_
 
 	const int gx = get_global_id(0);
 
-	if (gx > CHANNEL_LENGTH) { return; }
+	if (gx >= CHANNEL_LENGTH) { return; }
 	const int gy = get_global_id(1);
 	const int gi = GET_GLOBAL_IDX(gx, gy);
 	const NTYPE_TYPE type = Map[gi];
@@ -398,36 +398,41 @@ __kernel void LB_collision_SRT_Fluid_w_kOmega(__global double* __restrict__ rho_
 	// Read in and calculate necessary terms for calculation of 
 	// turbulent viscosity
 	double omegaval = iO[gi], kval = iK[gi], yval = wallD[gi];
-	double F2arg = max(2.*sqrt(kval) / (KO_BETA_STAR*omegaval*yval), 500.*MU_NUMBER / (yval*yval*omegaval));
-	double F2val = tanh(F2arg*F2arg); 
+	double F2arg = max(2. * sqrt(kval) / (KO_BETA_STAR * omegaval * yval), 500. * MU_NUMBER / (yval * yval * omegaval));
+	double F2val = tanh(F2arg * F2arg);
 
 
 	// Multiply F2val by the magnitude of the strain rate S = sqrt(2*S_ij*S_ij)
-	double sxx_val = iSxy[gi], sxy_val = iSxy[gi + DIST_SIZE], syy_val = iSxy[gi + DIST_SIZE*2];
+	double sxx_val = iSxy[gi], sxy_val = iSxy[gi + DIST_SIZE], syy_val = iSxy[gi + DIST_SIZE * 2];
 	F2val *= sqrt(2. * (sxx_val * sxx_val + 2. * sxy_val * sxy_val + syy_val * syy_val));
 
 	// Calculate Nu_turbulent
-	double nut = KO_A1*kval / max(KO_A1*omegaval, F2val);
-	
+	double nut = KO_A1 * kval / max(KO_A1 * omegaval, F2val);
+
 	// Use SST boundary condition for any node with N,E,S,W neighbors
 	// on other side of boundary (i.e. these nodes have tau_wall already
 	// calculated, which can allow for easy calculation of friction Velocity
 	// Boundary condition for omega will be handled in the BiCGStab solver setup
 
 
-#ifdef USE_TURB_VEL_BC
-	if (type & NESW_BOUNDARY_NODE)
-	{
-		// get yplus value = sqrt(tau_wall/rho)*wall_distance/nu
-		double yplus = yval*sqrt(fabs(wallShearArr[ssIndMap[gi]]) / rho) / MU_NUMBER;
-		double velMag = sqrt(pown(v0[0], 2) + pown(v0[1], 2));
-		double fricVelVisc = velMag / yplus;
-		double fricVelLog = velMag / (log(yplus) / KO_KAPPA + 5.0);
-		double fricVel = pow(pown(fricVelLog, 4), pown(fricVelVisc, 4));
-		v0[0] *= fricVel / velMag;
-		v0[1] *= fricVel / velMag;
-	}
-#endif
+//#ifdef USE_TURB_VEL_BC
+//	int ssind_ = ssIndMap[gi];
+//	if (ssind_ >= 0)
+//	{
+//		// get yplus value = sqrt(tau_wall/rho)*wall_distance/nu
+//		double wallShearVal = fabs(wallShearArr[ssind_]);
+//		if (wallShearVal > 0.0)
+//		{
+//			double yplus = yval * sqrt(wallShearVal / rho) / MU_NUMBER;
+//			double velMag = sqrt(pown(v0[0], 2) + pown(v0[1], 2));
+//			double fricVelVisc = velMag / yplus;
+//			double fricVelLog = velMag / (log(yplus) / KO_KAPPA + 5.0);
+//			double fricVel = pow(pown(fricVelLog, 4), pown(fricVelVisc, 4));
+//			v0[0] *= fricVel / velMag;
+//			v0[1] *= fricVel / velMag;
+//		}
+//	}
+//#endif
 
 
 	iNut[gi] = nut;
@@ -547,22 +552,22 @@ __kernel void LB_collision_SRT_Fluid_w_kOmega(__global double* __restrict__ rho_
 	sxy_new -= Fi[8] - feq;
 	Fi[8] += -Fi[8] * tau_t + feq*tau_t - feq - xi_45 - xi_46 - xi_47 + xi_51;
 	/*
-	//								   ____
-	//								   /
-	//                                  /	
-	// Shear stress t_ab = -3*nu*tau *	/    C_ia*C_ib * (fneq_i)
-	//								   /___i
+									   ____
+									   /
+	                                  /	
+	 Shear stress t_ab = -3*nu*tau *	/    C_ia*C_ib * (fneq_i)
+									   /___i
 
 
-	//								      ____
-	//								      /
-	//									   /	
-	// Strain tensor S_ab = -1.5*tau/rho * /    C_ia*C_ib * (fneq_i) = t_ab/(2*rho*nu)
-	//								      /___i
+									      ____
+									      /
+										   /	
+	 Strain tensor S_ab = -1.5*tau/rho * /    C_ia*C_ib * (fneq_i) = t_ab/(2*rho*nu)
+									      /___i
 	*/
 
-	// Storing strain rate Tensor components for use in kOmega and shear stress
-	// kernels
+	 //Storing strain rate Tensor components for use in kOmega and shear stress
+	 //kernels
 	iSxy[gi] = -1.5 * (tau0) / rho * sxx_new;
 	iSxy[gi + DIST_SIZE] = -1.5 * (tau0) / rho * sxy_new;
 	iSxy[gi + DIST_SIZE*2] = -1.5 * (tau0) / rho * syy_new;
@@ -590,28 +595,29 @@ __kernel void LB_collision_SRT_Fluid_w_kOmega(__global double* __restrict__ rho_
 	int eneigh = (gx < CHANNEL_LENGTH - 1) ? 1 : -gx;
 	int wneigh = (gx > 0) ? -1 : (CHANNEL_LENGTH - 1);
 
-	if ((type & E_BOUND) == 0)
+
+	if (!(type & E_BOUND))
 		FB[gi + eneigh + DIST_SIZE] = Fi[1];
 
-	if ((type & W_BOUND) == 0)
+	if (!(type & W_BOUND))
 		FB[gi + wneigh + DIST_SIZE * 2] = Fi[2];
 
-	if ((type & N_BOUND) == 0)
+	if (!(type & N_BOUND))
 		FB[gi + N_NEIGH + DIST_SIZE * 3] = Fi[3];
 
-	if ((type & S_BOUND) == 0)
+	if (!(type & S_BOUND))
 		FB[gi + S_NEIGH + DIST_SIZE * 4] = Fi[4];
 
-	if ((type & NE_BOUND) == 0)
+	if (!(type & NE_BOUND))
 		FB[gi + N_NEIGH + eneigh + DIST_SIZE * 5] = Fi[5];
 
-	if ((type & SW_BOUND) == 0)
+	if (!(type & SW_BOUND))
 		FB[gi + S_NEIGH + wneigh + DIST_SIZE * 6] = Fi[6];
 
-	if ((type & SE_BOUND) == 0)
+	if (!(type & SE_BOUND))
 		FB[gi + S_NEIGH + eneigh + DIST_SIZE * 7] = Fi[7];
 
-	if ((type & NW_BOUND) == 0)
+	if (!(type & NW_BOUND))
 		FB[gi + N_NEIGH + wneigh + DIST_SIZE * 8] = Fi[8];
 
 }

@@ -115,60 +115,34 @@ typedef struct cl_bool2
 #pragma OPENCL_EXTENSION cl_amd_fp64: enable
 #pragma OPENCL EXTENSION cl_amd_printf : enable
 #pragma OPENCL EXTENSION cl_khr_subgroups : enable
-//#pragma OPENCL EXTENSION CL_KHR_gl_sharing : enable
 
+#define LOGMESSAGE(mess_)	Logger::Instance()->writeToLogFile(mess_)
+#define LOGPARTIAL(mess_)	Logger::Instance()->writePartialToLogFile(mess_)
 
-#define SDK_SUCCESS 0
-#define SDK_FAILURE 1
-#define SDK_EXPECTED_FAILURE 2
-
-
-#define CHECK_ALLOCATION(actual, msg, error_num) \
-if (actual == nullptr) \
-{ \
-	std::cout << "Location : " << __FILE__ << ":" << __LINE__ << std::endl; \
-	exit(error_num); \
-}
-
-#define CHECK_ERROR(actual, reference, msg) \
-if (actual != reference) \
-{ \
-	std::cout << "Location : " << __FILE__ << ":" << __LINE__ << std::endl; \
-	return SDK_FAILURE; \
-}
-
-#define CHECK_ERROR_WITH_EXIT(actual, reference, msg) \
-if (actual != reference) \
-{ \
-	std::cout << "Location : " << __FILE__ << ":" << __LINE__ << std::endl; \
-	exit(actual);\
-}
-
-#define PRINT_ERROR_FUNC(msg, error_num) \
-	std::fstream stream;\
-	stream.open("error.txt", std::ios_base::out);\
-	stream << "Error in " <<  __FILE__  << " at line " << __LINE__ << "\n";\
-	stream << "Message: " << msg << "\n";\
-	stream.close();\
+#define PRINT_ERROR_FUNC(msg, error_num)\
+	std::string ERRMESG_ = "Error in ";\
+	ERRMESG_.append(__FILE__);\
+	ERRMESG_.append(" at line ");\
+	ERRMESG_.append(std::to_string(__LINE__));\
+	ERRMESG_.append("\nMessage: ");\
+	ERRMESG_.append(msg);\
+	LOGMESSAGE(ERRMESG_);\
 	std::cout << "Error in " <<  __FILE__  << " at line " << __LINE__ << "\n";\
-	std::cout << "See error.txt for more information\n";\
+	std::cout << "See log file for more information\n";\
 	exit(error_num);
 
+#define ERROR_CHECKING(test, msg, error_num)\
+	if ((test))\
+	{\
+		PRINT_ERROR_FUNC(msg, error_num);\
+	}
 
-#define ERROR_CHECKING(test, msg, error_num) if ((test)) { PRINT_ERROR_FUNC(msg, error_num); }
+#define ERROR_CHECKING_OCL(test, msg, error_num) \
+	if ((test)) \
+	{\
+		PRINT_ERROR_FUNC("OpenCL Error Number: " + std::to_string(static_cast<int>(test)) + "\n" + msg, error_num); \
+	}
 
-#define ERROR_CHECKING_OCL(test, msg) \
-if ((test)) \
-{ \
-	FILE *stream;\
-	stream = fopen("error.txt", "w+");\
-	fprintf(stream, "Error in %s at line %d\n", __FILE__, __LINE__);\
-	fprintf(stream, "OpenCL Error Number: %d\n", test);\
-	fprintf(stream, "Message: " msg "\n");\
-	fclose(stream);\
-	printf("Error in %s at line %d\n. See error.txt for more information\n", __FILE__, __LINE__);\
-	exit(test);\
-}
 
 #define FREE(ptr) \
 { \
@@ -179,39 +153,7 @@ if (ptr != NULL) \
 } \
 }
 
-#define RELEASE_EVENT(ptr) \
-{ \
-if (ptr != NULL) \
-{ \
-	clReleaseEvent(ptr); \
-} \
-}
-
-#ifdef _WIN32
-#define ALIGNED_FREE(ptr) \
-{ \
-if (ptr != NULL) \
-{ \
-	_aligned_free(ptr); \
-	ptr = NULL; \
-} \
-}
-#endif
-#define CHECK_OPENCL_ERROR(actual, msg) \
-if (checkVal(actual, CL_SUCCESS, msg)) \
-{ \
-	std::cout << "Location : " << __FILE__ << ":" << __LINE__ << std::endl; \
-	return SDK_FAILURE; \
-}
-
-#define OPENCL_EXPECTED_ERROR(msg) \
-{ \
-	return SDK_EXPECTED_FAILURE; \
-}
-
-
 #define FREE_OCL_BUFFER(buf) if(buf != nullptr) {clReleaseMemObject(buf);}
-
 
 #define FREE_OCL_BUFFER_ARRAY(bufarr_, size_) \
 if (bufarr_ != nullptr) \
@@ -223,30 +165,6 @@ if (bufarr_ != nullptr) \
 	delete[] bufarr_; \
 }
 
-
-
-
-template<typename T>
-static int checkVal(
-	T input,
-	T reference,
-	std::string message, bool isAPIerror = true)
-{
-	if (input == reference)
-	{
-		return SDK_SUCCESS;
-	}
-	else
-	{
-		if (isAPIerror)
-		{
-			std::cout << "Error: " << message << " Error code : ";
-		}
-		return SDK_FAILURE;
-	}
-}
-
-
 enum FileMode { FileIn, FileOut, FileAppend, BinaryIn, BinaryOut };
 
 enum statKernelType {
@@ -255,24 +173,24 @@ enum statKernelType {
 	logisticKer, sigmoidKer
 };
 
-#ifndef PRINT_ERROR_MESSAGES
-#define PRINT_ERROR					do {} while(0)
-#define PRINT_ERROR_W_MSG(msg_)		do {} while(0)
-#else
-#define PRINT_ERROR					FILE *stream;\
-									stream = fopen("error.txt", "w+");\
-									fprintf(stream, "Error in %s at line %d\n", __FILE__, __LINE__);\
-									fclose(stream);\
-									printf("Error in %s at line %d\n", __FILE__, __LINE__);\
-									exit(__LINE__);
-
-#define PRINT_ERROR_W_MSG(msg_)		FILE *stream;\
-									stream = fopen("error.txt", "w+");\
-									fprintf(stream, "Error in %s at line %d\n%s\n", __FILE__, __LINE__, msg_);\
-									fclose(stream);\
-									printf("Error in %s at line %d\n%s\n", __FILE__, __LINE__, msg_);\
-									exit(__LINE__);
-#endif
+//#ifndef PRINT_ERROR_MESSAGES
+//#define PRINT_ERROR					do {} while(0)
+//#define PRINT_ERROR_W_MSG(msg_)		do {} while(0)
+//#else
+//#define PRINT_ERROR					FILE *stream;\
+//									stream = fopen("error.txt", "w+");\
+//									fprintf(stream, "Error in %s at line %d\n", __FILE__, __LINE__);\
+//									fclose(stream);\
+//									printf("Error in %s at line %d\n", __FILE__, __LINE__);\
+//									exit(__LINE__);
+//
+//#define PRINT_ERROR_W_MSG(msg_)		FILE *stream;\
+//									stream = fopen("error.txt", "w+");\
+//									fprintf(stream, "Error in %s at line %d\n%s\n", __FILE__, __LINE__, msg_);\
+//									fclose(stream);\
+//									printf("Error in %s at line %d\n%s\n", __FILE__, __LINE__, msg_);\
+//									exit(__LINE__);
+//#endif
 
 //typedef struct Nodetemp
 //{
@@ -305,7 +223,7 @@ enum statKernelType {
 
 
 #define ARRAY_ERROR_CHECKING
-#define STATUS_CHECK_SETUP(codeval, msg)	if(codeval) { Gen_Error_Msg(codeval, msg); }
+//#define STATUS_CHECK_SETUP(codeval, msg)	if(codeval) { Gen_Error_Msg(codeval, msg); }
 
 
 #define Subtract2(A, B) { {A.x - B.x, A.y - B.y} } 

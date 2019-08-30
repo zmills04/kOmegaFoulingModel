@@ -464,6 +464,8 @@ void clVariablesTR::ini()
 
 	if (saveMacroStart && !restartRunFlag)
 		save2file();
+
+	LOGMESSAGE("vtr initialized");
 }
 
 void clVariablesTR::iniBLandNodI()

@@ -78,7 +78,7 @@ double kOmega::findMinDist(cl_int2 botSearchInds, cl_int2 topSearchInds, cl_doub
 {
 	double dmin = 1000.;
 
-	for (int i = botSearchInds.x; i < botSearchInds.x; i++)
+	for (int i = botSearchInds.x; i < botSearchInds.y; i++)
 	{
 		cl_double2 P0 = vls.C(vls.BL(i, 0)), P1 = vls.C(vls.BL(i, 1));
 		cl_double2 vT = Subtract2(P1, P0);
@@ -104,7 +104,7 @@ double kOmega::findMinDist(cl_int2 botSearchInds, cl_int2 topSearchInds, cl_doub
 		dmin = MIN(dmin, dtemp);
 	}
 
-	for (int i = topSearchInds.x; i < topSearchInds.x; i++)
+	for (int i = topSearchInds.x; i < topSearchInds.y; i++)
 	{
 		cl_double2 P0 = vls.C(vls.BL(i, 0)), P1 = vls.C(vls.BL(i, 1));
 		cl_double2 vT = Subtract2(P1, P0);
@@ -172,6 +172,8 @@ void kOmega::ini()
 	Diff_K.fillByNodeType(vlb.MuVal, vls.nType, M_FLUID_NODE);
 
 	allocateBuffers();
+
+	LOGMESSAGE("kOmega instance in vlb initialized");
 }
 
 void kOmega::iniKOmegaArrays()
@@ -180,12 +182,12 @@ void kOmega::iniKOmegaArrays()
 	setInitialValues();
 
 	// Initialize solver classes for k and omega
-	KappaInds.ini(p.nX, p.XsizeFull, p.nY, p.nY, &vls.nType);
-	Kappa.CreateSolver(&Kappa_array, &KappaInds, LBQUEUE_REF,
+	kOmegaInds.ini(p.nX, p.XsizeFull, p.nY, p.nY, &vls.nType);
+	Kappa.CreateSolver(&Kappa_array, &kOmegaInds, LBQUEUE_REF,
 		kappaMaxIters, kappaMaxRelTol, kappaMaxAbsTol);
 
-	OmegaInds.ini(p.nX, p.XsizeFull, p.nY, p.nY, &vls.nType);
-	Omega.CreateSolver(&Omega_array, &OmegaInds, LBQUEUE_REF,
+	//OmegaInds.ini(p.nX, p.XsizeFull, p.nY, p.nY, &vls.nType);
+	Omega.CreateSolver(&Omega_array, &kOmegaInds, LBQUEUE_REF,
 		omegaMaxIters, omegaMaxRelTol, omegaMaxAbsTol);
 
 	// initialize reduce classes for k and omega
@@ -273,6 +275,8 @@ void kOmega::save2file()
 
 void kOmega::saveDebug(int saveFl)
 {
+
+
 #ifdef DEBUG_TURBARR
 	Array2Dd outtemp;
 	outtemp.zeros(p.nX, p.nY);
@@ -321,9 +325,15 @@ void kOmega::saveDebug(int saveFl)
 		}
 	}
 #endif
-	Fval_array.save_txt_from_device("Fvals");
-	Diff_Omega.save_txt_from_device("Diff_Omega");
-	Diff_K.save_txt_from_device("Diff_K");
+	Fval_array.save_txt_from_device();
+	Diff_Omega.save_txt_from_device();
+	Diff_K.save_txt_from_device();
+	Nut_array.save_txt_from_device();
+	//WallD.save_txt_from_device();
+	dKdO_array.save_txt_from_device_as_multi2D("dKdO");
+	Sxy_array.save_txt_from_device_as_multi2D("Sxy");
+
+	save2file();
 }
 
 
@@ -457,6 +467,19 @@ void kOmega::setKernelArgs()
 	kOmegaUpdateCoeffs.set_argument(ind++, koDbgArr2.get_buf_add());
 #endif
 
+	//kappaDebug.zeros(p.nX, p.XsizeFull, p.nY, p.nY, 6, 6);
+	//kappaDebug.allocate_buffer_w_copy();
+	//omegaDebug.zeros(p.nX, p.XsizeFull, p.nY, p.nY, 6, 6);
+	//omegaDebug.allocate_buffer_w_copy();
+
+
+	//kOmegaUpdateCoeffs.set_argument(ind++, kappaDebug.get_buf_add());
+	//kOmegaUpdateCoeffs.set_argument(ind++, omegaDebug.get_buf_add());
+
+
+
+
+
 
 	ind = 0;
 	updateWallDKernel.set_argument(ind++, WallD.get_buf_add());
@@ -503,6 +526,10 @@ void kOmega::Solve()
 	kOmegaUpdateDiffCoeffs.call_kernel();
 	kOmegaUpdateCoeffs.call_kernel();
 	clFinish(LBQUEUE);
+
+	//Kappa.saveAxbCSR_from_device();
+	//Omega.saveAxbCSR_from_device();
+
 	Kappa.solve();
 	Omega.solve();
 }

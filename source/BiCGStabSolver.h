@@ -175,6 +175,10 @@ public:
 
 	void iniAXPBYKernels();
 
+	// Fills diagonal elements of rows associated with solid boundary
+	// nodes with 1 (otherwise solver will encounter div by 0)
+	void fillSolidBoundaryNodes();
+
 	// y = alpha*A*x + beta * y;
 	void createCSRMVKernel(thinKerWrapper &ker, double alphaval, double betaval, cl_mem *xvec_, cl_mem* yvec_);
 
@@ -198,7 +202,7 @@ public:
 
 	void createOmegaDotSqr();
 
-	static void iniBuffer(cl_mem &buf_, const int size_, const std::string name_);
+	static void iniBuffer(cl_mem &buf_, const int size_, std::string name_);
 
 	// initializes all static variables
 	static void ini(int xsize_, int xsizefull_, int ysize_);

@@ -58,12 +58,17 @@ void clVariablesLS::allocateBuffers()
 	C0.allocate_buffer_w_copy(CL_MEM_READ_ONLY);
 	C.allocate_buffer_w_copy();
 	dXArr.allocate_buffer_w_copy();
-	dXArr.allocate_buffer_w_copy(CL_MEM_READ_ONLY);
+	dXArr.allocate_buffer_w_copy();
+	dXArr0.allocate_buffer_w_copy();
+	dXArr0.allocate_buffer_w_copy();
+
 	Masses.allocate_buffer_w_copy(2);
 	ssArrInds.allocate_buffer_w_copy();
 	ssArrIndMap.allocate_buffer_w_copy();
 	lsMap.allocate_buffer_w_copy(CL_MEM_READ_ONLY);
 
+	ssArr.allocate_buffer(CL_MEM_READ_ONLY);
+	ssArr.copy_dynamic_to_buffer();
 #ifndef IN_KERNEL_IBB
 	ibbArr.allocate_buffer();
 	ibbArr.copy_dynamic_to_buffer();
@@ -399,7 +404,6 @@ void clVariablesLS::setKernelArgs()
 	updateNType.set_argument(9, vlb.kOmegaClass.Nut_array.get_buf_add());
 	updateNType.set_argument(10, vlb.kOmegaClass.Omega.get_add_IndArr());
 
-
 	int ind = 0;
 	BLinks::arrName BLArrList[] = { BLinks::P01Arr, BLinks::vNArr,
 		BLinks::lenArr, BLinks::nodLocArr, BLinks::typeArr };
@@ -423,6 +427,7 @@ void clVariablesLS::setKernelArgs()
 	updateIBBOnly.set_argument(4, ibbArrCurIndex.get_buf_add());
 	updateIBBOnly.setOptionInd(5);
 	updateIBBOnly.set_argument(5, &ibbarrsize_);
+
 #endif
 
 
@@ -441,8 +446,7 @@ void clVariablesLS::setSourceDefines()
 		ind_++;
 	}
 
-	minSSArrNodeX = MAX(vtr.xReleasePos - 10, 0);
-	maxSSArrNodeX = vtr.xStopPos + 10;
+
 
 	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "MIN_SS_ARR_NODE_X", minSSArrNodeX);
 	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "MAX_SS_ARR_NODE_X", maxSSArrNodeX);
@@ -450,8 +454,8 @@ void clVariablesLS::setSourceDefines()
 	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "LSC_NN", nN);
 
 	// These are used by updateM kernel for indexing
-	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "LSC_UPDATE_M_NN", nN - 1);
-	int nodeskip = (nN - 1) / 2 - 1;
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "LSC_UPDATE_M_NN", nN-1);
+	int nodeskip = nN / 2 - 1;
 	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "LSC_UPDATE_M_SKIP", nodeskip);
 
 
@@ -528,14 +532,21 @@ void clVariablesLS::save2file()
 {
 	C.save_txt_from_device();
 	nType.save_txt_from_device();
-	//M.save_txt_from_device();
 }
 
 void clVariablesLS::saveDebug()
 {
-	ibbArr.savetxt();
-	dXArr.savetxt();
-	dXArr0.savetxt();
+	ibbArr.saveTxtFromDeviceDynamic();
+	//dXArr.save_txt_from_device_as_multi2D("dXarr");
+	//dXArr0.save_txt_from_device_as_multi2D("dX0arr");
+	ibbDistArr.saveTxtFromDeviceDynamic();
+	ssArr.save_txt_from_device();
+	BL.save_txt_from_device();
+	ssArrInds.save_txt_from_device();
+	ssArrIndMap.save_txt_from_device();
+	lsMap.save_txt_from_device();
+	save2file();
+
 }
 
 
@@ -549,6 +560,10 @@ void clVariablesLS::saveDebug()
 
 void clVariablesLS::ini()
 {
+
+	minSSArrNodeX = MAX(vtr.xReleasePos - 10, 0);
+	maxSSArrNodeX = vtr.xStopPos + 10;
+
 	if(!restartRunFlag)
 	{
 		for (int i = 0; i < nN; i++)
@@ -588,6 +603,8 @@ void clVariablesLS::ini()
 	
 	if (saveMacroStart & !restartRunFlag)
 		save2file();
+
+	LOGMESSAGE("vls initialized");
 }
 
 
@@ -1045,6 +1062,13 @@ void clVariablesLS::updateBoundaryArrays()
 
 void clVariablesLS::iniIBBArrays()
 {
+	//for (int i = 0; i < nN; i++)
+	//{
+	//	updateIBBOnly_Test(i);
+	//}
+
+
+
 	ibbArrCurIndex.FillBuffer(0, LBQUEUE_REF);
 
 	updateIBBOnly.call_kernel();
@@ -1056,8 +1080,9 @@ void clVariablesLS::iniIBBArrays()
 	{
 		ibbArrCurIndex.FillBuffer(0, LBQUEUE_REF);
 		resizeFlag = true;
-		ibbArr.resize_device_dynamic();
-		ibbDistArr.resize_device_dynamic();
+		int newsize = ibbArr.getNewSize(ibbArrCurIndex(0));
+		ibbArr.reallocate_device_dynamic(newsize);
+		ibbDistArr.reallocate_device_dynamic(newsize);
 
 		updateIBBOnly.set_argument(2, ibbArr.get_buf_add());
 		updateIBBOnly.set_argument(3, ibbDistArr.get_buf_add());
@@ -1072,6 +1097,7 @@ void clVariablesLS::iniIBBArrays()
 	int ibbnumel_ = ibbArrCurIndex(0);
 
 	vlb.ibbKernel.set_argument(3, &ibbnumel_);
+
 
 	// dont need to update these kernels until after updateIBBOnly
 	// has finished updating ibb arrays since they will not be
@@ -1164,3 +1190,117 @@ const int clVariablesLS::LF[9] = {	LB_NO_BOUNDARY_LINK,
 									LB_BOUNDARY_LINK_7,
 									LB_BOUNDARY_LINK_8 };
 
+
+
+
+void clVariablesLS::updateIBBOnly_Test(int i)
+{
+	if (i >= nN || i == (nN / 2 - 1))
+		return;
+
+	cl_double2 vC0 = C(i), vC1 = C(i + 1);
+
+	cl_double2 vT = { {vC1.x - vC0.x, vC1.y - vC0.y} };
+
+	double blLen = GETLEN(vT);
+	vT = Divide2(vT, blLen);
+	cl_double2 vCn = { {-vT.y, vT.x} };
+
+
+	cl_int2 vCmin = min2(vC0, vC1), vCmax = max2(vC0, vC1);
+	vCmin.x -= 1;
+	vCmin.y -= 1;
+	vCmax.x += 1;
+	vCmax.y += 1;
+	if (vCmin.x < 0) vCmin.x = 0;
+	if (vCmin.x >= p.nX) return;
+	if (vCmax.x < 0) return;
+	if (vCmax.x >= p.nX) vCmax.x = p.nX - 1;
+
+	if (vCmin.y < 0) vCmin.y = 0;
+	if (vCmin.y >= p.nY) return;
+	if (vCmax.y < 0) return;
+	if (vCmax.y >= p.nY) vCmax.y = p.nY - 1;
+
+
+	for (int ii = vCmin.x; ii <= vCmax.x; ii++)
+	{
+		for (int jj = vCmin.y; jj <= vCmax.y; jj++)
+		{
+			int ii0_1D = ii + p.XsizeFull * jj;
+			NTYPE_TYPE ntype = nType[ii0_1D];
+
+			if (ntype & M_SOLID_NODE)
+				continue;
+
+			cl_double2 vL0 = { {(double)ii, (double)jj} };
+
+			for (int dir = 0; dir < 8; dir += 2)
+			{
+
+				cl_double2 Cdir = vlb.Cxy_double[dir + 1];
+				double dist;
+
+				if (bcFindIntersectionLS(&dist, &dir, vL0, &Cdir,
+					vC0, vC1, blLen, vCn))
+				{
+					//////////// Set required info for IBB.//////////
+
+					//// get index of next element to add to array
+					//int ibbind = atomic_add(&ibbIndCount[0], 1);
+					//ibbind = MIN(ibbind, ibbArrSize - 1);
+
+					ibbDistArr.append(dist);
+					ibbArr.append(ii0_1D + p.distSize * (dir + 1));
+				}
+			}
+		}
+	}
+}
+
+
+int clVariablesLS::bcFindIntersectionLS(double* dist, int* dir, cl_double2 vL0, cl_double2 * vLd,
+	cl_double2 vC0, cl_double2 vC1, double vP10Length, cl_double2 vN)
+{
+	// Calculate distance between vL0 and intersection
+	double den = DOT_PROD(vN, (*vLd));
+
+	// if perpendicular, will not cross so return 0 (false)
+	if (den == 0.)
+		return 0;
+
+	// vN is pointing away from BL, vLd is pointing away from node,
+	// so if den < 0, vLd is pointing toward BL and we should continue
+	// to test that distribution direction
+	// if den > 0, vLd is pointing away from BL, so we should test opposite
+	// distribution direction.
+	if (den > 0.)
+	{
+		*dir = vlb.rev[*dir + 1] - 1;
+		*vLd = { {-(*vLd).x, -(*vLd).y} };
+		den *= -1.0;
+	}
+	cl_double2 vCL0 = Subtract2(vC0, vL0);
+	*dist = DOT_PROD(vN, vCL0) / den;
+
+	// Looking for node closest to wall, so dist > 1
+	// will have a node closer to wall in that direction.
+	// Testing to make sure dist > 0. just in case
+	if ((*dist) < 0. || (*dist) > 1.)
+		return 0;
+
+	// Location of intersection between two lines
+	cl_double2 vCcut = { {vL0.x + (*vLd).x * (*dist), vL0.y + (*vLd).y * (*dist)} };
+
+	// Test to see if intersection falls between vC0 and vC1
+	// if falls outside, return 0.
+	cl_double2 vd0 = Subtract2(vCcut, vC0), vd1 = Subtract2(vCcut, vC1);
+	if (fabs(vP10Length - GETLEN(vd0) - GETLEN(vd1)) >= 1e-5)
+		return 0;
+
+	// Limiting the minimum value of dX to avoid instabilities that
+	// it might lead to.
+	(*dist) = MAX((*dist), 1e-5);
+
+	return 1;
+}

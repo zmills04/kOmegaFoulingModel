@@ -5,15 +5,15 @@
 // Global static pointer used to ensure a single instance of the class.
 Logger* Logger::m_pInstance = nullptr;
 
-Logger* Logger::SetupInstance(bool restartFlag)
-{
-	if (!m_pInstance)   // Only allow one instance of class to be generated.
-		m_pInstance = new Logger(restartFlag);
+//Logger* Logger::SetupInstance(bool restartFlag)
+//{
+//	if (!m_pInstance)   // Only allow one instance of class to be generated.
+//		m_pInstance = new Logger(restartFlag);
+//
+//	return m_pInstance;
+//}
 
-	return m_pInstance;
-}
-
-void Logger::openLogFile(bool restartFlag)
+void Logger::iniLogger(bool restartFlag)
 {
 	using std::chrono::system_clock;
 		
@@ -22,8 +22,11 @@ void Logger::openLogFile(bool restartFlag)
 	else
 		logStream.open(logName, std::ios_base::app);
 
-	ERROR_CHECKING(!logStream.is_open(), "Unable to open logfile",
-		ERROR_IN_LOGGER);
+	if (!logStream.is_open())
+	{
+		std::cout << "Unable to open logfile\n";
+		exit(ERROR_IN_LOGGER);
+	}
 
 	auto timenow = system_clock::now();
 	std::time_t timenowformatted = system_clock::to_time_t(timenow);
@@ -75,12 +78,28 @@ void Logger::closeLogFile(bool finishedSim)
 
 void Logger::writeToLogFile(std::string logMessage)
 {
-	ERROR_CHECKING(!logStream.is_open(), "Trying to write to "
-		"unopened log file", ERROR_IN_LOGGER);
+	if (!logStream.is_open())
+	{
+		std::cout << "Trying to write message "
+			"to unopened log file\n";
+		exit(ERROR_IN_LOGGER);
+	}
 
 	logStream << logMessage;
 	logStream << "\n";
 	logStream.flush();
+}
+
+void Logger::writePartialToLogFile(std::string logMessage)
+{
+	if (!logStream.is_open())
+	{
+		std::cout << "Trying to write partial "
+			"message to unopened log file\n";
+		exit(ERROR_IN_LOGGER);
+	}
+
+	logStream << logMessage;
 }
 
 

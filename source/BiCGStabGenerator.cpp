@@ -187,6 +187,10 @@ void BiCGStabGenerator::ini(const int xsize_, const int xsizefull_, const int ys
 	// All kernels are generated above, so no need to have a separate call
 	// to build the source.
 	buildSource();
+
+	LOGMESSAGE("BiCGStabGenerator singleton initialized");
+
+
 }
 
 

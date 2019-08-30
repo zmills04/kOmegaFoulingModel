@@ -34,12 +34,12 @@ void particleSort::allocateBuffers()
 	sortLocs1 = clCreateBuffer(CLCONTEXT, CL_MEM_READ_WRITE,
 		sizeof(int) * vtr.nN, NULL, &status);
 	ERROR_CHECKING_OCL(status, "Error creating sortLocs1 "\
-		"in particlesSort class");
+		"in particlesSort class", ERROR_INITIALIZING_VTR);
 	
 	sortLocs2 = clCreateBuffer(CLCONTEXT, CL_MEM_READ_WRITE,
 		sizeof(int) * vtr.nN, NULL, &status);
 	ERROR_CHECKING_OCL(status, "Error creating sortLocs2 "\
-		"in particlesSort class");
+		"in particlesSort class", ERROR_INITIALIZING_VTR);
 
 	clMemIniFlag = true;
 }
@@ -277,10 +277,7 @@ void particleSort::ini()
 	// Add kernels to kernel source string for compilation
 	sourceGenerator::SourceInstance()->addFile2Kernel("trKernelsSort.cl");
 
-#if _DEBUG
-	LOGMESSAGE("Initialized Particle Sort Class");
-#endif
-	   	  
+	LOGMESSAGE("particle sort class within vtr initialized");
 }
 
 

@@ -32,8 +32,8 @@ public:
 		Diff_Omega("diffOmega"), Diff_K("diffK"), Fval_array("Fvals"),
 		Nut_array("lbnut"), dKdO_array("dKdO"), Sxy_array("lbsxy"),
 		Kappa_array("lbkappa"), Omega_array("lbomega"),
-		KappaInds(M_SOLID_NODE, M_FLUID_NODE, SOLID_BOUNDARY_NODE),
-		OmegaInds(M_SOLID_NODE, M_FLUID_NODE, SOLID_BOUNDARY_NODE)
+		kOmegaInds(M_SOLID_NODE, M_FLUID_NODE, SOLID_BOUNDARY_NODE)//,
+//		kappaDebug("kappaDebug"), omegaDebug("omegaDebug")
 	{}
 
 	~kOmega() {}
@@ -81,6 +81,11 @@ public:
 //////////////                   Data Arrays                 ///////////////
 ////////////////////////////////////////////////////////////////////////////
 
+	//Array3Dd kappaDebug, omegaDebug;
+
+
+
+
 	// Arrays that contain actual kappa and omega values, which
 	// directly addressed during initialization/reading bin files
 	// pointers to these arrays are passed to Solvers, which
@@ -97,7 +102,7 @@ public:
 
 	// CSR indicies for kappa and omega, which are passed to 
 	// solvers
-	CSR_Inds_Periodic KappaInds, OmegaInds;
+	CSR_Inds_Periodic kOmegaInds;
 	
 	// Arrays for kOmega solver coefficients,
 	// which are used to calculate the soln matrix
@@ -151,6 +156,7 @@ public:
 	// Switches for initialization and to turn on turb. model solver
 	bool perturbVelField;
 	bool kOmegaSolverFlag, iniTurbVelocity;
+	bool restartRunFlag;
 
 	// Flags used to indicate if simulation is being restarted from
 	// a checkpoint
@@ -231,7 +237,7 @@ public:
 	void save2file();
 
 	// Writes additional data to file for debugging purposes
-	void saveDebug(int saveFl);
+	void saveDebug(int saveFl = lbDbgSave);
 
 	// Saves parameters to yaml file used for restarting runs
 	void saveParams();

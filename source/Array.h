@@ -367,13 +367,13 @@ protected:
 	void Copy_DtoH(cl_command_queue *queue = NULL, cl_bool block_flag = CL_TRUE, int num_wait = 0, cl_event *wait = NULL, cl_event *evt = NULL)
 	{
 		CHECK_ARRAY_ERROR((Device_Alloc_Flag == 0 || Host_Alloc_Flag == 0),
-			"Copying unallocated memory to device", ERROR_BUFFER_ALLOCATION);
+			"Copying unallocated memory to host", ERROR_BUFFER_ALLOCATION);
 
 		if (queue == NULL) { queue = ioQue; }
 
 		int status = clEnqueueReadBuffer(*queue, Buffer, block_flag, 0, FullSize*sizeof(T), Array, num_wait, wait, evt);
 
-		CHECK_ARRAY_ERROR(status, "Copying from buffer to device", status);
+		CHECK_ARRAY_ERROR(status, "Copying from buffer to host", status);
 	}
 
 	void Copy_HtoD_Size(int num_el, cl_command_queue *queue = NULL, cl_bool block_flag = CL_TRUE, int num_wait = 0, cl_event *wait = NULL, cl_event *evt = NULL)
@@ -1950,6 +1950,11 @@ public:
 	{
 	}
 
+	int getNewSize(int newsize_)
+	{
+		return (newsize_ / wgSize + resizeMult) * wgSize;
+	}
+
 	void allocateDynamic(const int inisize)
 	{
 		getGlobalSizeMacro(inisize, wgSize);
@@ -1997,6 +2002,28 @@ public:
 	{
 		FreeDevice();
 		allocate_buffer_size(FullSize);
+	}
+
+	// memory reallocation on device, does not save existing data
+	// on device to copy over after reallocation
+	void reallocate_device_dynamic(int reallocVal_)
+	{
+		BufferFullSize = reallocVal_;
+		AllocDevice(ArrayBase<T>::clFlags, BufferFullSize);
+	}
+
+	bool saveTxtFromDeviceDynamic(std::string FileName = "")
+	{
+		if (BufferFullSize > FullSize)
+		{
+			ArrayBase<T>::SizeX = 
+			FullSize = BufferFullSize;
+			ArrayBase<T>::SizeX = FullSize;
+			ArrayBase<T>::FullSizeX = SizeX;
+			AllocHost();
+		}
+
+		return ArrayBase<T>::save_txt_from_device(FileName);
 	}
 
 	// memory reallocation on device, does not save existing data
@@ -2394,6 +2421,7 @@ public:
 		stream.close();
 		return true;
 	}
+
 
 	virtual bool savetxt_as_1D(std::string FileName = "")
 	{

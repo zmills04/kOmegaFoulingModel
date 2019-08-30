@@ -396,7 +396,7 @@ void clEnv::displayDevices()
 	ERROR_CHECKING(status, "clGetDeviceIDs failed", ERROR_OCL_INITIALIZATION);
 	cl_device_id* deviceIds = (cl_device_id*)malloc(sizeof(cl_device_id) *
 		deviceCount);
-	CHECK_ALLOCATION(deviceIds, "Failed to allocate memory(deviceIds)", ERROR_OCL_INITIALIZATION);
+	ERROR_CHECKING(deviceIds == nullptr, "Failed to allocate memory(deviceIds)", ERROR_OCL_INITIALIZATION);
 	// Get device ids
 	status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, deviceCount, deviceIds, NULL);
 	ERROR_CHECKING(status, "clGetDeviceIDs failed", ERROR_OCL_INITIALIZATION);

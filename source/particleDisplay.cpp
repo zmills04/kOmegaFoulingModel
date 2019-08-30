@@ -138,6 +138,7 @@ void particleDisplay::ini()
 
 	allocateBuffers();
 	freeHostArrays();
+	LOGMESSAGE("particle display class within vtr initialized");
 }
 
 void particleDisplay::iniBLArrays()

@@ -129,9 +129,8 @@ void shearStress::ini()
 	// Add kernels to kernel source string for compilation
 	sourceGenerator::SourceInstance()->addFile2Kernel("trKernelsShear.cl");
 
-#if _DEBUG
-	LOGMESSAGE("Initialized Shear Stress Class");
-#endif
+
+	LOGMESSAGE("wall shear class within vtr initialized");
 }
 
 

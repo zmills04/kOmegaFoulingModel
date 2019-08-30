@@ -75,7 +75,7 @@
 
 #define WORKGROUPSIZE_TR			64
 #define WORKGROUPSIZE_TR_WALL		32
-#define WORKGROUPSIZE_RERELEASE		64.
+#define WORKGROUPSIZE_RERELEASE		64
 #define WORKGROUPSIZE_TR_GL			256
 #define WORKGROUPSIZE_TR_SHEAR		64
 #define WORKGROUPSIZE_SORT			256
@@ -163,9 +163,9 @@
 // LB ini steps is steps with just lb being solved before
 // Steady state temperature is calculated
 // LBFD is number of steps solving transient LB and temp.
-#define TLBM_INI_DUMP_STEP			(200000)
-#define NUM_LB_INI_STEPS			(4000000)
-#define NUM_LBFD_INI_STEPS			(10000000)
+#define TLBM_INI_DUMP_STEP			(100000)
+#define NUM_LB_INI_STEPS			(1000000)
+#define NUM_LBFD_INI_STEPS			(20000000)
 
 
 // Perturb parameters
@@ -207,7 +207,7 @@
 /////////////////////////////////////////////////////////////
 #define USE_THERMAL_SOLVER			true
 #define CALC_NUSSELT				false
-#define SOLVE_SS_TEMP               false
+#define SOLVE_SS_TEMP               true
 #define CHT_SOURCE_CORRECTION		true
 
 
@@ -219,7 +219,7 @@
 #define LBT_ACTUAL_TEMP_MAX			(400.+273.)
 
 //Wall Temperature
-#define TFD_INI_TEMP		1.9
+#define TFD_INI_TEMP		0.5
 #define TFD_X_IN			2.0
 #define TFD_WALL			1.0
 
@@ -434,29 +434,37 @@
 
 #ifndef IN_KERNEL_IBB
 	#define C_BOUND					0x0000 //just a placeholder. Not actually used
-	#define M_SOLID_NODE			0x0001
-	#define M_FLUID_NODE			0x0002
-	#define M0_SOLID_NODE			0x0004
-	#define M0_FLUID_NODE			0x0008
-	#define SOLID_BOUNDARY_NODE		0x0010
-	#define SOLID_BOUNDARY_NODE0	0x0020	// Solid boundary node in unfouled domain
-	#define NESW_BOUNDARY_NODE0		0x0040  // NESW_BOUNDARY_NODE in unfouled domain
-	#define BOUNDARY_NODE0			0x0080  // BOUNDARY_NODE in unfouled domain
+	#define M_SOLID_NODE			0x0001 // 0000 0000 0000 0001
+	#define M_FLUID_NODE			0x0002 // 0000 0000 0000 0010
+	#define M0_SOLID_NODE			0x0004 // 0000 0000 0000 0100
+	#define M0_FLUID_NODE			0x0008 // 0000 0000 0000 1000
+	#define SOLID_BOUNDARY_NODE		0x0010 // 0000 0000 0001 0000
+	#define SOLID_BOUNDARY_NODE0	0x0020 // 0000 0000 0010 0000
+										   // Solid boundary node in unfouled domain
+	#define NESW_BOUNDARY_NODE0		0x0040 // 0000 0000 0100 0000
+										   // NESW_BOUNDARY_NODE in unfouled domain
+	#define BOUNDARY_NODE0			0x0080 // 0000 0000 1000 0000
+										   // BOUNDARY_NODE in unfouled domain
 
-	#define E_BOUND					0x0100
-	#define W_BOUND					0x0200
-	#define N_BOUND					0x0400
-	#define S_BOUND					0x0800
-	#define NE_BOUND				0x1000
-	#define SW_BOUND				0x2000
-	#define SE_BOUND				0x4000
-	#define NW_BOUND				0x8000
+	#define E_BOUND					0x0100 // 0000 0001 0000 0000
+	#define W_BOUND					0x0200 // 0000 0010 0000 0000
+	#define N_BOUND					0x0400 // 0000 0100 0000 0000
+	#define S_BOUND					0x0800 // 0000 1000 0000 0000
+	#define NE_BOUND				0x1000 // 0001 0000 0000 0000
+	#define SW_BOUND				0x2000 // 0010 0000 0000 0000
+	#define SE_BOUND				0x4000 // 0100 0000 0000 0000
+	#define NW_BOUND				0x8000 // 1000 0000 0000 0000
 	
-	#define M_FOUL_NODE				0x0009  // M0_FLUID_NODE | M_SOLID_NODE
-	#define NESW_BOUNDARY_NODE		0x0F00  // E_BOUND | W_BOUND | N_BOUND | S_BOUND
-	#define FD_BOUNDARY_NODE		0x0F10	//SOLID_BOUNDARY_NODE | NESW_BOUNDARY_NODE
-	#define BOUNDARY_NODE			0xFF00  // E_BOUND | W_BOUND | ... | NW_BOUND
-	#define FD_BOUNDARY_NODE0		0x0060	//SOLID_BOUNDARY_NODE0 | NESW_BOUNDARY_NODE0
+	#define M_FOUL_NODE				0x0009 // 0000 0000 0000 1001
+										   // M0_FLUID_NODE | M_SOLID_NODE
+	#define NESW_BOUNDARY_NODE		0x0F00 // 0000 1111 0000 0000
+										   // E_BOUND | W_BOUND | N_BOUND | S_BOUND
+	#define FD_BOUNDARY_NODE		0x0F10 // 0000 1111 0001 0000
+										   // SOLID_BOUNDARY_NODE | NESW_BOUNDARY_NODE
+	#define BOUNDARY_NODE			0xFF00 // 1111 1111 0000 0000
+										   // E_BOUND | W_BOUND | ... | NW_BOUND
+	#define FD_BOUNDARY_NODE0		0x0060 // 0000 0000 0110 0000
+										   // SOLID_BOUNDARY_NODE0 | NESW_BOUNDARY_NODE0
 
 	
 #else
@@ -585,13 +593,14 @@
 #define ERROR_INITIALIZING_VFD								-119
 #define ERROR_INITIALIZING_VLB								-120
 #define ERROR_INITIALIZING_CSR_CLASS						-121
+#define ERROR_CREATING_REDUCER								-122
 
 
 #ifdef _DEBUG
 
-#ifndef DEBUG_TURBARR
-#define DEBUG_TURBARR
-#endif
+//#ifndef DEBUG_TURBARR
+//#define DEBUG_TURBARR
+//#endif
 
 #ifndef PRINT_ERROR_MESSAGES
 #define PRINT_ERROR_MESSAGES

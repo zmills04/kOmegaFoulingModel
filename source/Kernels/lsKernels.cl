@@ -206,13 +206,21 @@ int bcFindIntersectionLS(double* dist, int *dir, double2 vL0, double2 *vLd,
 {
 	// Calculate distance between vL0 and intersection
 	double den = dot(vN, *vLd);
+	
+	// if perpendicular, will not cross so return 0 (false)
 	if (den == 0.)
 		return 0;
 
+	// vN is pointing away from BL, vLd is pointing away from node,
+	// so if den < 0, vLd is pointing toward BL and we should continue
+	// to test that distribution direction
+	// if den > 0, vLd is pointing away from BL, so we should test opposite
+	// distribution direction.
 	if (den > 0.)
 	{
 		*dir = RevDir[*dir];
-		*vLd = -(*vLd);
+		*vLd *= -1.0;
+		den *= -1.0;
 	}
 
 	*dist = dot(vN, (vC0 - vL0)) / den;
@@ -300,11 +308,12 @@ void updateBoundaryNodes(__global ushort* __restrict__ BL_P01ind,
 		((blind.x - TR_X_IND_START) + (FULLSIZEX_TR_PADDED)* blind.y) : -1;
 
 	int2 vCmin = min2(vC0, vC1), vCmax = max2(vC0, vC1);
-
+	//vCmin -= 1;
+	//vCmax += 1;
 	if (vCmin.x < 0) vCmin.x = 0;
 	if (vCmin.x >= CHANNEL_LENGTH) return;
 	if (vCmax.x < 0) return;
-	if (vCmax.x >= CHANNEL_LENGTH) vCmax.x = CHANNEL_LENGTH;
+	if (vCmax.x >= CHANNEL_LENGTH) vCmax.x = CHANNEL_LENGTH-1;
 
 	if (vCmin.y < 0) vCmin.y = 0;
 	if (vCmin.y >= CHANNEL_HEIGHT) return;
@@ -507,11 +516,12 @@ void updateIBBOnly(__global double2* C,
 
 
 	int2 vCmin = min2(vC0, vC1), vCmax = max2(vC0, vC1);
-
+	//vCmin -= 1;
+	//vCmax += 1;
 	if (vCmin.x < 0) vCmin.x = 0;
 	if (vCmin.x >= CHANNEL_LENGTH) return;
 	if (vCmax.x < 0) return;
-	if (vCmax.x >= CHANNEL_LENGTH) vCmax.x = CHANNEL_LENGTH;
+	if (vCmax.x >= CHANNEL_LENGTH) vCmax.x = CHANNEL_LENGTH-1;
 
 	if (vCmin.y < 0) vCmin.y = 0;
 	if (vCmin.y >= CHANNEL_HEIGHT) return;
@@ -543,8 +553,9 @@ void updateIBBOnly(__global double2* C,
 					//////////// Set required info for IBB.//////////
 
 					// get index of next element to add to array
-					int ibbind = min(atomic_add(&ibbIndCount[0], 1), ibbArrSize);
-					ibbind = min(ibbind, ibbArrSize);
+					int ibbind = atomic_add(&ibbIndCount[0], 1);
+				
+					ibbind = min(ibbind, ibbArrSize-1);
 
 					ibbDistArr[ibbind] = dist;
 					ibbArr[ibbind] = ii0_1D + DIST_SIZE * (dir + 1);

@@ -13,22 +13,31 @@
 #include "StdAfx.h"
 #include <fstream>
 
-class Logger 
+class Logger
 {
 public:
 
-	static Logger* Instance() { return SetupInstance(true); }
-	static Logger* SetupInstance(bool restartFlag);
-	void openLogFile(bool restartFlag);
+	static Logger* Instance()
+	{
+		if (!m_pInstance)   // Only allow one instance of class to be generated.
+			m_pInstance = new Logger();
+
+		return m_pInstance;
+	}
+		
+	//static Logger* SetupInstance(bool restartFlag);
+	void iniLogger(bool restartFlag);
 	void writeToLogFile(std::string logMessage);
 	void closeLogFile(bool finishedSim = true);
+	void writePartialToLogFile(std::string logMessage);
+	//void iniLogFile(bool restartFlag)
 
 private:
 	std::string logName = "logFile.txt";
 	std::fstream logStream;
-	Logger(bool restartFlag) 
+	Logger() 
 	{
-		openLogFile(restartFlag);
+		//openLogFile(restartFlag);
 	};
 	~Logger()
 	{
@@ -40,7 +49,7 @@ private:
 	static Logger* m_pInstance;
 };
 
-#define LOGMESSAGE(mess_)	Logger::Instance()->writeToLogFile(mess_)
+
 
 
 

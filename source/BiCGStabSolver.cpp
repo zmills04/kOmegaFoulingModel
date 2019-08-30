@@ -235,16 +235,16 @@ void BiCGStabSolver::createOmegaDotSqr()
 	omegaDotSqr(numRedKer - 1).setArgument(5, &scalarInd);
 }
 
-void BiCGStabSolver::iniBuffer(cl_mem &buf_, const int size_, const std::string name_)
+void BiCGStabSolver::iniBuffer(cl_mem &buf_, const int size_, std::string name_)
 {
 	int status;
 	double zer = 0.;
 	buf_ = clCreateBuffer(*clEnv::instance()->getContext(), CL_MEM_READ_WRITE, sizeof(double) * size_, NULL, &status);
-	CHECK_ERROR_WITH_EXIT(status, 0, "Error creating " + name_ + " in BiCGStabSolver Class");
+	ERROR_CHECKING_OCL(status, "Error creating " + name_ + " in BiCGStabSolver Class", ERROR_CREATING_BICGSTAB_SOLVER);
 
 	status = clEnqueueFillBuffer(*clEnv::instance()->getIOqueue(), buf_, &zer,
 		sizeof(double), 0, sizeof(double)*size_, 0, NULL, NULL);
-	CHECK_ERROR_WITH_EXIT(status, 0, "Error filling " + name_ + " in BiCGStabSolver Class");
+	ERROR_CHECKING_OCL(status, "Error filling " + name_ + " in BiCGStabSolver Class", ERROR_CREATING_BICGSTAB_SOLVER);
 }
 
 // initializes all static variables
@@ -297,11 +297,11 @@ void BiCGStabSolver::getCSRMeta()
 
 	// Creating own buffer to store rowBlocks array in device memory, since the clsparse object is temporary
 	rowBlocks = clCreateBuffer(*clEnv::instance()->getContext(), CL_MEM_READ_WRITE, rowBlockSize*sizeof(cl_ulong), NULL, &status);
-	CHECK_ERROR_WITH_EXIT(status, 0, "error creating rowBlocks buffer in BiCGStab");
+	ERROR_CHECKING_OCL(status, "error creating rowBlocks buffer in BiCGStab", ERROR_CREATING_BICGSTAB_SOLVER);
 
 	// copying data into new rowBlocks buffer. Now clsparse objects are unneeded.
 	status = clEnqueueCopyBuffer(*clEnv::instance()->getIOqueue(), meta_ptr->rowBlocks(), rowBlocks, 0, 0, rowBlockSize*sizeof(cl_ulong), 0, NULL, NULL);
-	CHECK_ERROR_WITH_EXIT(status, 0, "error copying rowBlocks into BiCGStab class buffer object");
+	ERROR_CHECKING_OCL(status, "error copying rowBlocks into BiCGStab class buffer object", ERROR_CREATING_BICGSTAB_SOLVER);
 
 	// just to ensure that meta owned buffer is freed
 	meta_ptr->clear();
@@ -325,24 +325,32 @@ void BiCGStabSolver::CreateSolver(Array2Dd *macro_, CSR_Inds *inds_, cl_command_
 	relTol = reltol_;
 	absTol = abstol_;
 
+
 	std::string Aname = Name + "_Amat";
 	std::string bname = Name + "_bVec";
 	std::string xname = Name + "_xVec";
-	std::string ianame = Name + "_IA";
-	std::string janame = Name + "_JA";
-	std::string raname = Name + "_RA";
 	std::string scalarname = Name + "_Scalar";
 
-	Inds->IA.setName(ianame);
-	Inds->JA.setName(janame);
-	Inds->RA.setName(raname);
+	// Only want to call these once when a CSR_Inds instance is shared
+	// between BiCGStabSolver instances
+	if (!(Inds->iniFlag))
+	{
+		std::string ianame = Name + "_IA";
+		std::string janame = Name + "_JA";
+		std::string raname = Name + "_RA";
 
-	Inds->allocate_buffers(*clEnv::instance()->getContext());
-	Inds->copy_RA_to_device(clEnv::instance()->getIOqueue());
-	Inds->copy_to_device(clEnv::instance()->getIOqueue());
+		Inds->IA.setName(ianame);
+		Inds->JA.setName(janame);
+		Inds->RA.setName(raname);
 
+		Inds->allocate_buffers(*clEnv::instance()->getContext());
+		Inds->copy_RA_to_device(clEnv::instance()->getIOqueue());
+		Inds->copy_to_device(clEnv::instance()->getIOqueue());
+		Inds->iniFlag = true;
+	}
 	Amat.zeros(Inds->nnz());
 	Amat.setName(Aname);
+	fillSolidBoundaryNodes();
 	
 	Amat.allocate_buffer_w_copy(CL_MEM_READ_WRITE);
 	scalarBuf.setName(scalarname);
@@ -374,6 +382,20 @@ void BiCGStabSolver::CreateSolver(Array2Dd *macro_, CSR_Inds *inds_, cl_command_
 	iniCSRMVKernels();
 	iniAXPBYKernels();
 
+}
+
+void BiCGStabSolver::fillSolidBoundaryNodes()
+{
+	for (int i = 0; i < Inds->Xsize; i++)
+	{
+		for (int j = 0; j < Inds->Ysize; j++)
+		{
+			if (Inds->testSolidBoundaryNode(i, j))
+			{
+				Amat(Inds->getInd(i, j, CSR_Inds::C)) = 1.;
+			}
+		}
+	}
 }
 
 void BiCGStabSolver::runReduce(RedKernelList &redlist_, cl_command_queue* que_, int num_wait,

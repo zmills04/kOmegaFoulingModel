@@ -4,6 +4,9 @@ ParamsName: 1
 nX: !!int 2000
 nY: !!int 204
 Pipe Radius: !!float 1.00000000e+002
+Wavy Start Loc: !!int 200
+Period Length: !!int 200
+Num Periods: !!int 5
 
 --- # LS Parameters
 ParamsName: 5

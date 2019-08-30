@@ -110,19 +110,19 @@ void ReduceGenerator::iniDeviceMemory(const int num_red_steps, cl_mem** red_buf_
 	double zer = 0.;
 	redBufTemp[0] = clCreateBuffer(*context, CL_MEM_READ_WRITE,
 		sizeof(double) * intermediateSize1, NULL, &status);
-	CHECK_ERROR_WITH_EXIT(status, 0, "Error creating intermediate buffer 1");
+	ERROR_CHECKING_OCL(status, "Error creating intermediate buffer 1", ERROR_CREATING_REDUCER);
 		
 	status = clEnqueueFillBuffer(*ioQue, redBufTemp[0], &zer,
 		sizeof(double), 0, sizeof(double)*intermediateSize1, 0, NULL, NULL);
-	CHECK_ERROR_WITH_EXIT(status, 0, "Error filling intermediate buffer 1");
+	ERROR_CHECKING_OCL(status, "Error filling intermediate buffer 1", ERROR_CREATING_REDUCER);
 
 	redBufTemp[1] = clCreateBuffer(*context, CL_MEM_READ_WRITE,
 		sizeof(double) * intermediateSize2, NULL, &status);
-	CHECK_ERROR_WITH_EXIT(status, 0, "Error creating intermediate buffer number 2");
+	ERROR_CHECKING_OCL(status, "Error creating intermediate buffer number 2", ERROR_CREATING_REDUCER);
 
 	status = clEnqueueFillBuffer(*ioQue, redBufTemp[1], &zer,
 		sizeof(double), 0, sizeof(double)*intermediateSize2, 0, NULL, NULL);
-	CHECK_ERROR_WITH_EXIT(status, 0, "Error filling intermediate buffer 2");
+	ERROR_CHECKING_OCL(status, "Error filling intermediate buffer 2", ERROR_CREATING_REDUCER);
 
 	
 	*red_buf_ = redBufTemp;
@@ -438,20 +438,20 @@ void ReduceGenerator::callIniKernels()
 	{
 		int status;
 		status = it->kerAdd->createKernel(&program, it->kerName);
-		CHECK_ERROR_WITH_EXIT(status, 0, "Error creating kernel " + n.kerName);
+		ERROR_CHECKING_OCL(status, "Error creating kernel " + it->kerName, ERROR_CREATING_REDUCER);
 		
 		for (int i = 0; i < it->numBuffer; i++)
 		{
 			status = it->kerAdd->setArgument(it->bufInds[i], it->bufAdd[i]);
-			CHECK_ERROR_WITH_EXIT(status, 0, "Error setting index " + std::to_string(n.bufInds[i]) +
-				" to kernel " + n.kerName);
+			ERROR_CHECKING_OCL(status, "Error setting index " + std::to_string(it->bufInds[i]) +
+				" to kernel " + it->kerName, ERROR_CREATING_REDUCER);
 		}
 		for (int i = 1; i <= it->numLocalBuf; i++)
 		{
 			status = it->kerAdd->setLocalMem(it->bufInds[it->numBuffer - 1] + i,
 				getVarTypeSize(it->vType)*it->localBufSize);
-			CHECK_ERROR_WITH_EXIT(status, 0, "Error setting local buffer at index " +
-				std::to_string(n.bufInds[i]) + " to kernel " + n.kerName);
+			ERROR_CHECKING_OCL(status, "Error setting local buffer at index " +
+				std::to_string(it->bufInds[i]) + " to kernel " + it->kerName, ERROR_CREATING_REDUCER);
 		}
 	}
 }

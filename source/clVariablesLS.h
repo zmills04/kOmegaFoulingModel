@@ -13,6 +13,38 @@
 #include "Kernels.h"
 #include "Reducer.h"
 
+///////////////////////////////////////////////////////////////////////
+/////////////////////                           ///////////////////////
+/////////////////////    CURRENT DEBUG STATE    ///////////////////////
+/////////////////////                           ///////////////////////
+///////////////////////////////////////////////////////////////////////
+
+// Straight Channel:
+//		Initialization: Initialization of all arrays except for those 
+//		associated with shear stress have been checked to ensure their
+//		correct initialization.
+//		Run: N/A (Nothing changes during run. Only FL update step)
+//		FL update: Nothing tested/checked yet
+
+// Wavy Channel:
+//		Initialization: Nothing tested/checked yet
+//		Run: N/A (Nothing changes during run. Only FL update step)
+//		FL update: Nothing tested/checked yet
+
+// Other:
+//	
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 // TODO: Combine all arrays containing node information, to reduce to as few
@@ -32,18 +64,15 @@ public:
 	typedef NTYPE_TYPE			nTypeType;
 	typedef Array2D<nTypeType>	nTypeArrayType;	// needs to be into to store all bitfields
 
-
-
-
 		// Func Pointer for calling loadParams
 	std::function<void(void)> loadParamsPtr;
 
 	clVariablesLS() : BL("lsbl"), Masses("lsmasses"), C0("lsc0"), C("lsc"),
-		ibbArr(WORKGROUPSIZE_IBB*2,"ibbArr", WORKGROUPSIZE_IBB, 3), nType("nType"),
+		ibbArr(WORKGROUPSIZE_IBB*16,"ibbArr", WORKGROUPSIZE_IBB, 3), nType("nType"),
 		ssArr(WORKGROUPSIZE_TR_SHEAR * 2, "ssArr", WORKGROUPSIZE_TR_SHEAR, 3),
 		dXArr("dXArr"), dXArr0("dXArr0"), bFlag("bFlag"), ssArrIndMap("ssIndMap"),
-		lsMap("lsMap"),	ibbDistArr(WORKGROUPSIZE_IBB * 16, "ibbArr", WORKGROUPSIZE_IBB, 3),
-		nTypePrev("nTypePrev")
+		lsMap("lsMap"),	ibbDistArr(WORKGROUPSIZE_IBB * 16, "ibbArrDist", WORKGROUPSIZE_IBB, 3),
+		nTypePrev("nTypePrev"), ssArrInds("ssArrInds")
 	{
 		loadParamsPtr = std::bind(&clVariablesLS::loadParams, this);
 	};
@@ -473,6 +502,12 @@ public:
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////                Display Functions              ///////////////
 	////////////////////////////////////////////////////////////////////////////
+
+
+	void updateIBBOnly_Test(int i);
+	int bcFindIntersectionLS(double* dist, int* dir, cl_double2 vL0, cl_double2* vLd,
+		cl_double2 vC0, cl_double2 vC1, double vP10Length, cl_double2 vN);
+
 
 };
 

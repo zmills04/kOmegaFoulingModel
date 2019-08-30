@@ -13,6 +13,28 @@
 #include "BiCGStabSolver.h"
 #include "kOmega.h"
 
+///////////////////////////////////////////////////////////////////////
+/////////////////////                           ///////////////////////
+/////////////////////    CURRENT DEBUG STATE    ///////////////////////
+/////////////////////                           ///////////////////////
+///////////////////////////////////////////////////////////////////////
+
+// Straight Channel:
+//		Initialization: Initialization of all arrays except for those 
+//		associated with shear stress have been checked to ensure their
+//		correct initialization.
+//		Run: N/A (Nothing changes during run. Only FL update step)
+//		FL update: Nothing tested/checked yet
+
+// Wavy Channel:
+//		Initialization: Nothing tested/checked yet
+//		Run: N/A (Nothing changes during run. Only FL update step)
+//		FL update: Nothing tested/checked yet
+
+// Other:
+//	
+
+
 
 
 class clVariablesLB
@@ -34,7 +56,7 @@ public:
 	
 	clVariablesLB() : FA("FA"), FB("FB"), Ro_array("lbro"),
 		Ux_array("lbux"), Uy_array("lbuy"), Inlet_Vel("inletVels"),
-		lbOut("lbOut")//, NodeType("nodeType")
+		lbOut("lbOut")//, IBB_loc("ibbLoc")//, IBB_coeff("ibbCoeff")//, NodeType("nodeType")
 	{
 		loadParamsPtr = std::bind(&clVariablesLB::loadParams, this);
 	};
@@ -92,8 +114,8 @@ public:
 					   // a given direction
 
 	// IBB stuff for lbm not currently implemented
-	Array1Dv2i IBB_loc;		// locations used in IBB step
-	Array1Dv2d IBB_coeff;	// Coefficients used in IBB step
+	//Array1Dv2i IBB_loc;		// locations used in IBB step
+	//Array1Dv2d IBB_coeff;	// Coefficients used in IBB step
 	
 	Array1Dd Inlet_Vel;	// Used by inlet velocity BC (not implemented)
 	
@@ -257,7 +279,7 @@ public:
 	void save2file();
 
 	// Writes additional data to file for debugging purposes
-	void saveDebug(int saveFl);
+	void saveDebug(int saveFl = kOmega::lbDbgSave);
 
 	// Saves parameters to yaml file used for restarting runs
 	void saveParams();

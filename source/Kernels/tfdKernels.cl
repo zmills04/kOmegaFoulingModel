@@ -158,8 +158,7 @@ __kernel void Update_T_Coeffs_Implicit(__global int* __restrict__ IndArr,
 	double dX2e = 2. / (dx_e * dx_c), dX2w = 2. / (dx_w * dx_c), dX2c = -2. / (dx_e * dx_w);
 	double dY2n = 2. / (dy_n * dy_c), dY2s = 2. / (dy_s * dy_c), dY2c = -2. / (dy_n * dy_s);
 
-	int gidw = ((i > 0) ? -1 : (CHANNEL_LENGTH - 1)) + gid;
-	int gide = ((i < CHANNEL_LENGTH - 1) ? 1 : (1-CHANNEL_LENGTH_FULL)) + gid;
+
 
 	
 
@@ -176,8 +175,10 @@ __kernel void Update_T_Coeffs_Implicit(__global int* __restrict__ IndArr,
 	double Dsource = Jx * dRhoCp[gid * 2] + Jy * dRhoCp[gid * 2 + 1];
 
 	#ifdef USING_KOMEGA_SOLVER
-		Jx -= dAlpha[gid * 2] + PR_TURB_NUMBER_INV * (dXe * iNut[gide] + dXw * iNut[gidw]) + dXc * alphatVal;
-		Jy -= dAlpha[gid * 2+1] + PR_TURB_NUMBER_INV * (dYn * iNut[gid+CHANNEL_LENGTH_FULL] + dYs * iNut[gid-CHANNEL_LENGTH_FULL]) + dYs * alphatVal;
+		int gidw = ((i > 0) ? -1 : (CHANNEL_LENGTH - 1)) + gid;
+		int gide = ((i < CHANNEL_LENGTH - 1) ? 1 : (1 - CHANNEL_LENGTH_FULL)) + gid;
+		Jx -= dAlpha[gid * 2] + PR_TURB_NUMBER_INV * (dXe * iNut[gide] + dXw * iNut[gidw] + dXc * alphatVal);
+		Jy -= dAlpha[gid * 2+1] + PR_TURB_NUMBER_INV * (dYn * iNut[gid+CHANNEL_LENGTH_FULL] + dYs * iNut[gid-CHANNEL_LENGTH_FULL] + dYc * alphatVal);
 		alphaVal += alphatVal;
 	#else
 		Jx -= dAlpha[gid * 2];
@@ -188,9 +189,11 @@ __kernel void Update_T_Coeffs_Implicit(__global int* __restrict__ IndArr,
 	double Ccoeff = 1. + DTFD*(Jx*dXc + Jy*dYc - alphaVal*(dX2c+dY2c) - min(Dsource,0.));
 #else
 	#ifdef USING_KOMEGA_SOLVER
-		double Jx = ivx[gid] - (dAlpha[gid * 2] + PR_TURB_NUMBER_INV * (dXe * iNut[gide] + dXw * iNut[gidw]) + dXc * alphatVal);
+		int gidw = ((i > 0) ? -1 : (CHANNEL_LENGTH - 1)) + gid;
+		int gide = ((i < CHANNEL_LENGTH - 1) ? 1 : (1 - CHANNEL_LENGTH_FULL)) + gid;
+		double Jx = ivx[gid] - (dAlpha[gid * 2] + PR_TURB_NUMBER_INV * (dXe * iNut[gide] + dXw * iNut[gidw] + dXc * alphatVal));
 		double Jy = ivy[gid] - (dAlpha[gid * 2 + 1] + PR_TURB_NUMBER_INV * (dYn * iNut[gid + CHANNEL_LENGTH_FULL] + 
-			dYs * iNut[gid - CHANNEL_LENGTH_FULL]) + dYs * alphatVal);
+			dYs * iNut[gid - CHANNEL_LENGTH_FULL] + dYc * alphatVal));
 		alphaVal += alphatVal;
 	#else
 		double Jx = ivx[gid] - dAlpha[gid * 2];
@@ -246,8 +249,7 @@ __kernel void Steady_State_T_Coeffs(__global int* __restrict__ IndArr,
 	__global double* __restrict__ dRhoCp,
 #endif
 	__global double* __restrict__ ivx,
-	__global double* __restrict__ ivy,
-	double DTFD)
+	__global double* __restrict__ ivy)
 {
 	int i = get_global_id(0);
 	int j = get_global_id(1);
@@ -264,6 +266,7 @@ __kernel void Steady_State_T_Coeffs(__global int* __restrict__ IndArr,
 	if (ntype & M0_SOLID_NODE)
 		return;
 
+
 	double dx_e = dXcur[gid], dx_w = dXcur[gid + DIST_SIZE], dx_c = dx_e + dx_w;
 	double dy_n = dXcur[gid + DIST_SIZE * 2], dy_s = dXcur[gid + DIST_SIZE * 3], dy_c = dy_n + dy_s;
 
@@ -273,49 +276,13 @@ __kernel void Steady_State_T_Coeffs(__global int* __restrict__ IndArr,
 	double dX2e = 2. / (dx_e * dx_c), dX2w = 2. / (dx_w * dx_c), dX2c = -2. / (dx_e * dx_w);
 	double dY2n = 2. / (dy_n * dy_c), dY2s = 2. / (dy_s * dy_c), dY2c = -2. / (dy_n * dy_s);
 
-	int gidw = ((i > 0) ? -1 : (CHANNEL_LENGTH - 1)) + gid;
-	int gide = ((i < CHANNEL_LENGTH - 1) ? 1 : (1 - CHANNEL_LENGTH_FULL)) + gid;
+	double alphaVal = LB_ALPHA_FLUID;
 
-
-
-	double alphaVal = (ntype & M_SOLID_NODE) ? LB_ALPHA_FOUL : LB_ALPHA_FLUID;
-
-
-#ifdef USING_KOMEGA_SOLVER
-	double alphatVal = iNut[gid] * PR_TURB_NUMBER_INV;
-#endif
-
-#ifdef USING_CHT_SOURCE_CORRECTION
 	double Jx = ivx[gid];
 	double Jy = ivy[gid];
 
-	double Dsource = Jx * dRhoCp[gid * 2] + Jy * dRhoCp[gid * 2 + 1];
-
-#ifdef USING_KOMEGA_SOLVER
-	Jx -= dAlpha[gid * 2] + PR_TURB_NUMBER_INV * (dXe * iNut[gide] + dXw * iNut[gidw]) + dXc * alphatVal;
-	Jy -= dAlpha[gid * 2 + 1] + PR_TURB_NUMBER_INV * (dYn * iNut[gid + CHANNEL_LENGTH_FULL] + dYs * iNut[gid - CHANNEL_LENGTH_FULL]) + dYs * alphatVal;
-	alphaVal += alphatVal;
-#else
-	Jx -= dAlpha[gid * 2];
-	Jy -= dAlpha[gid * 2 + 1];
-#endif
-
-	double Tsrc = Temp[gid] * (max(Dsource, 0.));
-	double Ccoeff = DTFD * (Jx * dXc + Jy * dYc - alphaVal * (dX2c + dY2c) - min(Dsource, 0.));
-#else
-#ifdef USING_KOMEGA_SOLVER
-	double Jx = ivx[gid] - (dAlpha[gid * 2] + PR_TURB_NUMBER_INV * (dXe * iNut[gide] + dXw * iNut[gidw]) + dXc * alphatVal);
-	double Jy = ivy[gid] - (dAlpha[gid * 2 + 1] + PR_TURB_NUMBER_INV * (dYn * iNut[gid + CHANNEL_LENGTH_FULL] +
-		dYs * iNut[gid - CHANNEL_LENGTH_FULL]) + dYs * alphatVal);
-	alphaVal += alphatVal;
-#else
-	double Jx = ivx[gid] - dAlpha[gid * 2];
-	double Jy = ivy[gid] - dAlpha[gid * 2 + 1];
-#endif
-
 	double Tsrc = 0.;
-	double Ccoeff = DTFD * (Jx * dXc + Jy * dYc - alphaVal * (dX2c + dY2c));
-#endif
+	double Ccoeff = (Jx * dXc + Jy * dYc - alphaVal * (dX2c + dY2c));
 
 	// No BCs to handle for south coefficient, so calculate and set element in A
 	// directly
@@ -346,6 +313,130 @@ __kernel void Steady_State_T_Coeffs(__global int* __restrict__ IndArr,
 	// Set corresponding element in b vector.
 	bvec[gid] = Tsrc;
 }
+
+
+
+//__kernel void Steady_State_T_Coeffs(__global int* __restrict__ IndArr,
+//	__global NTYPE_TYPE* __restrict__ Map,
+//	__global double* __restrict__ dXcur,
+//	__global double* __restrict__ Amat,
+//	__global double* __restrict__ bvec,
+//	__global double* __restrict__ Temp,
+//	__global double* __restrict__ dAlpha,
+//#ifdef USING_KOMEGA_SOLVER
+//	__global double* __restrict__ iNut,
+//#endif
+//#ifdef USING_CHT_SOURCE_CORRECTION
+//	__global double* __restrict__ dRhoCp,
+//#endif
+//	__global double* __restrict__ ivx,
+//	__global double* __restrict__ ivy)
+//{
+//	int i = get_global_id(0);
+//	int j = get_global_id(1);
+//	if (i >= CHANNEL_LENGTH)
+//		return;
+//
+//	int gid = i + CHANNEL_LENGTH_FULL * j;
+//
+//	NTYPE_TYPE ntype = Map[gid];
+//
+//	// return if inside wall of channel (not fouling layer)
+//	// solid boundary nodes do not need coefficients updated,
+//	// so no need to handle these nodes here.
+//	if (ntype & M0_SOLID_NODE)
+//		return;
+//
+//	double dx_e = dXcur[gid], dx_w = dXcur[gid + DIST_SIZE], dx_c = dx_e + dx_w;
+//	double dy_n = dXcur[gid + DIST_SIZE * 2], dy_s = dXcur[gid + DIST_SIZE * 3], dy_c = dy_n + dy_s;
+//
+//	double dXe = dx_w / (dx_e * dx_c), dXw = -dx_e / (dx_w * dx_c), dXc = (dx_e - dx_w) / (dx_e * dx_w);
+//	double dYn = dy_s / (dy_n * dy_c), dYs = -dy_n / (dy_s * dy_c), dYc = (dy_n - dy_s) / (dy_n * dy_s);
+//
+//	double dX2e = 2. / (dx_e * dx_c), dX2w = 2. / (dx_w * dx_c), dX2c = -2. / (dx_e * dx_w);
+//	double dY2n = 2. / (dy_n * dy_c), dY2s = 2. / (dy_s * dy_c), dY2c = -2. / (dy_n * dy_s);
+//
+//	int i_w = (i > 0) ? i - 1 : (CHANNEL_LENGTH - 1);
+//	int i_e = (i >= CHANNEL_LENGTH) ? 0 : i + 1;
+//	int gidw = i_w + CHANNEL_LENGTH_FULL * j;
+//	int gide = i_e + CHANNEL_LENGTH_FULL * j;
+//
+//
+//
+//	double alphaVal = LB_ALPHA_FLUID;
+//
+//
+//#ifdef USING_KOMEGA_SOLVER
+//	double alphatVal = iNut[gid] * PR_TURB_NUMBER_INV;
+//#endif
+//
+//
+//
+//#ifdef USING_CHT_SOURCE_CORRECTION
+//	double Jx = ivx[gid];
+//	double Jy = ivy[gid];
+//
+//	double Dsource = Jx * dRhoCp[gid * 2] + Jy * dRhoCp[gid * 2 + 1];
+//
+//#ifdef USING_KOMEGA_SOLVER
+//	Jx -= dAlpha[gid * 2] + PR_TURB_NUMBER_INV * (dXe * iNut[gide] + dXw * iNut[gidw]) + dXc * alphatVal;
+//	Jy -= dAlpha[gid * 2 + 1] + PR_TURB_NUMBER_INV * (dYn * iNut[gid + CHANNEL_LENGTH_FULL] + dYs * iNut[gid - CHANNEL_LENGTH_FULL]) + dYs * alphatVal;
+//	alphaVal += alphatVal;
+//#else
+//	Jx -= dAlpha[gid * 2];
+//	Jy -= dAlpha[gid * 2 + 1];
+//#endif
+//
+//	double Tsrc = Temp[gid] * (max(Dsource, 0.));
+//	double Ccoeff = (Jx * dXc + Jy * dYc - alphaVal * (dX2c + dY2c) - min(Dsource, 0.));
+//
+//#else
+//
+//#ifdef USING_KOMEGA_SOLVER
+//	double Jx = ivx[gid] - (dAlpha[gid * 2] + PR_TURB_NUMBER_INV * (dXe * iNut[gide] + dXw * iNut[gidw]) + dXc * alphatVal);
+//	double Jy = ivy[gid] - (dAlpha[gid * 2 + 1] + PR_TURB_NUMBER_INV * (dYn * iNut[gid + CHANNEL_LENGTH_FULL] +
+//		dYs * iNut[gid - CHANNEL_LENGTH_FULL]) + dYs * alphatVal);
+//	alphaVal += alphatVal;
+//#else
+//	double Jx = ivx[gid] - dAlpha[gid * 2];
+//	double Jy = ivy[gid] - dAlpha[gid * 2 + 1];
+//#endif
+//
+//	double Tsrc = 0.;
+//	double Ccoeff = (Jx * dXc + Jy * dYc - alphaVal * (dX2c + dY2c));
+//#endif
+//
+//	// No BCs to handle for south coefficient, so calculate and set element in A
+//	// directly
+//	Amat[IndArr[gid + DIST_SIZE * 4]] = (Jy * dYs - alphaVal * dY2s);
+//
+//	// W coefficient is 0 for inlet nodes, so Wcoeff must be multiplied
+//	// by the inlet temperature and moved to the LHS of equation
+//	double Wcoeff = (Jx * dXw - alphaVal * dX2w);
+//	if (i > 0)
+//		Amat[IndArr[gid + DIST_SIZE * 2]] = Wcoeff;
+//	else
+//		Tsrc -= TFD_X_IN_VAL * Wcoeff;
+//
+//	// E coefficient is 0 for outlet nodes and Ecoeff is added to
+//	// Ccoeff to essentially set Temp of east node to temp of outlet node
+//	double Ecoeff = (Jx * dXe - alphaVal * dX2e);
+//	if (i < CHANNEL_LENGTH - 1)
+//		Amat[IndArr[gid + DIST_SIZE]] = Ecoeff;
+//	else
+//		Ccoeff += Ecoeff;
+//
+//	// Set C coefficient after checking to see if Ecoeff is added to it
+//	Amat[IndArr[gid]] = Ccoeff;
+//
+//	// North coefficient Same situation as S coefficient, so set directly
+//	Amat[IndArr[gid + DIST_SIZE * 3]] = (Jy * dYn - alphaVal * dY2n);
+//
+//	// Set corresponding element in b vector.
+//	bvec[gid] = Tsrc;
+//}
+
+
 
 //Old version of steady state coefficient kernel
 
@@ -430,7 +521,8 @@ __kernel void Steady_State_T_Coeffs(__global int* __restrict__ IndArr,
 /////////////////                                    /////////////////
 //////////////////////////////////////////////////////////////////////
 
-void calcAlphaRhoCpBtwNodes(const double del,
+// del initially = dXcurrent, divided by dx0 to get dXcur/dX0
+void calcAlphaRhoCpBtwNodes(double del, const double dx0,
 	const NTYPE_TYPE ntype1,
 	const NTYPE_TYPE ntype2,
 	double* alphaVal, double* rhoCpVal)
@@ -442,6 +534,16 @@ void calcAlphaRhoCpBtwNodes(const double del,
 	double k_n = (ntype2 & M_FLUID_NODE) ? K_AIR_LB : K_SOOT_LB;
 	double cp_n = (ntype2 & M_FLUID_NODE) ? CP_AIR_LB : CP_SOOT_LB;
 	double ro_n = (ntype2 & M_FLUID_NODE) ? RHO_AIR_LB : RHO_SOOT_LB;
+
+	// if very thin region of fouling layer, just use values based on node type
+	if ((del - dx0) < CEPS)
+	{
+		*rhoCpVal = ro_c * cp_c;
+		*alphaVal = k_c / *rhoCpVal;
+		return;
+	}
+
+	del /= dx0;
 
 	double coeffA = k_n * ro_c * cp_c;
 	double coeffB = k_n * ro_c * cp_n + k_n * ro_n * cp_c + k_c * ro_c * cp_c;
@@ -457,8 +559,8 @@ void calcAlphaRhoCpBtwNodes(const double del,
 }
 
 
-// Calculates the 
-void calcAlphaBtwNodes(const double del,
+// del initially = dXcurrent, divided by dx0 to get dXcur/dX0
+void calcAlphaBtwNodes(double del, const double dx0,
 	const NTYPE_TYPE ntype1,
 	const NTYPE_TYPE ntype2,
 	double* alphaVal)
@@ -471,6 +573,14 @@ void calcAlphaBtwNodes(const double del,
 	double cp_n = (ntype2 & M_FLUID_NODE) ? CP_AIR_LB : CP_SOOT_LB;
 	double ro_n = (ntype2 & M_FLUID_NODE) ? RHO_AIR_LB : RHO_SOOT_LB;
 
+	if ((del - dx0) < CEPS)
+	{
+		*alphaVal = k_c / ro_c * cp_c;
+		return;
+	}
+
+	del /= dx0;
+	
 	double coeffA = k_n * ro_c * cp_c;
 	double coeffB = k_n * ro_c * cp_n + k_n * ro_n * cp_c + k_c * ro_c * cp_c;
 	double coeffC = k_n * ro_n * cp_n + k_c * ro_c * cp_n + k_c * ro_n * cp_c;
@@ -516,14 +626,14 @@ __kernel void updateDerivativeArrays(__global NTYPE_TYPE* __restrict__ Map,
 #ifdef USING_CHT_SOURCE_CORRECTION
 	double rhoCp_e, rhoCp_w, rhoCp_n, rhoCp_s;
 
-	calcAlphaRhoCpBtwNodes(dX0Arr[gid] / dxe, ntype, Map[gide], &alpha_e, &rhoCp_e);
+	calcAlphaRhoCpBtwNodes(dxe, dX0Arr[gid], ntype, Map[gide], &alpha_e, &rhoCp_e);
 	
-	calcAlphaRhoCpBtwNodes(dX0Arr[gid + DIST_SIZE] / dxw, ntype, Map[gidw], &alpha_w, &rhoCp_w);
+	calcAlphaRhoCpBtwNodes(dxw, dX0Arr[gid + DIST_SIZE], ntype, Map[gidw], &alpha_w, &rhoCp_w);
 	
-	calcAlphaRhoCpBtwNodes(dX0Arr[gid + DIST_SIZE*2] / dyn, ntype,
+	calcAlphaRhoCpBtwNodes(dyn, dX0Arr[gid + DIST_SIZE*2], ntype,
 		Map[gid + CHANNEL_LENGTH_FULL], &alpha_n, &rhoCp_n);
 	
-	calcAlphaRhoCpBtwNodes(dX0Arr[gid + DIST_SIZE*3] / dys, ntype,
+	calcAlphaRhoCpBtwNodes(dys, dX0Arr[gid + DIST_SIZE*3], ntype,
 		Map[gid - CHANNEL_LENGTH_FULL], &alpha_s, &rhoCp_s);
 
 	double roCp_c = 0.25 * (rhoCp_e + rhoCp_w + rhoCp_n + rhoCp_s);
@@ -535,14 +645,14 @@ __kernel void updateDerivativeArrays(__global NTYPE_TYPE* __restrict__ Map,
 		2. * (dyn - dys) / (dyn * dys);
 
 #endif
-	calcAlphaBtwNodes(dX0Arr[gid] / dxe, ntype, Map[gide], &alpha_e);
+	calcAlphaBtwNodes(dxe, dX0Arr[gid], ntype, Map[gide], &alpha_e);
 
-	calcAlphaBtwNodes(dX0Arr[gid + DIST_SIZE] / dxw, ntype, Map[gidw], &alpha_w);
+	calcAlphaBtwNodes(dxw, dX0Arr[gid + DIST_SIZE], ntype, Map[gidw], &alpha_w);
 
-	calcAlphaBtwNodes(dX0Arr[gid + DIST_SIZE * 2] / dyn, ntype,
+	calcAlphaBtwNodes(dyn, dX0Arr[gid + DIST_SIZE * 2], ntype,
 		Map[gid + CHANNEL_LENGTH_FULL], &alpha_n);
 
-	calcAlphaBtwNodes(dX0Arr[gid + DIST_SIZE * 3] / dys, ntype,
+	calcAlphaBtwNodes(dys, dX0Arr[gid + DIST_SIZE * 3], ntype,
 		Map[gid - CHANNEL_LENGTH_FULL], &alpha_s);
 
 	double alpha_c = 0.25 * (alpha_e + alpha_w + alpha_n + alpha_s);

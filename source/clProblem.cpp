@@ -83,10 +83,12 @@ void clProblem::ini()
 	vfl.flSolverFlag = false;
 
 	loadRunParameters("load" SLASH YAML_PARAM_FILE);
-
+	LOGMESSAGE("Run parameters loaded");
 	outDir = OUTPUT_DIR;
 	MakeDir(outDir);
+	LOGMESSAGE("Output Directory Created");
 	setSourceDefines();
+	LOGMESSAGE("Source Defines Set");
 };
 
 
@@ -440,6 +442,14 @@ void clProblem::getSaveStepInfo(std::string varname_, unsigned int &starttime_,
 
 void clProblem::loadParams()
 {
+	RestartTime = p.getParameter("Current Time", 0);
+	if (RestartTime > 0)
+		restartRunFlag = true;
+	else
+		restartRunFlag = false;
+
+	Logger::Instance()->iniLogger(restartRunFlag);
+
 	DeviceID = p.getParameter<int>("Device ID", DEVICE_ID);
 	nX = p.getParameter<int>("nX");
 	nY = p.getParameter<int>("nY");
@@ -447,7 +457,7 @@ void clProblem::loadParams()
 
 	xWavyStart = p.getParameter("Wavy Start Loc", -1);
 	wavyPeriodLen = p.getParameter("Period Length", -1);
-	numWavyPeriods = p.getParameter("Num Wave Periods", -1);
+	numWavyPeriods = p.getParameter("Num Periods", -1);
 
 
 	nn = { { nX, nY } };
@@ -475,11 +485,7 @@ void clProblem::loadParams()
 	StopTime = STOP_TIME;
 #endif
 
-	RestartTime = p.getParameter("Current Time", 0);
-	if (RestartTime > 0)
-		restartRunFlag = true;
-	else
-		restartRunFlag = false;
+
 
 	trSteps = p.getParameter("TR Steps Per LB", TR_STEPS_PER_LB);
 	trSteps_wall = p.getParameter("TR Wall Steps Per LB", TR_STEPS_PER_LB_WALL);
@@ -593,15 +599,35 @@ void clProblem::loadRunParameters(std::string runparams_)
 	parseAndLoadParams(runparams_, trParamNum, vtr.loadParamsPtr);
 	parseAndLoadParams(runparams_, flParamNum, vfl.loadParamsPtr);
 
-	restartRunFlag &= vlb.restartRunFlag;
-	restartRunFlag &= vls.restartRunFlag;
+	if (restartRunFlag)
+	{
+		if (!vlb.restartRunFlag)
+		{
+			LOGMESSAGE("Failed to restart run due to vlb class");
+			restartRunFlag = false;
+		}
+		if (!vls.restartRunFlag)
+		{
+			LOGMESSAGE("Failed to restart run due to vls class");
+			restartRunFlag = false;
+		}
+		if (vfd.thermalSolverFlag && !vfd.restartRunFlag)
+		{
+			LOGMESSAGE("Failed to restart run due to vfd class");
+			restartRunFlag = false;
+		}
+		if (vtr.trSolverFlag && !vtr.restartRunFlag)
+		{
+			LOGMESSAGE("Failed to restart run due to vtr class");
+			restartRunFlag = false;
+		}
+		if (vfl.flSolverFlag && !vfl.restartRunFlag)
+		{
+			LOGMESSAGE("Failed to restart run due to vfl class");
+			restartRunFlag = false;
+		}
+	}
 
-	if (vfd.thermalSolverFlag)
-		restartRunFlag &= vfd.restartRunFlag;
-	if (vtr.trSolverFlag)
-		restartRunFlag &= vtr.restartRunFlag;
-	if (vfl.flSolverFlag)
-		restartRunFlag &= vfl.restartRunFlag;
 
 	if (!restartRunFlag)
 	{

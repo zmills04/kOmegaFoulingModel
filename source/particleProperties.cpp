@@ -142,11 +142,7 @@ void particleProperties::ini()
 	
 	// Copy arrays to device
 	//copyToDevice();
-
-#if _DEBUG
-	LOGMESSAGE("Initialized Particle Properties Class");
-#endif
-
+	LOGMESSAGE("particle property class within vtr initialized");
 }
 
 void particleProperties::loadParams()

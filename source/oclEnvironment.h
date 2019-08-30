@@ -12,6 +12,7 @@
 
 
 #include "StdAfx.h"
+#include "logger.h"
 
 
 #define IOQUEUE			*clEnv::instance()->getIOqueue()
@@ -84,12 +85,22 @@ public:
 	void iniOpenCL(int deviceid_, bool useOpenGL)
 	{
 		iniPlatform();
+		LOGMESSAGE("openCL platform initialized");
 		iniDevice((cl_uint)deviceid_);
+		LOGMESSAGE("Device number " + std::to_string(deviceid_) + " initialized");
 		if (!useOpenGL)
+		{
 			iniContext();
+			LOGMESSAGE("openCL context initialized");
+		}
 		else // GL implementation not working at the moment
+		{
 			iniCLGLContext();
+			LOGMESSAGE("openCL-GL context initialized");
+		}
 		iniQueues();
+		LOGMESSAGE("openCL queues initialized");
+
 	}
 
 	void iniCLGLContext();

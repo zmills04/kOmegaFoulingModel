@@ -133,6 +133,8 @@ void clVariablesFL::ini()
 	sourceGenerator::SourceInstance()->addIniFunction(createKerPtr, setArgsPtr);
 	if (saveOnStartFlag)
 		save2file();
+
+	LOGMESSAGE("vfl initialized");
 }
 
 void clVariablesFL::iniFoulI()

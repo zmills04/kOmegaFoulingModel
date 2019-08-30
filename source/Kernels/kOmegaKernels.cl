@@ -4,7 +4,7 @@
 
 
 
-__kernel void Update_kOmega_Diffusivities(__global int *__restrict__ map,
+__kernel void Update_kOmega_Diffusivities(__global NTYPE_TYPE *__restrict__ map,
 	__global double *__restrict__ iK,
 	__global double *__restrict__ iO,
 	__global double *__restrict__ iNut,
@@ -27,7 +27,7 @@ __kernel void Update_kOmega_Diffusivities(__global int *__restrict__ map,
 		return;
 
 	int gid = i + CHANNEL_LENGTH_FULL*j;
-	const int type = map[gid];
+	const NTYPE_TYPE type = map[gid];
 	if ((type & M_SOLID_NODE)) { return; }
 
 
@@ -194,6 +194,8 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int* __restrict__ IndArr,
 #else
 	, __global double* __restrict__ DebugArrs)
 #endif
+	//, __global double* __restrict__ kappaDebug,
+	//__global double* __restrict__ omegaDebug)
 {
 
 	int i = get_global_id(0);
@@ -298,17 +300,37 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int* __restrict__ IndArr,
 	double Ks = DTFD * (Jy_k * Ys_coeff - diffk * Ys2_coeff);
 	double Ksrc = kval + DTFD * Pk;
 
+	//if (ntype & NESW_BOUNDARY_NODE)
+	//{
+	//	int ssind_ = ssIndMap[gid];
+	//	if (ssind_ >= 0)
+	//	{
+	//		// get yplus value = sqrt(tau_wall/rho)*wall_distance/nu
+	//		double wallShearVal = fabs(wallShearArr[ssind_]);
+	//		if (wallShearVal > 0.0)
+	//		{
+	//			DTFD = 0.;
+	//			Sc = 0.;
+	//			// get yplus value = sqrt(tau_wall/rho)*wall_distance/nu
+	//			double fricVel = sqrt(wallShearVal / Rho);
+	//			double yplus = WallD[gid] * fricVel / MU_NUMBER;
+	//			double omegaVis = (6. * MU_NUMBER / 0.75) / pown(yplus, 2);
+	//			double omegaLog = (1. / (0.3 * KO_KAPPA)) * fricVel / yplus;
+	//			omegaval = sqrt(omegaVis * omegaVis + omegaLog * omegaLog);
+	//		}
+	//	}
+	//}
 	if (ntype & NESW_BOUNDARY_NODE)
 	{
 		DTFD = 0.;
 		Sc = 0.;
-		// get yplus value = sqrt(tau_wall/rho)*wall_distance/nu
-		double fricVel = sqrt(fabs(wallShearArr[ssIndMap[gid]]) / Rho);
-		double yplus = WallD[gid] * fricVel / MU_NUMBER;
-		double omegaVis = (6. * MU_NUMBER / 0.75) / pown(yplus,2);
-		double omegaLog = (1. / (0.3 * KO_KAPPA)) * fricVel / yplus;
+		/// get yplus value = y*0.09^(0.25)*sqrt(kappa)/nu
+		double yplus = WallD[gid];// *sqrt(kval)* KO_C_MU_0_25 / MU_NUMBER;
+		double omegaVis = (6. * MU_NUMBER / 0.075) / pown(yplus, 2);
+		double omegaLog = sqrt(kval) / (KO_C_MU_0_25 * KO_KAPPA * yplus);// (1. / (0.3 * KO_KAPPA))* fricVel / yplus;
 		omegaval = sqrt(omegaVis * omegaVis + omegaLog * omegaLog);
 	}
+
 
 	double Wc = 1. + DTFD * (Jx_omega * Xc_coeff + Jy_omega * Yc_coeff - diffo * (Xc2_coeff + Yc2_coeff)) - Sc;
 	double We = DTFD * (Jx_omega * Xe_coeff - diffo * Xe2_coeff);
@@ -316,6 +338,23 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int* __restrict__ IndArr,
 	double Wn = DTFD * (Jy_omega * Yn_coeff - diffo * Yn2_coeff);
 	double Ws = DTFD * (Jy_omega * Ys_coeff - diffo * Ys2_coeff);
 	double Wsrc = omegaval + DTFD * (gammaval * Pk);
+
+	//kappaDebug[gid] = Kc;
+	//kappaDebug[gid + DIST_SIZE] = Ke;
+	//kappaDebug[gid + DIST_SIZE * 2] = Kw;
+	//kappaDebug[gid + DIST_SIZE * 3] = Kn;
+	//kappaDebug[gid + DIST_SIZE * 4] = Ks;
+	//kappaDebug[gid + DIST_SIZE * 5] = Ksrc;
+
+	//omegaDebug[gid] = Wc;
+	//omegaDebug[gid + DIST_SIZE] = We;
+	//omegaDebug[gid + DIST_SIZE * 2] = Ww;
+	//omegaDebug[gid + DIST_SIZE * 3] = Wn;
+	//omegaDebug[gid + DIST_SIZE * 4] = Ws;
+	//omegaDebug[gid + DIST_SIZE * 5] = Wsrc;
+
+
+
 
 #ifdef DEBUG_ARRAYS
 	DBGARR(10, Kc);

@@ -71,46 +71,49 @@ void ini()
 {
 	staticBaseVar::setArrayContext(CLCONTEXT_REF);
 
-	omp_set_num_threads(OPENMP_NUMBER_THREADS);
-
 	p.ini();
+
+	omp_set_num_threads(OPENMP_NUMBER_THREADS);
+	LOGMESSAGE("Setting number of OpenMP threads to " + std::to_string(OPENMP_NUMBER_THREADS));
+
 	vls.ini();
-	//vls.ini_IBB_arrays();
 	vlb.ini();
 	vfd.ini();
 	vtr.ini();
 	vfl.ini();
 
-
-	//vlb.ini_IBB();
-
 	if (vfd.calcNuFlag)
 		vfd.iniNuCoeffs();
 
-#ifdef USE_OPENGL
-	vls.iniGL();
-	vtr.iniGL();
-#endif
-
 	sourceGenerator::SourceInstance()->buildSource();
+	LOGMESSAGE("OpenCL source built");
 	ReduceGenerator::ReduceInstance()->buildSource();
-	
+	LOGMESSAGE("Reducer source built");
+
 	// Meta data for all CSR matricies have been generated,
 	// clSparse objects can be deleted
 	BiCGStabGenerator::BiCGStabInstance()->deleteClSparseObjects(); 
 
-	if (!vlb.restartRunFlag)
-	{
-		vlb.getInitialFlow();
-	}
+	// If f distributions are not loaded, and kappa and omega are not
+	// loaded when using turbulence model, the initial flow must be
+	// solved for.
+	//if (!vlb.fLoadedFlag && (vlb.kOmegaClass.kOmegaSolverFlag &&
+	//	!vlb.kOmegaClass.kOmegaLoadedFlag))
+	//{
+	//	LOGMESSAGE("Solving for initial flow field");
+	//	vlb.getInitialFlow();
+	//	LOGMESSAGE("Initial flow field obtained");
+	//}
 
-	if (vfd.thermalSolverFlag && !vfd.restartRunFlag)
+	// if using temperature solver, and no initial temperature is
+	// loaded, must get initial temperature
+	if (vfd.thermalSolverFlag && !vfd.tempLoadedFlag)
 	{
+		LOGMESSAGE("Solving for initial temperature distribution");
 		vlb.getIntialFlowAndTemp();
+		LOGMESSAGE("Solved for initial temperature distribution");
 	}
-
-
-
+	   
 	if (!vtr.restartRunFlag)
 		vtr.parSort.initialSort();
 

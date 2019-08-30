@@ -179,6 +179,12 @@ void clVariablesLB::getInitialFlow()
 	clock_t start_time = clock();
 	double sizedom = (double)p.nX * (double)p.Channel_Height * (double)CLOCKS_PER_SEC / 1.0e6;
 
+#ifdef _DEBUG
+	//vls.saveDebug();
+	//vlb.saveDebug();
+#endif
+
+
 	while (Time < stopTime && !fLoadedFlag)
 	{
 		Solve();
@@ -186,6 +192,12 @@ void clVariablesLB::getInitialFlow()
 
 		if (kOmegaClass.kOmegaSolverFlag)
 			kOmegaClass.Solve();
+
+#ifdef _DEBUG
+		//vls.saveDebug();
+		//vlb.saveDebug();
+#endif
+
 
 		Time++;
 		if (Time > NextDumpSteptime)
@@ -231,7 +243,8 @@ void clVariablesLB::getInitialFlow()
 
 void clVariablesLB::getIntialFlowAndTemp()
 {
-	vfd.solveSSThermal();
+	// Not currently working
+	//vfd.solveSSThermal();
 	
 	int option = (OPTION_SAVE_MACRO_FIELDS);
 	collisionKernel.setOption(&option);
@@ -244,18 +257,21 @@ void clVariablesLB::getIntialFlowAndTemp()
 	clock_t start_time = clock();
 	double sizedom = (double)p.nX * (double)p.Channel_Height * (double)CLOCKS_PER_SEC / 1.0e6;
 
+
 	while (Time < stopTime)
 	{
 		Solve();
 		clFinish(LBQUEUE);
 		if (kOmegaClass.kOmegaSolverFlag)
 			kOmegaClass.Solve();
+		
 		vfd.Solve();
 
 		Time++;
 		if (Time > NextDumpSteptime)
 		{
 			save2file();
+			vfd.save2file();
 			NextDumpSteptime += dump_step_interval;
 		}
 
@@ -346,6 +362,8 @@ void clVariablesLB::ini()
 
 	if(saveMacroStart && !restartRunFlag)
 		save2file();
+
+	LOGMESSAGE("vlb initialized");
 }
 
 
@@ -610,12 +628,14 @@ void clVariablesLB::save2file()
 
 void clVariablesLB::saveDebug(int saveFl)
 {
-	saveDistributions();
+	//saveDistributions();
+	//IBB_coeff.save_txt_from_device();
+	//IBB_loc.save_txt_from_device();
+	save2file();	
 	if (kOmegaClass.kOmegaSolverFlag)
 	{
 		kOmegaClass.saveDebug(saveFl);
 	}
-
 }
 
 void clVariablesLB::saveDistributions()
@@ -818,6 +838,9 @@ void clVariablesLB::Solve()
 {
 	//cl_event col_evt;
 	collisionKernel.call_kernel(NULL, 0, NULL, NULL);
+#ifndef IN_KERNEL_IBB
+	ibbKernel.call_kernel();
+#endif
 	clFinish(LBQUEUE);
 
 //	clReleaseEvent(col_evt);

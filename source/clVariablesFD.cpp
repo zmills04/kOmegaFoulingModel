@@ -65,7 +65,11 @@ double clVariablesFD::calcAlphaDirection(const int i1, const int j1, const int i
 		ro_n = rhoSootLB;
 	}
 
-	double del = vls.dXArr(i1, j1, dirInd) / vls.dXArr(i1, j1, dirInd);
+	double dXcur = vls.dXArr(i1, j1, dirInd), dX0 = vls.dXArr0(i1, j1, dirInd);
+	if (dXcur - dX0 < p.eps)
+		return k_c / ro_c / cp_c;
+
+	double del = dXcur / dX0;
 
 	double coeffA = k_n * ro_c * cp_c;
 	double coeffB = k_n * ro_c * cp_n + k_n * ro_n * cp_c + k_c * ro_c * cp_c;
@@ -106,8 +110,14 @@ cl_double2 clVariablesFD::calcAlphaRhoCpDirection(const int i1, const int j1, co
 		ro_n = rhoSootLB;
 	}
 
-	double del = vls.dXArr(i1, j1, dirInd) / vls.dXArr0(i1, j1, dirInd);
 
+	double dXcur = vls.dXArr(i1, j1, dirInd), dX0 = vls.dXArr0(i1, j1, dirInd);
+	if (dXcur - dX0 < p.eps)
+		return { {k_c / ro_c / cp_c, ro_c * cp_c} };
+
+
+	double del = dXcur / dX0;
+	
 	double coeffA = k_n * ro_c * cp_c;
 	double coeffB = k_n * ro_c * cp_n + k_n * ro_n * cp_c + k_c * ro_c * cp_c;
 	double coeffC = k_n * ro_n * cp_n + k_c * ro_c * cp_n + k_c * ro_n * cp_c;
@@ -195,6 +205,11 @@ void clVariablesFD::ini()
 	// opencl source may not compile without variables defined
 	setSourceDefines();
 
+	if (!tempLoadedFlag)
+	{
+		tempArray.fillByNodeType(ROE0, vls.nType, M0_FLUID_NODE);
+	}
+
 	if (thermalSolverFlag == false)
 		return;
 
@@ -212,7 +227,7 @@ void clVariablesFD::ini()
 		tempMaxIters, tempMaxRelTol, tempMaxAbsTol);
 
 	// Initialize reduction class for temp
-	sumTemp.ini(*Temp.getMacroArray(), "redTemp");
+	sumTemp.ini(*Temp.getMacroArray(), restartRunFlag, "redTemp");
 	
 	// Create function pointers to functions to be called after compiling
 	// opencl source code
@@ -229,6 +244,8 @@ void clVariablesFD::ini()
 
 	if (saveMacroStart && !restartRunFlag)
 		save2file();
+
+	LOGMESSAGE("vfd initialized");
 }
 
 void clVariablesFD::iniDerivativeArrays()
@@ -672,11 +689,20 @@ void clVariablesFD::solveSSThermal()
 		return;
 
 	SetSSCoeffs.call_kernel();
-	
-	Temp.setMaxIters(1000);
+
+	Temp.setMaxIters(100);
 	Temp.setAbsTol(1.e-12);
 	Temp.setRelTol(1.e-5);
 	Temp.solve();
+
+	Temp.savetxt_from_device();
+	Temp.solve();
+	Temp.savetxt_from_device();
+	Temp.solve();
+	Temp.savetxt_from_device();
+	Temp.solve();
+	Temp.savetxt_from_device();
+
 
 	Temp.setMaxIters(tempMaxIters);
 	Temp.setAbsTol(tempMaxAbsTol);
@@ -768,6 +794,17 @@ void clVariablesFD::updateNuCoeffs()
 
 	updateNuKernel[0].call_kernel();
 	updateNuKernel[1].call_kernel();
+
+
+	//clFinish(FDQUEUE);
+	//nuYInds.save_txt_from_device();
+	//nuDistVec.save_txt_from_device();
+	//nuDist.save_txt_from_device();
+
+
+
+
+
 }
 
 void clVariablesFD::updateTimeData()

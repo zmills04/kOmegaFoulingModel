@@ -49,24 +49,24 @@ y2_plus = y2*u_tau/Visc;
 y3_plus = y3*u_tau/Visc;
 
 U_plus = log(y2_plus)/kappa + Cp;
-U_plus_lin = log(y3_plus) / kappa + Cp;
+% U_plus_lin = log(y3_plus) / kappa + Cp;
 
 a = find(y2_plus < 11.44532166);
-a_lin = find(y3_plus < 11.44532166);
+% a_lin = find(y3_plus < 11.44532166);
 
 U_plus(a) = y2_plus(a);
-U_plus_lin(a_lin) = y3_plus(a_lin);
-U_plus_lin *= u_tau;
-U_plus_lin = [U_plus_lin,U_plus_lin(end:-1:1)];
-plot([y3-H,y3], U_plus_lin,'c')
+% U_plus_lin(a_lin) = y3_plus(a_lin);
+% U_plus_lin *= u_tau;
+% U_plus_lin = [U_plus_lin,U_plus_lin(end:-1:1)];
+% plot([y3-H,y3], U_plus_lin,'c')
 hold off
 
-printf("Ulbm = %g, Utheo = %g", mean(Uxx), mean(U_plus_lin));
-if(nargin == 4)
-	printf(", Ulbm_old = %g\n", mean(Uxx_prev));
-else
-	printf("\n");
-end
+% printf("Ulbm = %g, Utheo = %g", mean(Uxx), mean(U_plus_lin));
+% if(nargin == 4)
+% 	printf(", Ulbm_old = %g\n", mean(Uxx_prev));
+% else
+% 	printf("\n");
+% end
 
 
 
@@ -74,8 +74,8 @@ figure
 hold on
 semilogx(y_plus, U_plus_top,'k')
 semilogx(y_plus, U_plus_bot,'r')
-semilogx(y_plus, U_plus_top_theo,'k..')
-semilogx(y_plus, U_plus_bot_theo,'r..')
+semilogx(y_plus, U_plus_top_theo,'k--')
+semilogx(y_plus, U_plus_bot_theo,'r--')
 semilogx(y2_plus, U_plus, 'b')
 if(nargin == 4)
   semilogx(y_plus, Ux_top_prev(1:end)/u_tau,'k--')
