@@ -15,7 +15,7 @@
 #include "oclEnvironment.h"
 #include "logger.h"
 #include "StreamFuncs.h"
-
+#include <bitset>
 
 #ifdef _DEBUG
 #define ARRAY_DEBUG
@@ -542,9 +542,9 @@ public:
 		BufferFullSize = buffersize;
 		AllocDevice(clflags, buffersize);
 
-		// Will set padding to zeros if the buffer is larger than the host array.
-		if(BufferFullSize > FullSize)
-			Copy_HtoD_Size(BufferFullSize);
+		//// Will set padding to zeros if the buffer is larger than the host array.
+		//if(BufferFullSize > FullSize)
+		//	Copy_HtoD_Size(BufferFullSize);
 	}
 
 	void resetSizesDebug(int newsize)
@@ -1070,6 +1070,7 @@ public:
 			ArrayBase<T>::FreeHost();
 		return ret;
 	}
+
 
 	bool save_txt_from_device_full(std::string FileName = "", cl_command_queue *queue = NULL)
 	{// savetxt will convert to Name if FileName = "", so no need to convert it here
@@ -2034,6 +2035,13 @@ public:
 		allocate_buffer_size(BufferFullSize + resizeMult * wgSize);
 	}
 
+	void resize_device_dynamic(const int newSize_)
+	{
+		FreeDevice();
+		BufferFullSize = getGlobalSizeMacro((newSize_ + resizeMult * wgSize), wgSize);
+		allocate_buffer_size(BufferFullSize);
+	}
+
 	// memory reallocation on device, which copies current host
 	// contents to newly reallocated buffer rather than copying 
 	// values held previously in buffer.
@@ -2460,6 +2468,39 @@ public:
 			ArrayBase<T>::FreeHost();
 		return ret;
 	}
+
+	bool save_txt_from_device_short_to_int(std::string FileName = "", cl_command_queue* queue = NULL)
+	{ // savetxt will convert to Name if FileName = "", so no need to convert it here
+		int delflag = 0;
+		if (ArrayBase<T>::Host_Alloc_Flag == 0)
+		{
+			delflag = 1;
+		}
+
+		read_from_buffer(queue);
+		int i, j;
+		if (FileName.length() == 0)
+			FileName = Name;
+		FileName.append(".txt");
+		std::fstream stream;
+		if (fileopen(stream, FileName, FileOut) == false)
+			return false;
+
+		for (i = 0; i < ArrayBase<T>::SizeX; i++)
+		{
+			for (j = 0; j < ArrayBase<T>::SizeY; j++)
+			{
+				stream << std::bitset<16>(getEl(i, j)) << "\t";
+			}
+			stream << "\n";
+		}
+		stream.close();
+
+		if (delflag)
+			ArrayBase<T>::FreeHost();
+		return true;
+	}
+
 	
 	virtual bool save2file_full(std::string FileName = "")
 	{
@@ -2677,6 +2718,8 @@ public:
 		cl_bool block_flag = CL_TRUE, int num_wait = 0, 
 		cl_event* wait = NULL, cl_event* evt = NULL)
 	{
+		if (curInd == 0)
+			return true;
 		int delflag = 0;
 		if (ArrayBase<T>::Host_Alloc_Flag == 0)
 		{

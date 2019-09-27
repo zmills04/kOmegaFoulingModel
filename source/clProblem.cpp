@@ -128,13 +128,13 @@ void clProblem::step()
 	bool saveDumpFlag = false;
 	bool dumpFlag = false;
 
-	if (nextDumpStepTime < TimeN)
-	{
-		p.DumpStep();
-		dumpFlag = true;
-		clFinish(*clEnv::instance()->getIOqueue());
-		nextDumpStepTime += dumpTimeStep;
-	}
+	//if (nextDumpStepTime < TimeN)
+	//{
+	//	p.DumpStep();
+	//	dumpFlag = true;
+	//	clFinish(*clEnv::instance()->getIOqueue());
+	//	nextDumpStepTime += dumpTimeStep;
+	//}
 
 	// if time to save bin files, do so
 	if (nextDumpBin < currentDumpStep)
@@ -262,27 +262,39 @@ void clProblem::saveParameters()
 
 
 	*p.yamlOut << YAML::BeginDoc;
+	*p.yamlOut << YAML::BeginMap;
 	saveSystemParams();
-	*p.yamlOut << YAML::EndDoc;
+	*p.yamlOut << YAML::EndMap;
+	//*p.yamlOut << YAML::EndDoc;
 	
-	*p.yamlOut << YAML::BeginDoc;
+	//*p.yamlOut << YAML::BeginDoc;
+	*p.yamlOut << YAML::BeginMap;
 	vls.saveParams();
-	*p.yamlOut << YAML::EndDoc;
+	*p.yamlOut << YAML::EndMap;
+	//*p.yamlOut << YAML::EndDoc;
 	
-	*p.yamlOut << YAML::BeginDoc;
+	//*p.yamlOut << YAML::BeginDoc;
+	*p.yamlOut << YAML::BeginMap;
 	vlb.saveParams();
-	*p.yamlOut << YAML::EndDoc;
+	*p.yamlOut << YAML::EndMap;
+	//*p.yamlOut << YAML::EndDoc;
 	
-	*p.yamlOut << YAML::BeginDoc;
+	//*p.yamlOut << YAML::BeginDoc;
+	*p.yamlOut << YAML::BeginMap;
 	vfd.saveParams();
-	*p.yamlOut << YAML::EndDoc;
+	*p.yamlOut << YAML::EndMap;
+	//*p.yamlOut << YAML::EndDoc;
 	
-	*p.yamlOut << YAML::BeginDoc;
+	//*p.yamlOut << YAML::BeginDoc;
+	*p.yamlOut << YAML::BeginMap;
 	vtr.saveParams();
-	*p.yamlOut << YAML::EndDoc;
+	*p.yamlOut << YAML::EndMap;
+	//*p.yamlOut << YAML::EndDoc;
 	
-	*p.yamlOut << YAML::BeginDoc;
+	//*p.yamlOut << YAML::BeginDoc;
+	*p.yamlOut << YAML::BeginMap;
 	vfl.saveParams();
+	*p.yamlOut << YAML::EndMap;
 	*p.yamlOut << YAML::EndDoc;
 
 	std::string fname_ = YAML_PARAM_FILE;
@@ -302,19 +314,19 @@ void clProblem::saveParameters()
 template <typename T>
 void clProblem::setParameter(std::string pname_, T val_)
 {
-	*yamlOut << YAML::BeginMap;
+	//*yamlOut << YAML::BeginMap;
 	*yamlOut << YAML::Key << pname_;
 	*yamlOut << YAML::Value << val_;
-	*yamlOut << YAML::EndMap;
+	//*yamlOut << YAML::EndMap;
 }
 
 template <>
 void clProblem::setParameter(std::string pname_, std::string val_)
 {
-	*yamlOut << YAML::BeginMap;
+	//*yamlOut << YAML::BeginMap;
 	*yamlOut << YAML::Key << pname_;
 	*yamlOut << YAML::Value << val_;
-	*yamlOut << YAML::EndMap;
+	//*yamlOut << YAML::EndMap;
 }
 
 
@@ -487,15 +499,15 @@ void clProblem::loadParams()
 
 
 
-	trSteps = p.getParameter("TR Steps Per LB", TR_STEPS_PER_LB);
-	trSteps_wall = p.getParameter("TR Wall Steps Per LB", TR_STEPS_PER_LB_WALL);
-	tfdSteps = p.getParameter("T Steps Per LB", FD_STEPS_PER_LB);
+	trSteps = p.getParameter("LB Steps Per TR", LB_STEPS_PER_TR);
+	trSteps_wall = p.getParameter("LB Steps Per TR Wall", LB_STEPS_PER_TR_WALL);
+	tfdSteps = p.getParameter("LB Steps Per T", LB_STEPS_PER_FD);
 	Time_Btw_Clump = p.getParameter("Clumping Time", CLUMP_TIME);
 
 	dTlb = 1.;
-	dTtfd = dTlb / (double)tfdSteps;
-	dTtr = dTlb / (double)trSteps;
-	dTtr_wall = dTlb / (double)trSteps_wall;
+	dTtfd = (double)tfdSteps;
+	dTtr = (double)trSteps;
+	dTtr_wall = (double)trSteps_wall;
 
 	// Number of dump steps between save bin steps (keep at 1)
 	saveBinStep = p.getParameter("Save Bin Step", DUMP_STEPS_PER_DUMP_BIN);
@@ -655,6 +667,16 @@ void clProblem::loadRunParameters(std::string runparams_)
 	clEnv::instance()->setRestartFlag(restartRunFlag);
 }
 
+void clProblem::freeHostArrays()
+{
+	vls.freeHostArrays();
+	vlb.freeHostArrays();
+	vfd.freeHostArrays();
+	vtr.freeHostArrays();
+	vfl.freeHostArrays();
+}
+
+
 //////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////
 //////////////             Initialization of Static Variables             ////////////////
@@ -687,9 +709,9 @@ bool clProblem::flOutputDump = FLAG_DUMP;
 unsigned int clProblem::StopTime = STOP_TIME;
 
 double clProblem::dTlb = LB_STEPS;
-int clProblem::tfdSteps = FD_STEPS_PER_LB;
-int clProblem::trSteps = TR_STEPS_PER_LB;
-int clProblem::trSteps_wall = TR_STEPS_PER_LB_WALL;
+int clProblem::tfdSteps = LB_STEPS_PER_FD;
+int clProblem::trSteps = LB_STEPS_PER_TR;
+int clProblem::trSteps_wall = LB_STEPS_PER_TR_WALL;
 cl_short clProblem::IBB_Flag[8] = { 0x1, 0x2, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80 };
 
 int clProblem::DeviceID = DEVICE_ID;

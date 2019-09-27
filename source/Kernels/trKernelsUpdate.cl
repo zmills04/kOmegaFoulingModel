@@ -309,16 +309,18 @@ void updateTRCoeffs(__global NTYPE_TYPE* nType,
 	// get index of nodes aways from wall
 	int iLin = activeNodes[ii];
 
+	// i, j are indexing tr domain
 	int i, j;
-	decodeGlobalIdx(iLin, &i, &j);
+	decodeGlobalTrIdx(iLin, &i, &j);
 
-	i += TR_X_IND_START;
+
+	//i += TR_X_IND_START;
 
 	//Nact Ntemp = Neighs[Nod_ind];
-	uint ii00 = i + j * CHANNEL_LENGTH_FULL;
-	uint ii10 = ii00 + 1;
-	uint ii01 = ii00 + CHANNEL_LENGTH_FULL;
-	uint ii11 = ii10 + CHANNEL_LENGTH_FULL;
+	int ii00 = i + TR_X_IND_START + j * CHANNEL_LENGTH_FULL;
+	int ii10 = ii00 + 1;
+	int ii01 = ii00 + CHANNEL_LENGTH_FULL;
+	int ii11 = ii10 + CHANNEL_LENGTH_FULL;
 
 	short wfTemp = WF_EMPTY;
 	int tnum = 0;
@@ -326,38 +328,54 @@ void updateTRCoeffs(__global NTYPE_TYPE* nType,
 	NTYPE_TYPE ntype = nType[ii00];
 	if (ntype & M_SOLID_NODE)
 		wfTemp |= WF_00_SOLID;
-	if (ntype & M_FLUID_NODE)
+	else
 		tnum += 1;
+
+	//if (ntype & M_FLUID_NODE)
+	//	tnum += 1;
 	
 	ntype = nType[ii10];
 	if (ntype & M_SOLID_NODE)
 		wfTemp |= WF_10_SOLID;
-	if (ntype & M_FLUID_NODE)
+	else
 		tnum += 2;
+
+	//if (ntype & M_FLUID_NODE)
+	//	tnum += 2;
 
 	ntype = nType[ii01];
 	if (ntype & M_SOLID_NODE)
 		wfTemp |= WF_01_SOLID;
-	if (ntype & M_FLUID_NODE)
+	else
 		tnum += 4;
+	
+	//if (ntype & M_FLUID_NODE)
+	//	tnum += 4;
 
 	ntype = nType[ii11];
 	if (ntype & M_SOLID_NODE)
 		wfTemp |= WF_11_SOLID;
-	if (ntype & M_FLUID_NODE)
+	else
 		tnum += 8;
+
+	//if (ntype & M_FLUID_NODE)
+	//	tnum += 8;
 
 	// if all are solid, set node as solid
 	if (wfTemp == WF_TEST_ALL_SOLID)
 	{
 		wfTemp |= WF_SOLID;
 	}
-
-	// if any are not solid, set as fluid node
-	if (wfTemp ^= WF_TEST_ALL_SOLID)
+	else
 	{
 		wfTemp |= WF_FLUID;
 	}
+
+	//// if any are not solid, set as fluid node
+	//if (wfTemp ^= WF_TEST_ALL_SOLID)
+	//{
+	//	wfTemp |= WF_FLUID;
+	//}
 
 	niWallFlag[iLin] = wfTemp;
 
@@ -380,50 +398,50 @@ void updateTRCoeffs(__global NTYPE_TYPE* nType,
 	{
 		// only 00 is a fluid node, rest are solid
 		// use east and north directions from ii00 node
-		dXcx = dX_cur[ii00 * 4];
-		dXcy = dX_cur[ii00 * 4 + 2];
-		dXx = dX[ii00 * 4];
-		dXy = dX[ii00 * 4 + 2];
+		dXcx = dX_cur[ii00];
+		dXcy = dX_cur[ii00 + 2 * DIST_SIZE];
+		dXx = dX[ii00];
+		dXy = dX[ii00 + 2 * DIST_SIZE];
 		break;
 	}
 	case 2:
 	{
 		// only 10 is a fluid node, rest are solid
 		// use west and north directions from ii10 node
-		dXcx = dX_cur[ii10 * 4 + 1];
-		dXcy = dX_cur[ii10 * 4 + 2];
-		dXx = dX[ii10 * 4 + 1];
-		dXy = dX[ii10 * 4 + 2];
+		dXcx = dX_cur[ii10 + DIST_SIZE];
+		dXcy = dX_cur[ii10 + 2 * DIST_SIZE];
+		dXx = dX[ii10 + DIST_SIZE];
+		dXy = dX[ii10 + 2 * DIST_SIZE];
 		break;
 	}
 	case 3:
 	{
 		// 00 and 10 are fluid nodes, rest are solid
 		// use north from both ii00 and ii10 nodes
-		dXcx = dX_cur[ii00 * 4 + 2];
-		dXcy = dX_cur[ii10 * 4 + 2];
-		dXx = dX[ii00 * 4 + 2];
-		dXy = dX[ii10 * 4 + 2];
+		dXcx = dX_cur[ii00 + 2 * DIST_SIZE];
+		dXcy = dX_cur[ii10 + 2 * DIST_SIZE];
+		dXx = dX[ii00 + 2 * DIST_SIZE];
+		dXy = dX[ii10 + 2 * DIST_SIZE];
 		break;
 	}
 	case 4:
 	{
 		// only 01 is fluid node
 		// use east and south from ii01 node
-		dXcx = dX_cur[ii01 * 4];
-		dXcy = dX_cur[ii01 * 4 + 3];
-		dXx = dX[ii01 * 4];
-		dXy = dX[ii01 * 4 + 3];
+		dXcx = dX_cur[ii01];
+		dXcy = dX_cur[ii01 + 3 * DIST_SIZE];
+		dXx = dX[ii01];
+		dXy = dX[ii01 + 3 * DIST_SIZE];
 		break;
 	}
 	case 5:
 	{
 		// 00 and 01 are fluid nodes, rest are solid
 		// use east from both ii00 and ii01 nodes
-		dXcx = dX_cur[ii00 * 4];
-		dXcy = dX_cur[ii01 * 4];
-		dXx = dX[ii00 * 4];
-		dXy = dX[ii01 * 4];
+		dXcx = dX_cur[ii00];
+		dXcy = dX_cur[ii01];
+		dXx = dX[ii00];
+		dXy = dX[ii01];
 		break;
 	}
 	case 6:
@@ -431,19 +449,19 @@ void updateTRCoeffs(__global NTYPE_TYPE* nType,
 		// 10 and 01 are fluid nodes, rest are solid
 		// this should rarely if ever occur, will just treat it the same
 		// as tnum == 2
-		dXcx = dX_cur[ii10 * 4 + 1];
-		dXcy = dX_cur[ii10 * 4 + 2];
-		dXx = dX[ii10 * 4 + 1];
-		dXy = dX[ii10 * 4 + 2];
+		dXcx = dX_cur[ii10 + DIST_SIZE];
+		dXcy = dX_cur[ii10 + 2 * DIST_SIZE];
+		dXx = dX[ii10 + DIST_SIZE];
+		dXy = dX[ii10 + 2 * DIST_SIZE];
 		break;
 	}
 	case 7:
 	{
 		// 00, 01 and 10 are fluid nodes, 11 is solid
 		// using north from ii10 for only dx value.
-		dXcx = dX_cur[ii10 * 4 + 2];
+		dXcx = dX_cur[ii10 + 2 * DIST_SIZE];
 		dXcy = 1.;
-		dXx = dX[ii10 * 4 + 2];
+		dXx = dX[ii10 + 2 * DIST_SIZE];
 		dXy = 1.;
 		break;
 	}
@@ -451,10 +469,10 @@ void updateTRCoeffs(__global NTYPE_TYPE* nType,
 	{
 		// 11 is fluid node, rest are solid
 		// using west and south from ii11
-		dXcx = dX_cur[ii11 * 4 + 1];
-		dXcy = dX_cur[ii11 * 4 + 3];
-		dXx = dX[ii11 * 4 + 1];
-		dXy = dX[ii11 * 4 + 3];
+		dXcx = dX_cur[ii11 + DIST_SIZE];
+		dXcy = dX_cur[ii11 + 3 * DIST_SIZE];
+		dXx = dX[ii11 + DIST_SIZE];
+		dXy = dX[ii11 + 3 * DIST_SIZE];
 		break;
 	}
 	case 9:
@@ -462,29 +480,29 @@ void updateTRCoeffs(__global NTYPE_TYPE* nType,
 		// 00 and 11 are fluid nodes, rest are solid
 		// this should rarely if ever occur, will just treat it the same
 		// as tnum == 1
-		dXcx = dX_cur[ii00 * 4];
-		dXcy = dX_cur[ii00 * 4 + 2];
-		dXx = dX[ii00 * 4];
-		dXy = dX[ii00 * 4 + 2];
+		dXcx = dX_cur[ii00];
+		dXcy = dX_cur[ii00 + 2 * DIST_SIZE];
+		dXx = dX[ii00];
+		dXy = dX[ii00 + 2 * DIST_SIZE];
 		break;
 	}
 	case 10:
 	{
 		// 10 and 11 are fluid nodes, rest are solid
 		// using west from both ii10 and ii11 nodes
-		dXcx = dX_cur[ii10 * 4 + 1];
-		dXcy = dX_cur[ii11 * 4 + 1];
-		dXx = dX[ii10 * 4 + 1];
-		dXy = dX[ii11 * 4 + 1];
+		dXcx = dX_cur[ii10 + DIST_SIZE];
+		dXcy = dX_cur[ii11 + DIST_SIZE];
+		dXx = dX[ii10 + DIST_SIZE];
+		dXy = dX[ii11 + DIST_SIZE];
 		break;
 	}
 	case 11:
 	{
 		// 00 and 10 and 11 are fluid nodes, 01 is solid
 		// using north from ii00 for only dx value
-		dXcx = dX_cur[ii00 * 4 + 2];
+		dXcx = dX_cur[ii00 + 2 * DIST_SIZE];
 		dXcy = 1.;
-		dXx = dX[ii00 * 4 + 2];
+		dXx = dX[ii00 + 2 * DIST_SIZE];
 		dXy = 1.;
 		break;
 	}
@@ -492,19 +510,19 @@ void updateTRCoeffs(__global NTYPE_TYPE* nType,
 	{
 		// 01 and 11 are fluid nodes, 00 and 10 are solid
 		// using south from both 01 and 11 nodes
-		dXcx = dX_cur[ii01 * 4 + 3];
-		dXcy = dX_cur[ii11 * 4 + 3];
-		dXx = dX[ii01 * 4 + 3];
-		dXy = dX[ii11 * 4 + 3];
+		dXcx = dX_cur[ii01 + 3 * DIST_SIZE];
+		dXcy = dX_cur[ii11 + 3 * DIST_SIZE];
+		dXx = dX[ii01 + 3 * DIST_SIZE];
+		dXy = dX[ii11 + 3 * DIST_SIZE];
 		break;
 	}
 	case 13:
 	{
 		// 00 and 01 and 11 are fluid nodes, 10 is solid
 		// using south from ii11 for only dx value
-		dXcx = dX_cur[ii11 * 4 + 3];
+		dXcx = dX_cur[ii11 + 3 * DIST_SIZE];
 		dXcy = 1.;
-		dXx = dX[ii11 * 4 + 3];
+		dXx = dX[ii11 + 3 * DIST_SIZE];
 		dXy = 1.;
 		break;
 	}
@@ -512,9 +530,9 @@ void updateTRCoeffs(__global NTYPE_TYPE* nType,
 	{
 		// 00 and 01 and 11 are fluid nodes, 10 is solid
 		// using south from ii01 node for only dx value
-		dXcx = dX_cur[ii01 * 4 + 3];
+		dXcx = dX_cur[ii01 + 3 * DIST_SIZE];
 		dXcy = 1.;
-		dXx = dX[ii01 * 4 + 3];
+		dXx = dX[ii01 + 3 * DIST_SIZE];
 		dXy = 1.;
 		break;
 	}
@@ -571,13 +589,13 @@ void updateTRWallNodes(__global ushort2* __restrict__ blP01,
 	Cmax.x -= TR_X_IND_START;
 	
 	Cmin.x = max(0, Cmin.x);
-	Cmax.x = min(TR_X_IND_STOP - 1, Cmax.x);
+	Cmax.x = min(FULLSIZEX_TR - 1, Cmax.x);
 
 	Cmin.y = max(0, Cmin.y);
 	Cmax.y = min(FULLSIZEY_TR - 1, Cmax.y);
 
 
-	if (Cmax.x < 0 || Cmin.x >= TR_X_IND_STOP ||
+	if (Cmax.x < 0 || Cmin.x >= FULLSIZEX_TR ||
 		Cmax.y < 0 || Cmin.y >= FULLSIZEY_TR)
 		return;
 
@@ -619,7 +637,7 @@ __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_UPDATEWALL, 1, 1)))
 	{
 		int ind = atomic_add(&cur_loc[0], 1);
 		ind = min(windsCurLength - 1, ind);
-		Winds[ind] = i;
+		Winds[ind] = ii;
 	}
 }
 
@@ -647,8 +665,8 @@ int bcFindIntersectionLinePlane_shift(double* dist, double2 vL0, double2 vP0, do
 
 
 __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_RERELEASE, 1, 1)))
-void Shift_deposited_particles(__global int* __restrict__ pDepFlag,
-	__global int* __restrict__ pLoc,
+void Shift_deposited_particles(__global depFlagType* __restrict__ pDepFlag,
+	__global parLocType* __restrict__ pLoc,
 	__global double2 * __restrict__ pPos,
 	__global ushort2 * __restrict__ blP01,
 	__global double2 * __restrict__ Cvals,
@@ -662,7 +680,7 @@ void Shift_deposited_particles(__global int* __restrict__ pDepFlag,
 
 	i += offset;
 
-	int depBL = pDepFlag[i];
+	depFlagType depBL = pDepFlag[i];
 
 	if (depBL < 0)
 		return;
@@ -672,7 +690,7 @@ void Shift_deposited_particles(__global int* __restrict__ pDepFlag,
 
 	if (pPosNew.x >= X_MAX_VAL)
 	{
-		pDepFlag[i] = -2;
+		pDepFlag[i] = -3;
 		pLoc[i] = -2;
 	}
 
@@ -681,8 +699,8 @@ void Shift_deposited_particles(__global int* __restrict__ pDepFlag,
 
 
 __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_SHIFT_PAR, 1, 1)))
-void Shift_particles(__global int* __restrict__ pDepFlag,
-	__global int* __restrict__ pLoc,
+void Shift_particles(__global depFlagType* __restrict__ pDepFlag,
+	__global parLocType* __restrict__ pLoc,
 	__global double2 * __restrict__ pPos,
 	__global ushort2 * __restrict__ blP01,
 	__global double2 * __restrict__ Cvals,

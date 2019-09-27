@@ -325,15 +325,19 @@ void kOmega::saveDebug(int saveFl)
 		}
 	}
 #endif
-	Fval_array.save_txt_from_device();
-	Diff_Omega.save_txt_from_device();
-	Diff_K.save_txt_from_device();
-	Nut_array.save_txt_from_device();
-	//WallD.save_txt_from_device();
-	dKdO_array.save_txt_from_device_as_multi2D("dKdO");
-	Sxy_array.save_txt_from_device_as_multi2D("Sxy");
+	//Fval_array.save_txt_from_device();
+	//Diff_Omega.save_txt_from_device();
+	//Diff_K.save_txt_from_device();
+	//Nut_array.save_txt_from_device();
+	WallD.save_txt_from_device();
+	//dKdO_array.save_txt_from_device_as_multi2D("dKdO");
+	//Sxy_array.save_txt_from_device_as_multi2D("Sxy");
+	Omega.saveAxb_w_indicies_from_device();
+	Kappa.saveAxb_w_indicies_from_device();
 
-	save2file();
+
+
+//	save2file();
 }
 
 
@@ -521,22 +525,6 @@ void kOmega::setSourceDefines()
 #undef SETSOURCEDEFINE
 
 
-void kOmega::Solve()
-{
-	kOmegaUpdateDiffCoeffs.call_kernel();
-	kOmegaUpdateCoeffs.call_kernel();
-	clFinish(LBQUEUE);
-
-	//Kappa.saveAxbCSR_from_device();
-	//Omega.saveAxbCSR_from_device();
-
-	Kappa.solve();
-	Omega.solve();
-}
-
-
-
-
 bool kOmega::testRestartRun()
 {
 	// if not solving, return true since we dont want to show as
@@ -547,6 +535,11 @@ bool kOmega::testRestartRun()
 	allocateArrays();
 
 	bool koBool = Kappa_array.load("load" SLASH "lbkappa") && Omega_array.load("load" SLASH "lbomega");
+
+	if (vlb.loadVelTxtFlag && !koBool)
+	{
+		koBool = Kappa_array.loadtxt("restart_files\\lbkappaSolver") && Omega_array.loadtxt("restart_files\\lbomegaSolver");
+	}
 	if (koBool)
 	{
 		kOmegaLoadedFlag = true;

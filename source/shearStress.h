@@ -34,9 +34,9 @@ public:
 //////////////                                               ///////////////
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
-	shearStress() : sInds("ssSind"), blInds("ssblInds"),
-		ssWeights("ssWeights"),	shearCoeffs("ssShearCoeffs"), 
-		blIndsLoc("ssblIndsLoc"), Tau("ssTau"), ssOutput("ShearStress")
+	shearStress() : sInds("ssSind"), ssWeights("ssWeights"),
+		shearCoeffs("ssShearCoeffs"), blIndsLoc("ssblIndsLoc"),
+		Tau("ssTau"), ssOutput("ShearStress")
 	{}
 
 	~shearStress()
@@ -93,9 +93,6 @@ public:
 
 	// Index of first node used in averaging to get shear at wall
 	Array1Dv4i sInds;
-
-	// Index of BL array each index in SS arrays corresponds to	
-	Array1Di blInds;
 
 	// Weights for averaging shear when interpolating from SS at nodes to SS at wall
 	Array1Dv4d ssWeights;

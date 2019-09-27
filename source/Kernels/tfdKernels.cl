@@ -168,41 +168,58 @@ __kernel void Update_T_Coeffs_Implicit(__global int* __restrict__ IndArr,
 	double alphatVal = iNut[gid] * PR_TURB_NUMBER_INV;
 #endif
 
-#ifdef USING_CHT_SOURCE_CORRECTION
-	double Jx = ivx[gid];
-	double Jy = ivy[gid];
+//#ifdef USING_CHT_SOURCE_CORRECTION
+//	double Jx = ivx[gid];
+//	double Jy = ivy[gid];
+//
+//	double Dsource = Jx * dRhoCp[gid * 2] + Jy * dRhoCp[gid * 2 + 1];
+//
+//	#ifdef USING_KOMEGA_SOLVER
+//		int gidw = ((i > 0) ? -1 : (CHANNEL_LENGTH - 1)) + gid;
+//		int gide = ((i < CHANNEL_LENGTH - 1) ? 1 : (1 - CHANNEL_LENGTH_FULL)) + gid;
+//		Jx -= dAlpha[gid * 2] + PR_TURB_NUMBER_INV * (dXe * iNut[gide] + dXw * iNut[gidw] + dXc * alphatVal);
+//		Jy -= dAlpha[gid * 2+1] + PR_TURB_NUMBER_INV * (dYn * iNut[gid+CHANNEL_LENGTH_FULL] + dYs * iNut[gid-CHANNEL_LENGTH_FULL] + dYc * alphatVal);
+//		alphaVal += alphatVal;
+//	#else
+//		Jx -= dAlpha[gid * 2];
+//		Jy -= dAlpha[gid * 2 + 1];
+//	#endif
+//
+//	double Tsrc = Temp[gid] * (1. + max(Dsource, 0.));
+//	double Ccoeff = 1. + DTFD*(Jx*dXc + Jy*dYc - alphaVal*(dX2c+dY2c) - min(Dsource,0.));
+//#else
+//	#ifdef USING_KOMEGA_SOLVER
+//		int gidw = ((i > 0) ? -1 : (CHANNEL_LENGTH - 1)) + gid;
+//		int gide = ((i < CHANNEL_LENGTH - 1) ? 1 : (1 - CHANNEL_LENGTH_FULL)) + gid;
+//		double Jx = ivx[gid] - (dAlpha[gid * 2] + PR_TURB_NUMBER_INV * (dXe * iNut[gide] + dXw * iNut[gidw] + dXc * alphatVal));
+//		double Jy = ivy[gid] - (dAlpha[gid * 2 + 1] + PR_TURB_NUMBER_INV * (dYn * iNut[gid + CHANNEL_LENGTH_FULL] + 
+//			dYs * iNut[gid - CHANNEL_LENGTH_FULL] + dYc * alphatVal));
+//		alphaVal += alphatVal;
+//	#else
+//		double Jx = ivx[gid] - dAlpha[gid * 2];
+//		double Jy = ivy[gid] - dAlpha[gid * 2 + 1];
+//	#endif
+//
+//	double Tsrc = Temp[gid];
+//	double Ccoeff = 1. + DTFD * (Jx * dXc + Jy * dYc - alphaVal * (dX2c + dY2c));
+//#endif
 
-	double Dsource = Jx * dRhoCp[gid * 2] + Jy * dRhoCp[gid * 2 + 1];
 
-	#ifdef USING_KOMEGA_SOLVER
-		int gidw = ((i > 0) ? -1 : (CHANNEL_LENGTH - 1)) + gid;
-		int gide = ((i < CHANNEL_LENGTH - 1) ? 1 : (1 - CHANNEL_LENGTH_FULL)) + gid;
-		Jx -= dAlpha[gid * 2] + PR_TURB_NUMBER_INV * (dXe * iNut[gide] + dXw * iNut[gidw] + dXc * alphatVal);
-		Jy -= dAlpha[gid * 2+1] + PR_TURB_NUMBER_INV * (dYn * iNut[gid+CHANNEL_LENGTH_FULL] + dYs * iNut[gid-CHANNEL_LENGTH_FULL] + dYc * alphatVal);
-		alphaVal += alphatVal;
-	#else
-		Jx -= dAlpha[gid * 2];
-		Jy -= dAlpha[gid * 2 + 1];
-	#endif
 
-	double Tsrc = Temp[gid] * (1. + max(Dsource, 0.));
-	double Ccoeff = 1. + DTFD*(Jx*dXc + Jy*dYc - alphaVal*(dX2c+dY2c) - min(Dsource,0.));
-#else
-	#ifdef USING_KOMEGA_SOLVER
-		int gidw = ((i > 0) ? -1 : (CHANNEL_LENGTH - 1)) + gid;
-		int gide = ((i < CHANNEL_LENGTH - 1) ? 1 : (1 - CHANNEL_LENGTH_FULL)) + gid;
-		double Jx = ivx[gid] - (dAlpha[gid * 2] + PR_TURB_NUMBER_INV * (dXe * iNut[gide] + dXw * iNut[gidw] + dXc * alphatVal));
-		double Jy = ivy[gid] - (dAlpha[gid * 2 + 1] + PR_TURB_NUMBER_INV * (dYn * iNut[gid + CHANNEL_LENGTH_FULL] + 
-			dYs * iNut[gid - CHANNEL_LENGTH_FULL] + dYc * alphatVal));
-		alphaVal += alphatVal;
-	#else
-		double Jx = ivx[gid] - dAlpha[gid * 2];
-		double Jy = ivy[gid] - dAlpha[gid * 2 + 1];
-	#endif
+
+	int gidw = ((i > 0) ? -1 : (CHANNEL_LENGTH - 1)) + gid;
+	int gide = ((i < CHANNEL_LENGTH - 1) ? 1 : (1 - CHANNEL_LENGTH_FULL)) + gid;
+	double Jx = ivx[gid] - (PR_TURB_NUMBER_INV * (dXe * iNut[gide] + dXw * iNut[gidw] + dXc * alphatVal));
+	double Jy = ivy[gid] - (PR_TURB_NUMBER_INV * (dYn * iNut[gid + CHANNEL_LENGTH_FULL] +
+		dYs * iNut[gid - CHANNEL_LENGTH_FULL] + dYc * alphatVal));
+	alphaVal += alphatVal;
 
 	double Tsrc = Temp[gid];
 	double Ccoeff = 1. + DTFD * (Jx * dXc + Jy * dYc - alphaVal * (dX2c + dY2c));
-#endif
+
+
+
+
 
 	// No BCs to handle for south coefficient, so calculate and set element in A
 	// directly
@@ -536,7 +553,7 @@ void calcAlphaRhoCpBtwNodes(double del, const double dx0,
 	double ro_n = (ntype2 & M_FLUID_NODE) ? RHO_AIR_LB : RHO_SOOT_LB;
 
 	// if very thin region of fouling layer, just use values based on node type
-	if ((del - dx0) < CEPS)
+	if (fabs(del - dx0) < CEPS)
 	{
 		*rhoCpVal = ro_c * cp_c;
 		*alphaVal = k_c / *rhoCpVal;
@@ -555,7 +572,7 @@ void calcAlphaRhoCpBtwNodes(double del, const double dx0,
 		coeffC * del * (1.0 - del) * (1.0 - del) + coeffD * (1.0 - del) * (1.0 - del) * (1.0 - del));
 
 	// calculate alpha based on linear interp of rho*cp
-	*rhoCpVal = ro_c * cp_c * (1. - del) + ro_n * cp_n * del;
+	*rhoCpVal = ro_c * cp_c * del + ro_n * cp_n * (1. - del);
 }
 
 
@@ -573,7 +590,7 @@ void calcAlphaBtwNodes(double del, const double dx0,
 	double cp_n = (ntype2 & M_FLUID_NODE) ? CP_AIR_LB : CP_SOOT_LB;
 	double ro_n = (ntype2 & M_FLUID_NODE) ? RHO_AIR_LB : RHO_SOOT_LB;
 
-	if ((del - dx0) < CEPS)
+	if (fabs(del - dx0) < CEPS)
 	{
 		*alphaVal = k_c / ro_c * cp_c;
 		return;
@@ -626,14 +643,14 @@ __kernel void updateDerivativeArrays(__global NTYPE_TYPE* __restrict__ Map,
 #ifdef USING_CHT_SOURCE_CORRECTION
 	double rhoCp_e, rhoCp_w, rhoCp_n, rhoCp_s;
 
-	calcAlphaRhoCpBtwNodes(dxe, dX0Arr[gid], ntype, Map[gide], &alpha_e, &rhoCp_e);
+	calcAlphaRhoCpBtwNodes(dXArr[gid], dxe, ntype, Map[gide], &alpha_e, &rhoCp_e);
 	
-	calcAlphaRhoCpBtwNodes(dxw, dX0Arr[gid + DIST_SIZE], ntype, Map[gidw], &alpha_w, &rhoCp_w);
+	calcAlphaRhoCpBtwNodes(dXArr[gid + DIST_SIZE], dxw, ntype, Map[gidw], &alpha_w, &rhoCp_w);
 	
-	calcAlphaRhoCpBtwNodes(dyn, dX0Arr[gid + DIST_SIZE*2], ntype,
+	calcAlphaRhoCpBtwNodes(dXArr[gid + DIST_SIZE * 2], dyn, ntype,
 		Map[gid + CHANNEL_LENGTH_FULL], &alpha_n, &rhoCp_n);
 	
-	calcAlphaRhoCpBtwNodes(dys, dX0Arr[gid + DIST_SIZE*3], ntype,
+	calcAlphaRhoCpBtwNodes(dXArr[gid + DIST_SIZE * 3], dys, ntype,
 		Map[gid - CHANNEL_LENGTH_FULL], &alpha_s, &rhoCp_s);
 
 	double roCp_c = 0.25 * (rhoCp_e + rhoCp_w + rhoCp_n + rhoCp_s);
@@ -645,14 +662,14 @@ __kernel void updateDerivativeArrays(__global NTYPE_TYPE* __restrict__ Map,
 		2. * (dyn - dys) / (dyn * dys);
 
 #endif
-	calcAlphaBtwNodes(dxe, dX0Arr[gid], ntype, Map[gide], &alpha_e);
+	calcAlphaBtwNodes(dXArr[gid], dxe, ntype, Map[gide], &alpha_e);
 
-	calcAlphaBtwNodes(dxw, dX0Arr[gid + DIST_SIZE], ntype, Map[gidw], &alpha_w);
+	calcAlphaBtwNodes(dXArr[gid + DIST_SIZE], dxw, ntype, Map[gidw], &alpha_w);
 
-	calcAlphaBtwNodes(dyn, dX0Arr[gid + DIST_SIZE * 2], ntype,
+	calcAlphaBtwNodes(dXArr[gid + DIST_SIZE * 2], dyn, ntype,
 		Map[gid + CHANNEL_LENGTH_FULL], &alpha_n);
 
-	calcAlphaBtwNodes(dys, dX0Arr[gid + DIST_SIZE * 3], ntype,
+	calcAlphaBtwNodes(dXArr[gid + DIST_SIZE * 3], dys, ntype,
 		Map[gid - CHANNEL_LENGTH_FULL], &alpha_s);
 
 	double alpha_c = 0.25 * (alpha_e + alpha_w + alpha_n + alpha_s);
@@ -714,7 +731,7 @@ bool nuFindIntersectionNormal(double2* vC, double* dist, double2 vL0,
 // Finds node which has shortest vector pointing to it from BL in direction
 // normal to BL. 
 void nuFindNearestNode(__global double2* __restrict__ Cvals,
-	__global int* __restrict__ nType,
+	__global NTYPE_TYPE* __restrict__ nType,
 	__global int* nuYInds,
 	__global double2* __restrict__ nuDistVec,
 	__global double* __restrict__ nuDist,
@@ -725,11 +742,12 @@ void nuFindNearestNode(__global double2* __restrict__ Cvals,
 	int2 C1i = convert_int2_rtp(fmax(C0, C1));
 	C0i -= 1;
 	C1i += 1;
+
 	C0i = max(C0i, (int2)(TR_X_IND_START, 0));
 	C1i = min(C1i, (int2)(TR_X_IND_STOP - 1, CHANNEL_HEIGHT - 1));
 	if ((C0i.x >= TR_X_IND_STOP) || C1i.x < TR_X_IND_START)
 		return;
-	
+
 	double dist;
 	double2 vCcut;
 
@@ -745,7 +763,8 @@ void nuFindNearestNode(__global double2* __restrict__ Cvals,
 			{
 				if(AtomicMin(&nuDist[ii - shiftInd], dist))
 				{
-					nuDistVec[ii - shiftInd] = vCcut;
+					//nuDist[ii - shiftInd] = dist; // this is for testing and should not stay
+					nuDistVec[ii - shiftInd] = L0 - vCcut;
 					nuYInds[ii - shiftInd] = jj;
 				}
 			}
@@ -764,7 +783,7 @@ void nuFindNearestNode(__global double2* __restrict__ Cvals,
 __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_NU, 1, 1)))
 void updateNuCoeff1(__global double2* __restrict__ Cvals,
 	__global ushort2* __restrict__ BLinds,
-	__global int* __restrict__ nType,
+	__global NTYPE_TYPE* __restrict__ nType,
 	__global int* __restrict__ nuYInds,
 	__global double2* __restrict__ nuDistVec,
 	__global double* __restrict__ nuDist)
@@ -772,7 +791,7 @@ void updateNuCoeff1(__global double2* __restrict__ Cvals,
 
 	int i = get_global_id(0);
 
-	if (i >= NU_BL_PER_SIDE_NU)
+	if (i >= NU_NUM_NODES)
 		return;
 
 	nuFindNearestNode(Cvals, nType, nuYInds, nuDistVec,
@@ -836,43 +855,32 @@ double getTandDT(__global double* __restrict__ Tvals,
 	double2 vNorm, int linInd, int nType, double* dTval)
 {
 	double Tnode = Tvals[linInd];
-	double Tdiff, dx, dx0;
-	if (nType & 0x1)
-	{
-		Tdiff = Tvals[linInd + 1] - Tnode; // east neigh
-		dx = dXvals[linInd * 8]; // dxe
-		dx0 = dX0vals[linInd * 8];
-	}
-	else
-	{
-		Tdiff = Tnode - Tvals[linInd - 1]; // west neigh
-		dx = dXvals[linInd * 8 + 1]; // dxw
-		dx0 = dX0vals[linInd * 8 + 1];
-	}
+
+	int neighInd = (nType & 0x1) ? 1 : -1;
+	int dirInd = (nType & 0x1) ? 0 : DIST_SIZE;
+	dirInd += linInd;
+
+	double Tdiff = Tnode - Tvals[linInd + neighInd];
+	double dx = dXvals[dirInd];
+	double dx0 = dX0vals[dirInd];
+
 
 	double2 dTdx;
-	double cCoeff = KSOOT * dx / (KAIR * (dx0 - dx));
-	dTdx.x = ((dx0 - dx) > CEPS) ?
-		(KSOOT * (Tdiff) / (KAIR * (dx0 - dx) * (1. + cCoeff))) :
-		((Tdiff) / dx);
+	dTdx.x = KSOOT * Tdiff / (KAIR * (dx0 - dx) + KSOOT * dx);
 
-	if (nType & 0x2)
-	{
-		Tdiff = Tvals[linInd + CHANNEL_LENGTH_FULL] - Tnode; // north neigh
-		dx = dXvals[linInd * 8 + 3]; // dyn
-		dx0 = dX0vals[linInd * 8 + 3];
-	}
-	else
-	{
-		Tdiff = Tnode - Tvals[linInd - CHANNEL_LENGTH_FULL]; // south neigh
-		dx = dXvals[linInd * 8 + 4]; // dys
-		dx0 = dX0vals[linInd * 8 + 4];
-	}
+	neighInd = (nType & 0x2) ? CHANNEL_LENGTH_FULL : -CHANNEL_LENGTH_FULL;
+	dirInd = (nType & 0x2) ? (DIST_SIZE * 2) : (DIST_SIZE * 3);
+	dirInd += linInd;
+
+
+	Tdiff = Tnode - Tvals[linInd + neighInd];
+	dx = dXvals[dirInd];
+	dx0 = dX0vals[dirInd];
 
 
 	dTdx.y = KSOOT * Tdiff / (KAIR * (dx0 - dx) + KSOOT * dx);
 
-	*dTval = dot(dTdx, normalize(vNorm));
+	*dTval = dot(dTdx, normalize(fabs(vNorm)));
 
 	Tnode -= (*dTval) * length(vNorm);
 
@@ -887,7 +895,7 @@ void FD_calc_Nu(__global double* __restrict__ T_array,
 	__global double* __restrict__ Ux_array,
 	__global double* __restrict__ Uy_array,
 	__global int* __restrict__ nuYInds,
-	__global double2 * __restrict__ nuDist,
+	__global double2* __restrict__ nuDist,
 	__global double* __restrict__ dXvals,
 	__global double* __restrict__ dX0vals,
 	int timeIndex)
@@ -909,6 +917,10 @@ void FD_calc_Nu(__global double* __restrict__ T_array,
 	double dTdn[2] = { 0. };
 	double2 Ts = 0.;
 
+	timeIndex *= NU_NUM_NODES_FULLSIZE;
+	Nu_array[timeIndex + ix * 5] = Tm;
+
+
 	if (jj != -1)
 	{
 		int linInd = ii + jj * CHANNEL_LENGTH_FULL;
@@ -918,7 +930,10 @@ void FD_calc_Nu(__global double* __restrict__ T_array,
 			vNorm, linInd, nType, &dTdn[0]);
 	}
 
-	jj = nuYInds[ix + FULLSIZEX_TR];
+	Nu_array[timeIndex + ix * 5 + 1] = (jj > -1) ? dTdn[0] : -1000.;
+	Nu_array[timeIndex + ix * 5 + 2] = (jj > -1) ? Ts.x : -1000.;
+
+	jj = nuYInds[ix + NU_NUM_NODES];
 
 	nType = (jj & 0x3);
 	jj = jj >> 2;
@@ -926,19 +941,15 @@ void FD_calc_Nu(__global double* __restrict__ T_array,
 	if (jj != -1)
 	{
 		int linInd = ii + jj * CHANNEL_LENGTH_FULL;
-		double2 vNorm = nuDist[ix + FULLSIZEX_TR];
+		double2 vNorm = nuDist[ix + NU_NUM_NODES];
 
 		Ts.y = getTandDT(T_array, dXvals, dX0vals,
 			vNorm, linInd, nType, &dTdn[1]);
 	}
 
-	timeIndex *= NU_NUM_NODES_FULLSIZE;
-	
-	Nu_array[timeIndex + ix * 5]		= dTdn[0];
-	Nu_array[timeIndex + ix * 5 + 1] = Ts.x;
-	Nu_array[timeIndex + ix * 5 + 2] = dTdn[1];
-	Nu_array[timeIndex + ix * 5 + 3] = Ts.y;
-	Nu_array[timeIndex + ix * 5 + 4] = Tm;
+	Nu_array[timeIndex + ix * 5 + 3] = (jj > -1) ? dTdn[1] : -1000.;
+	Nu_array[timeIndex + ix * 5 + 4] = (jj > -1) ? Ts.y : -1000.;
+
 }
 
 // Calculates Bulk Mean at beginning of each period
@@ -959,7 +970,6 @@ __kernel void getNuMean(__global double* __restrict__ Uxvals,
 	const int localSize = get_local_size(1);
 	const int stride = tid * 2;
 
-	// top row of domain will always have solid nodes, so no need to worry if 
 	double Uxy1 = 0., Uxy2 = 0., T1 = 0., T2 = 0.;
 	if (stride < CHANNEL_HEIGHT)
 	{
@@ -991,6 +1001,8 @@ __kernel void getNuMean(__global double* __restrict__ Uxvals,
 	{
 		Nuvals[2 * gid + saveNum * NUM_NU_LOCS * 2] = UTdata[0];
 		Nuvals[2 * gid + 1 + saveNum * NUM_NU_LOCS * 2] = Udata[0];
+		//Nuvals[0] = UTdata[0];
+		//Nuvals[1] = Udata[0];
 	}
 }
 #else

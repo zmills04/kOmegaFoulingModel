@@ -20,28 +20,21 @@
 
 void particleSort::allocateArrays()
 {
-	Ploc.allocate(vtr.trDomainSize.x*vtr.trDomainSize.y + 2);
+	Ploc.allocate(vtr.trDomainFullSizeX * vtr.trDomainSize.y + 2);
 	Ptemp.setSizes(vtr.nN, vtr.nN, 1);
-	trP.allocateArrays();
+	Ptemp.allocateArrays();
+	sortLocs1.zeros(vtr.nN);
+	sortLocs2.zeros(vtr.nN);
+	Umax_val.zeros(1);
 }
 
 void particleSort::allocateBuffers()
 {
-	trP.allocateBuffers();
+	Umax_val.allocate_buffer_w_copy();
+	Ptemp.allocateBuffers();
 	Ploc.allocate_buffer_w_copy();
-	int status;
-	
-	sortLocs1 = clCreateBuffer(CLCONTEXT, CL_MEM_READ_WRITE,
-		sizeof(int) * vtr.nN, NULL, &status);
-	ERROR_CHECKING_OCL(status, "Error creating sortLocs1 "\
-		"in particlesSort class", ERROR_INITIALIZING_VTR);
-	
-	sortLocs2 = clCreateBuffer(CLCONTEXT, CL_MEM_READ_WRITE,
-		sizeof(int) * vtr.nN, NULL, &status);
-	ERROR_CHECKING_OCL(status, "Error creating sortLocs2 "\
-		"in particlesSort class", ERROR_INITIALIZING_VTR);
-
-	clMemIniFlag = true;
+	sortLocs1.allocate_buffer_w_copy();
+	sortLocs2.allocate_buffer_w_copy();
 }
 
 // functor used to sort ParLocVec in clumpParticles function
@@ -240,6 +233,10 @@ void particleSort::createKernels()
 
 void particleSort::freeHostArrays()
 {
+	sortLocs1.FreeHost();
+	sortLocs2.FreeHost();
+
+	Ptemp.freeHost();
 	// no arrays need/can be freed
 }
 
@@ -331,35 +328,18 @@ void particleSort::iniTrp()
 	}
 		
 
-	trP[TRP_UMAX_VAL_IND] = 3. / 2. * vlb.Re * vlb.MuVal / p.Pipe_radius;
-	double Xtop_val = vls.C[vls.BL(BL_rel_top, 1)].y + (vtr.xReleaseVal - vls.C[vls.BL(BL_rel_top, 1)].x) *
+	topWallYLoc = vls.C[vls.BL(BL_rel_top, 1)].y + (vtr.xReleaseVal - vls.C[vls.BL(BL_rel_top, 1)].x) *
 		(vls.C[vls.BL(BL_rel_top, 0)].y - vls.C[vls.BL(BL_rel_top, 1)].y) /
 		(vls.C[vls.BL(BL_rel_top, 0)].x - vls.C[vls.BL(BL_rel_top, 1)].x);
-	trP[TRP_OFFSET_Y_IND] = vls.C[vls.BL(BL_rel_bot, 1)].y + (vtr.xReleaseVal - vls.C[vls.BL(BL_rel_bot, 1)].x) *
+	botWallYLoc = vls.C[vls.BL(BL_rel_bot, 1)].y + (vtr.xReleaseVal - vls.C[vls.BL(BL_rel_bot, 1)].x) *
 		(vls.C[vls.BL(BL_rel_bot, 0)].y - vls.C[vls.BL(BL_rel_bot, 1)].y) /
 		(vls.C[vls.BL(BL_rel_bot, 0)].x - vls.C[vls.BL(BL_rel_bot, 1)].x);
-	
-	trP[TRP_BVAL_IND] = Xtop_val - trP[TRP_OFFSET_Y_IND];
-	
-	trP[TRP_BOT_LOC_IND] = ceil(trP[TRP_OFFSET_Y_IND]) - trP[TRP_OFFSET_Y_IND];
-	trP[TRP_TOP_LOC_IND] = floor(Xtop_val) - trP[TRP_OFFSET_Y_IND];
-
-	trP.copyToDevice();
 }
 
-// Legacy code. Not sure how this differs from a regular sort
-// called throughout the simulation.
+
 void particleSort::initialSort()
 {
-	this->operator()();
-
-	if (Ploc(1).y > 0)
-		vtr.wallShear.updateParRemArgs();
-
-	if (Ploc(0).y > 0)
-		reReleasePar();
-
-	sortTimer = numStepsBtwSort;
+	sortParticles();
 }
 
 
@@ -370,26 +350,32 @@ void particleSort::loadParams()
 	inletConcDtDivDx = vtr.parP.inletConcPerDx * (double)numStepsBtwSort;
 	sortTimer = p.getParameter("Sort Timer", NUM_STEPS_BTW_SORT);
 	clumpFlag = p.getParameter("Clump Particles", CLUMP_PARTICLES);
+	minParticlesPerRelease = p.getParameter("Min Par Release", MIN_PARTICLES_PER_RELEASE);
 }
 
 
+// TODO: see if using Ploc_Inds is necessary of if whole buffer can
+// be filled with -1
+
+
+// Sorting working, updateLocationKernel not generating correct Ploc array
 void particleSort::operator()(cl_event *TR_prev_evt, int numevt)
 {
 	const DualKernel::kernelID kerA = DualKernel::kernelID::kernelA;
 	const DualKernel::kernelID kerB = DualKernel::kernelID::kernelB;
-
-
+	
 	cl_event ioEvt;
 	int n1 = -1;
 	Ploc.FillBuffer((void*)& Ploc_inds, sizeof(cl_int4), 1,
-		0, IOQUEUE_REF, numevt, TR_prev_evt);
-	Ploc.FillBuffer((void*)& n1, sizeof(int), 2 * vtr.trDomainSize.x *
+		0, IOQUEUE_REF);
+	Ploc.FillBuffer((void*)&n1, sizeof(int), 2 * vtr.trDomainFullSizeX *
 		vtr.trDomainSize.y, 4, IOQUEUE_REF);
+
 
 	Ptemp.copyToParOnDevice(vtr.P, false, vtr.nN, IOQUEUE_REF, 0,
 		nullptr, &ioEvt);
-	   	
-	localMergeKernel.call_kernel();
+
+	localMergeKernel.call_kernel(nullptr, numevt, TR_prev_evt);
 	
 	for (size_t pass = 1; pass <= numMerges; ++pass)
 	{
@@ -404,22 +390,56 @@ void particleSort::operator()(cl_event *TR_prev_evt, int numevt)
 		}
 	}
 
-	updateLocationKernel.call_kernel(IOQUEUE_REF, 1, &ioEvt);
+	updateLocationKernel.call_kernel(TRQUEUE_REF, 1, & ioEvt);
 	clReleaseEvent(ioEvt);
 
-	Ploc.read_from_buffer_size(2, TRQUEUE_REF, CL_FALSE);
+	Ploc.read_from_buffer_size(2, TRQUEUE_REF, CL_TRUE);
 	sortTimer = numStepsBtwSort;
 }
 
+
+void particleSort::sortParticles(cl_event* TR_prev_evt, int numevt)
+{
+
+
+	this->operator()(TR_prev_evt, numevt);
+
+	if (Ploc(1).y > 0)
+		vtr.wallShear.updateParRemArgs();
+
+
+	if (Ploc(0).y > 0)
+	{
+		reReleasePar();
+	}
+
+
+}
+
+void particleSort::sortParticles()
+{
+	this->operator()();
+
+	if (Ploc(1).y > 0)
+		vtr.wallShear.updateParRemArgs();
+
+	if (Ploc(0).y > 0)
+		reReleasePar();
+}
+
+
+
 void particleSort::reReleasePar()
 {
+	// Get total number of particles to re-release
+	int maxval = Ploc(0).y;
+	//if (maxval < minParticlesPerRelease)
+	//	return;
 	// update Umax
 	getUmaxKernel.call_kernel();
 
-	// Get total number of particles to re-release
-	cl_uint maxval = Ploc(0).y;
 	double Umean = vlb.calcUmean();
-	cl_uint par_in = MAX((cl_uint)(inletConcDtDivDx*Umean) / maxval, 1);
+	cl_uint par_in = MAX((int)(inletConcDtDivDx*Umean) / maxval, 1);
 	trReReleaseKernel.setOption(&maxval);
 	trReReleaseKernel.setOption(&par_in, 1);
 	trReReleaseKernel.set_global_call_kernel(maxval);
@@ -432,7 +452,7 @@ void particleSort::save2file()
 
 void particleSort::saveDebug()
 {
-	Ploc.save_txt_from_device();
+	//Ploc.save_txt_from_device();
 }
 
 
@@ -442,6 +462,7 @@ void particleSort::saveParams()
 	p.setParameter("Num Steps Btw Sort", numStepsBtwSort);
 	p.setParameter("Sort Timer", sortTimer);
 	p.setParameter("Clump Particles", clumpFlag);
+	p.setParameter("Min Par Release", minParticlesPerRelease);
 }
 
 void particleSort::saveRestartFiles()
@@ -460,7 +481,6 @@ void particleSort::setKernelArgs()
 	int	ind = 0;
 	Par::arrName arrList_[] = { Par::posArr, Par::depFlagArr, Par::locArr };
 	vtr.P.setBuffers(clumpParticleKernels, ind, arrList_, 3);
-	clumpParticleKernels.set_argument(ind++, trP.fVals.get_buf_add());
 	clumpParticleKernels.set_argument(ind++, vls.C.get_buf_add());
 	// Remaining arguments set before call
 
@@ -468,7 +488,7 @@ void particleSort::setKernelArgs()
 	// getUmaxKernel Arguments
 	ind = 0;
 	getUmaxKernel.set_argument(ind++, vlb.Ux_array.get_buf_add());
-	trP.setBuffers(getUmaxKernel, ind);
+	getUmaxKernel.set_argument(ind++, Umax_val.get_buf_add());
 #ifdef OPENCL_VERSION_1_2
 	getUmaxKernel.set_local_memory(ind, getUmaxKernel.getLocalSize() * sizeof(double));
 #endif
@@ -479,11 +499,11 @@ void particleSort::setKernelArgs()
 	ind = 0;
 	vtr.P.setBuffers(trReReleaseKernel, ind, arrList2_, 6);
 	trReReleaseKernel.set_argument(ind++, vtr.RandList.get_buf_add());
-	trP.setBuffers(trReReleaseKernel, ind);
 	trReReleaseKernel.set_argument(ind++, vlb.Ux_array.get_buf_add());
+	trReReleaseKernel.set_argument(ind++, Umax_val.get_buf_add());
 	if (vtr.calcIOFlag)
 	{
-		trReReleaseKernel.set_argument(ind++, vlb.Ux_array.get_buf_add());
+		trReReleaseKernel.set_argument(ind++, vtr.ioDistsSave.get_buf_add());
 		vtr.ioDistsArgIndex = ind;
 		trReReleaseKernel.set_argument(ind++, vtr.ioDistsSave.getCurIndAdd());
 	}
@@ -496,7 +516,7 @@ void particleSort::setKernelArgs()
 
 	ind = 0;
 	localMergeKernel.set_argument(ind++, vtr.P.loc.get_buf_add());
-	localMergeKernel.set_argument(ind++, &sortLocs1);
+	localMergeKernel.set_argument(ind++, sortLocs1.get_buf_add());
 	localMergeKernel.set_local_memory(ind++, WORKGROUPSIZE_SORT * sizeof(int));
 	localMergeKernel.set_local_memory(ind++, WORKGROUPSIZE_SORT * sizeof(int));
 	localMergeKernel.set_local_memory(ind++, WORKGROUPSIZE_SORT * sizeof(int));
@@ -506,11 +526,11 @@ void particleSort::setKernelArgs()
 	globalMergeKernel.set_separate_arguments(ind++,
 		vtr.P.loc.get_buf_add(), Ptemp.loc.get_buf_add());
 	globalMergeKernel.set_separate_arguments(ind++,
-		&sortLocs1, &sortLocs2);
+		sortLocs1.get_buf_add(), sortLocs2.get_buf_add());
 	globalMergeKernel.set_separate_arguments(ind++,
 		Ptemp.loc.get_buf_add(), vtr.P.loc.get_buf_add());
 	globalMergeKernel.set_separate_arguments(ind++,
-		&sortLocs2, &sortLocs1);
+		sortLocs2.get_buf_add(), sortLocs1.get_buf_add());
 	globalMergeKernel.setOptionInd(ind); // option is srcLogicalBlockSize
 
 	// All P arrays will be copied to Ptemp buffers while sort kernels
@@ -527,14 +547,54 @@ void particleSort::setKernelArgs()
 	  // to copy loc array info over from Ptemp in kernel
 		updateLocationKernel.set_argument(ind++, Ptemp.loc.get_buf_add());
 		updateLocationKernel.set_argument(ind++, vtr.P.loc.get_buf_add());
-		updateLocationKernel.set_argument(ind++, &sortLocs2);
+		updateLocationKernel.set_argument(ind++, sortLocs2.get_buf_add());
 	}
 	else
 	{
 		updateLocationKernel.set_argument(ind++, vtr.P.loc.get_buf_add());
-		updateLocationKernel.set_argument(ind++, &sortLocs1);
+		updateLocationKernel.set_argument(ind++, sortLocs1.get_buf_add());
 	}
 	updateLocationKernel.set_argument(ind, Ploc.get_buf_add());
+
+	setReleaseParameters();
+}
+
+void particleSort::setReleaseParameters()
+{
+	topWallYLoc = vls.C[vls.BL(BL_rel_top, 1)].y + (vtr.xReleaseVal - vls.C[vls.BL(BL_rel_top, 1)].x) *
+		(vls.C[vls.BL(BL_rel_top, 0)].y - vls.C[vls.BL(BL_rel_top, 1)].y) /
+		(vls.C[vls.BL(BL_rel_top, 0)].x - vls.C[vls.BL(BL_rel_top, 1)].x);
+	botWallYLoc = vls.C[vls.BL(BL_rel_bot, 1)].y + (vtr.xReleaseVal - vls.C[vls.BL(BL_rel_bot, 1)].x) *
+		(vls.C[vls.BL(BL_rel_bot, 0)].y - vls.C[vls.BL(BL_rel_bot, 1)].y) /
+		(vls.C[vls.BL(BL_rel_bot, 0)].x - vls.C[vls.BL(BL_rel_bot, 1)].x);
+
+	//std::cout << "Be sure to remove adjustment made to release location info\n";
+	//botWallYLoc = 155.5;
+
+
+
+
+	double botLBNodeYLoc = ceil(botWallYLoc);
+	//int uStartIndex = vtr.xReleasePos + p.XsizeFull * ((int)botLBNodeYLoc);
+	double topLBNodeYLoc = floor(topWallYLoc);
+	//double distBtwLBNodes = topLBNodeYLoc - botLBNodeYLoc;
+	double distLastNodeWall = topWallYLoc - topLBNodeYLoc;
+	double distWallFirstNode = botLBNodeYLoc - botWallYLoc;
+	double curChannelHeight = topWallYLoc - botWallYLoc;
+
+
+
+
+
+	int ind = 2;
+	//trReReleaseKernel.setOption(&uStartIndex, 2);
+	trReReleaseKernel.setOption(&botWallYLoc, ind++);
+	trReReleaseKernel.setOption(&botLBNodeYLoc, ind++);
+	trReReleaseKernel.setOption(&topLBNodeYLoc, ind++);
+	trReReleaseKernel.setOption(&distWallFirstNode, ind++);
+	trReReleaseKernel.setOption(&distLastNodeWall, ind++);
+	trReReleaseKernel.setOption(&curChannelHeight, ind++);
+	//trReReleaseKernel.setOption(&distBtwLBNodes, 7);
 }
 
 #define setSrcDefinePrefix		SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr()
@@ -552,11 +612,7 @@ void particleSort::setSourceDefines()
 	
 	// Trp indicies
 	setSrcDefinePrefix, "TRP_X_RELEASE", vtr.xReleaseVal);
-	setSrcDefinePrefix, "TRP_TOP_LOC_IND", TRP_TOP_LOC_IND);
-	setSrcDefinePrefix, "TRP_BOT_LOC_IND", TRP_BOT_LOC_IND);
-	setSrcDefinePrefix, "TRP_UMAX_VAL_IND", TRP_UMAX_VAL_IND);
-	setSrcDefinePrefix, "TRP_BVAL_IND", TRP_BVAL_IND);
-	setSrcDefinePrefix, "TRP_OFFSET_Y_IND", TRP_OFFSET_Y_IND);
+
 
 	// BL and LSC info
 	setSrcDefinePrefix, "BL_REL_BOT", BL_rel_bot);
@@ -569,7 +625,7 @@ void particleSort::setSourceDefines()
 	setSrcDefinePrefix, "LSC_STOP_TOP", LSC_stop_top);
 
 	int y0 = 0;
-	int x0 = (int)vtr.xReleaseVal - 1;
+	int x0 = (int)vtr.xReleaseVal;
 	while (vls.nType(x0, y0) & M0_SOLID_NODE)
 		y0++;
 
@@ -607,17 +663,8 @@ void particleSort::updateTimeData()
 
 void particleSort::updateTrp()
 {
-	double Xtop_val = vls.C[vls.BL(BL_rel_top, 1)].y + (vtr.xReleaseVal - vls.C[vls.BL(BL_rel_top, 1)].x) *
-		(vls.C[vls.BL(BL_rel_top, 0)].y - vls.C[vls.BL(BL_rel_top, 1)].y) /
-		(vls.C[vls.BL(BL_rel_top, 0)].x - vls.C[vls.BL(BL_rel_top, 1)].x);
-	trP[TRP_OFFSET_Y_IND] = vls.C[vls.BL(BL_rel_bot, 1)].y + (vtr.xReleaseVal - vls.C[vls.BL(BL_rel_bot, 1)].x) *
-		(vls.C[vls.BL(BL_rel_bot, 0)].y - vls.C[vls.BL(BL_rel_bot, 1)].y) /
-		(vls.C[vls.BL(BL_rel_bot, 0)].x - vls.C[vls.BL(BL_rel_bot, 1)].x);
-	trP[TRP_BVAL_IND] = Xtop_val - trP[TRP_OFFSET_Y_IND];
-	trP[TRP_BOT_LOC_IND] = ceil(trP[TRP_OFFSET_Y_IND]) - trP[TRP_OFFSET_Y_IND];
-	trP[TRP_TOP_LOC_IND] = floor(Xtop_val) - trP[TRP_OFFSET_Y_IND];
-		
-
-	trP.copyToDevice();
+	// vls.C has been read from buffer, so no need to read again
+	setReleaseParameters();
+	
 }
 

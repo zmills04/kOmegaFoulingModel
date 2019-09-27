@@ -229,6 +229,10 @@ public:
 
 	// initializes arrays corresponding to particles
 	void iniParticleColors();
+
+	// allocates gl buffers after glew is initialized since
+	// it will throw error otherwise
+	//void allocateGLBuffers();
 	
 	
 	////////////////////////////////////////////////////////////////////////////	

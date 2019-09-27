@@ -57,6 +57,15 @@ public:
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 	
+	/////////////////////////////////////
+	////////////////////////////////////
+	/// Remove these, for debugging ///
+	/////////////////////////////////////
+	////////////////////////////////////
+
+	Array1Dv2i DebugOutData;
+
+
 	// Func Pointer for calling loadParams
 	std::function<void(void)> loadParamsPtr;
 
@@ -65,9 +74,11 @@ public:
 		updateFlag("updateFlag"), PV("PV"), RandList("RandList"), 
 		activeInds("activeInds", WORKGROUPSIZE_TR, 2),
 		wallInds("wallInds", WORKGROUPSIZE_TR, 2), BL("trBL"),
-		P("trP"), NodC("trNodC"), NodI("trNodI"), updateWallsDist("updateWallsDist")
+		P("trP"), NodC("trNodC"), NodI("trNodI"), updateWallsDist("updateWallsDist"),
+		DebugOutData("debugOutData")
 	{
 		loadParamsPtr = std::bind(&clVariablesTR::loadParams, this);
+		rmax = (double)(RAND_MAX + 1);
 	};
 
 	virtual ~clVariablesTR()
@@ -124,6 +135,11 @@ public:
 	// Finds wall nodes and appends their indicies to wallInds
 	Kernel findTRWallNodesKernel;
 
+	// Goes through several iterations of rand function for each particle
+	// to ensure that the Rand function returns sufficiently random values at
+	// beginning of simulation
+	Kernel callRand;
+
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                                               ///////////////
@@ -150,6 +166,7 @@ public:
 	// Similar array is wallInds, which is a list of the wall node indicies
 	// This can be updated very infrequently since it will change very little
 	// over the course of the simulation.
+	// size of activeInds = nActiveInds
 	DynArray1Di activeInds;
 
 	// indicates if a node in domain is active or not
@@ -172,7 +189,7 @@ public:
 	// may need to be changed slightly
 	//Array2Di nodeNeigh;
 
-	// Contains the coefficients used to calculate NodV
+	// Contains the coefficients used to calculate velocities and temperatures
 	// size - trDomainSize
 	NodeC NodC;
 
@@ -193,8 +210,8 @@ public:
 	// Number of nodes along the wall
 	//Array1Di numWallNodes;
 
-	// particle velocities (info must be kept between updating of location and
-	// deposit kernels
+	// Velocity and displacement information of particles that have
+	// reflected off of wall
 	// size - nN
 	Array1Dv2d PV;
 
@@ -384,7 +401,7 @@ public:
 								// possibly legacy
 
 	double Umean_Current;		// current mean Ux velocity in domain
-	int nActiveNodes;			// Number of active nodes in domain
+	//int nActiveNodes;			// Number of active nodes in domain
 
 
 	int Num_nodes_at_release;	// number of nodes in y direction at x location of release

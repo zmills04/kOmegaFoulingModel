@@ -206,7 +206,7 @@
       <PrecompiledHeader />
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <DisableSpecificWarnings>4068;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4068;26495;26439;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <AdditionalIncludeDirectories>C:\Program Files %28x86%29\OCL_SDK_Light\include;C:\Users\Grant\Documents\Visual Studio 2013\Projects\clBlas_build\package\include;C:\Users\Grant\Downloads\clSPARSE-master\release\clSPARSE-package\include;C:\Users\Grant\YAML_CPP_DEBUG\include;C:\Users\zmj\Documents\OCL_SDK_Light\include</AdditionalIncludeDirectories>
       <OpenMPSupport>true</OpenMPSupport>
     </ClCompile>

@@ -54,6 +54,7 @@ void clVariablesLS::allocateBuffers()
 {
 	//M.allocate_buffer_w_copy();
 	nType.allocate_buffer_w_copy();
+	nTypePrev.allocate_buffer_w_copy(CL_MEM_READ_ONLY);
 	BL.allocate_buffer_w_copy();
 	C0.allocate_buffer_w_copy(CL_MEM_READ_ONLY);
 	C.allocate_buffer_w_copy();
@@ -261,7 +262,7 @@ void clVariablesLS::bcSetdXArr(cl_int2 ii0, cl_int2 ii1, int dir, double dist,
 	if ((nType(ii1.x, ii1.y) & M_SOLID_NODE) == 0)
 		return;
 
-	dXArr(ii0.x, ii0.y, dir - 1) = MIN(dist, dXArr(ii0.x, ii0.y, dir - 1));
+	dXArr(ii0.x, ii0.y, dir - 1) = MAX((MIN(dist, dXArr(ii0.x, ii0.y, dir - 1))), vfl.mindXDist);
 }
 
 void clVariablesLS::bcSetdXArr0(cl_int2 ii0, cl_int2 ii1, int dir, double dist,
@@ -281,7 +282,7 @@ void clVariablesLS::bcSetdXArr0(cl_int2 ii0, cl_int2 ii1, int dir, double dist,
 	if ((vls.nType(ii1.x, ii1.y) & M0_SOLID_NODE) == 0)
 		return;
 	
-	dXArr0(ii0.x, ii0.y, dir - 1) = MIN(dist, dXArr0(ii0.x, ii0.y, dir - 1));
+	dXArr0(ii0.x, ii0.y, dir - 1) = MAX((MIN(dist, dXArr0(ii0.x, ii0.y, dir - 1))), vfl.mindXDist);
 }
 
 bool clVariablesLS::fillShearArray()
@@ -383,6 +384,8 @@ void clVariablesLS::createKernels()
 	updateBoundArr.create_kernel(GetSourceProgram, LBQUEUE_REF, "updateBoundaryNodes");
 	updateBoundArr.set_size(nBL, WORKGROUPSIZE_UPDATEM);
 
+	setBoundaryFlags.create_kernel(GetSourceProgram, LBQUEUE_REF, "updateNodeBoundaryInfo");
+	setBoundaryFlags.set_size(p.nX, WORKGROUPSIZE_UPDATEM, p.nY, 1);
 #ifndef IN_KERNEL_IBB
 	updateIBBOnly.create_kernel(GetSourceProgram, LBQUEUE_REF, "updateIBBOnly");
 	updateIBBOnly.set_size(nN - 1, WORKGROUPSIZE_UPDATEM);
@@ -399,10 +402,12 @@ void clVariablesLS::setKernelArgs()
 	updateNType.set_argument(5, vlb.Ro_array.get_buf_add());
 	updateNType.set_argument(6, vlb.kOmegaClass.Kappa.get_add_A());
 	updateNType.set_argument(7, vlb.kOmegaClass.Kappa.get_add_b());
-	updateNType.set_argument(8, vlb.kOmegaClass.Omega.get_add_A());
-	updateNType.set_argument(9, vlb.kOmegaClass.Omega.get_add_b());
-	updateNType.set_argument(9, vlb.kOmegaClass.Nut_array.get_buf_add());
-	updateNType.set_argument(10, vlb.kOmegaClass.Omega.get_add_IndArr());
+	updateNType.set_argument(8, vlb.kOmegaClass.Kappa.get_add_Macro());
+	updateNType.set_argument(9, vlb.kOmegaClass.Omega.get_add_A());
+	updateNType.set_argument(10, vlb.kOmegaClass.Omega.get_add_b());
+	updateNType.set_argument(11, vlb.kOmegaClass.Omega.get_add_Macro());
+	updateNType.set_argument(12, vlb.kOmegaClass.Nut_array.get_buf_add());
+	updateNType.set_argument(13, vlb.kOmegaClass.Omega.get_add_IndArr());
 
 	int ind = 0;
 	BLinks::arrName BLArrList[] = { BLinks::P01Arr, BLinks::vNArr,
@@ -430,10 +435,12 @@ void clVariablesLS::setKernelArgs()
 
 #endif
 
+	setBoundaryFlags.set_argument(0, nType.get_buf_add());
+
+
 
 	// Calls kernel, so must go here after kernel has been initialized
 	iniIBBArrays();
-
 }
 
 void clVariablesLS::setSourceDefines()
@@ -518,6 +525,7 @@ bool clVariablesLS::testRestartRun()
 
 void clVariablesLS::renameSaveFiles()
 {
+	return;
 	C.RenameTxtFile();
 	nType.RenameTxtFile();
 
@@ -537,15 +545,17 @@ void clVariablesLS::save2file()
 void clVariablesLS::saveDebug()
 {
 	ibbArr.saveTxtFromDeviceDynamic();
-	//dXArr.save_txt_from_device_as_multi2D("dXarr");
+	dXArr.save_txt_from_device_as_multi2D("dXarr");
+	C.save_txt_from_device();
+	nType.save_txt_from_device_short_to_int();
 	//dXArr0.save_txt_from_device_as_multi2D("dX0arr");
 	ibbDistArr.saveTxtFromDeviceDynamic();
-	ssArr.save_txt_from_device();
-	BL.save_txt_from_device();
-	ssArrInds.save_txt_from_device();
-	ssArrIndMap.save_txt_from_device();
-	lsMap.save_txt_from_device();
-	save2file();
+	//ssArr.save_txt_from_device();
+	//BL.save_txt_from_device();
+	//ssArrInds.save_txt_from_device();
+	//ssArrIndMap.save_txt_from_device();
+	//lsMap.save_txt_from_device();
+	//save2file();
 
 }
 
@@ -573,9 +583,13 @@ void clVariablesLS::ini()
 	C0.savetxt();
 
 	iniFillMap0();
+	iniNodeBoundaryInfo0();
+	sourceGenerator::SourceInstance()->addFile2Kernel("lsKernels.cl");
+	
+	
 	iniFillMap();
 
-	sourceGenerator::SourceInstance()->addFile2Kernel("lsKernels.cl");
+	
 
 	// Copy contents of nType to nTypePrev before calling iniNodeBoundaryInfo
 	std::memcpy(nTypePrev.get_array(), nType.get_array(), nType.getFullSize() * sizeof(NTYPE_TYPE));
@@ -905,7 +919,7 @@ void clVariablesLS::iniLSMap()
 	}
 }
 
-void clVariablesLS::iniNodeBoundaryInfo()
+void clVariablesLS::iniNodeBoundaryInfo0()
 {
 	// fill boundary info for unfouled domain first
 	for (int i = 0; i < p.nX; i++)
@@ -936,7 +950,10 @@ void clVariablesLS::iniNodeBoundaryInfo()
 			}
 		}
 	}
-	   	  
+}
+
+void clVariablesLS::iniNodeBoundaryInfo()
+{
 	for (int i = 0; i < p.nX; i++)
 	{
 		for (int j = 0; j < p.nY; j++)
@@ -962,9 +979,9 @@ void clVariablesLS::iniNodeBoundaryInfo()
 					}
 #ifdef IN_KERNEL_IBB
 					if (vls.dXArr(i, j, m - 1) <= 0.5)
-						nType(i,j) |= vlb.boundsArrT1[m];
+						nType(i, j) |= vlb.boundsArrT1[m];
 					else if (vls.dXArr(i, j, m - 1) > 0.5 && vls.dXArr(i, j, m - 1) < 1.0)
-						nType(i,j) |= vlb.boundsArrT2[m];
+						nType(i, j) |= vlb.boundsArrT2[m];
 					else
 						printf("dir at (%d,%d) points to solid node, but dx = 1\n", i, j);
 #else
@@ -988,6 +1005,9 @@ void clVariablesLS::iniShearArray()
 {
 	ssArr.reset();
 	fillShearArray();
+
+	//vtr.wallShear.allocateArrays();
+
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -1001,18 +1021,18 @@ void clVariablesLS::iniShearArray()
 
 void clVariablesLS::update()
 {
-	// Prepares dXArr and nType for updating.
-	nType.enqueue_copy_to_buffer(nTypePrev.get_buffer(), -1, LBQUEUE_REF);
+	// Prepares dXArr for updating.
 	dXArr.enqueue_copy_to_buffer(dXArr0.get_buffer(), -1, LBQUEUE_REF);
-	ibbArrCurIndex.FillBuffer(0, LBQUEUE_REF);
+
 
 	// updates nType
 	updateNType.call_kernel();
-
-	// Saves updated nType to nTypePrev to use in next update step
-	nTypePrev.enqueue_copy_to_buffer(vls.nType.get_buffer(), -1, LBQUEUE_REF);
-
+	FINISH_QUEUES;
+	
+	setBoundaryFlags.call_kernel();
+	FINISH_QUEUES;
 	updateBoundaryArrays();
+	FINISH_QUEUES;
 }
 
 
@@ -1021,98 +1041,122 @@ void clVariablesLS::updateBoundaryArrays()
 	updateBoundArr.call_kernel();
 	ibbArrCurIndex.read_from_buffer(LBQUEUE_REF);
 
-	bool resizeFlag = false;
 	if (ibbArrCurIndex(0) >= ibbArr.getBufferFullSize())
 	{
+		int fullIbbArrLength = ibbArrCurIndex(0);
+
 		ibbArrCurIndex.FillBuffer(0, LBQUEUE_REF);
-		resizeFlag = true;
-		ibbArr.resize_device_dynamic();
-		ibbDistArr.resize_device_dynamic();
+		ibbArr.resize_device_dynamic(fullIbbArrLength);
+		ibbDistArr.resize_device_dynamic(fullIbbArrLength);
 
 		updateIBBOnly.set_argument(2, ibbArr.get_buf_add());
 		updateIBBOnly.set_argument(3, ibbDistArr.get_buf_add());
+		
 		int ibbarrsize_ = ibbArr.getBufferFullSize();
 		updateIBBOnly.set_argument(5, &ibbarrsize_);
 
 		updateIBBOnly.call_kernel();
 
 		ibbArrCurIndex.read_from_buffer(LBQUEUE_REF);
-	}
 
-
-	int ibbnumel_ = ibbArrCurIndex(0);
-
-	vlb.ibbKernel.set_argument(3, &ibbnumel_);
-
-	// dont need to update these kernels until after updateIBBOnly
-	// has finished updating ibb arrays since they will not be
-	// called again until next update step.
-	if (resizeFlag)
-	{
 		updateBoundArr.set_argument(9, ibbArr.get_buf_add());
 		updateBoundArr.set_argument(10, ibbDistArr.get_buf_add());
-		int ibbarrsize_ = ibbArr.getBufferFullSize();
 		updateBoundArr.set_argument(12, &ibbarrsize_);
 
 
 		vlb.ibbKernel.set_argument(0, vls.ibbArr.get_buf_add());
 		vlb.ibbKernel.set_argument(1, vls.ibbDistArr.get_buf_add());
+
 	}
+
+	int ibbnumel_ = ibbArrCurIndex(0);
+
+	vlb.ibbKernel.set_argument(3, &ibbnumel_);
+
+	// Fill ibbArrCurIndex with 0, so that it is ready 
+	// to be re-used next vfl.update step.
+	ibbArrCurIndex.FillBuffer(0);
 }
 
 void clVariablesLS::iniIBBArrays()
 {
-	//for (int i = 0; i < nN; i++)
-	//{
-	//	updateIBBOnly_Test(i);
-	//}
-
-
-
 	ibbArrCurIndex.FillBuffer(0, LBQUEUE_REF);
-
 	updateIBBOnly.call_kernel();
-	
 	ibbArrCurIndex.read_from_buffer(LBQUEUE_REF);
 
-	bool resizeFlag = false;
 	if (ibbArrCurIndex(0) >= ibbArr.getBufferFullSize())
 	{
+		int fullIbbArrLength = ibbArrCurIndex(0);
+
 		ibbArrCurIndex.FillBuffer(0, LBQUEUE_REF);
-		resizeFlag = true;
-		int newsize = ibbArr.getNewSize(ibbArrCurIndex(0));
-		ibbArr.reallocate_device_dynamic(newsize);
-		ibbDistArr.reallocate_device_dynamic(newsize);
+		ibbArr.resize_device_dynamic(fullIbbArrLength);
+		ibbDistArr.resize_device_dynamic(fullIbbArrLength);
 
 		updateIBBOnly.set_argument(2, ibbArr.get_buf_add());
 		updateIBBOnly.set_argument(3, ibbDistArr.get_buf_add());
+
 		int ibbarrsize_ = ibbArr.getBufferFullSize();
 		updateIBBOnly.set_argument(5, &ibbarrsize_);
 
 		updateIBBOnly.call_kernel();
 
 		ibbArrCurIndex.read_from_buffer(LBQUEUE_REF);
-	}
 
-	int ibbnumel_ = ibbArrCurIndex(0);
-
-	vlb.ibbKernel.set_argument(3, &ibbnumel_);
-
-
-	// dont need to update these kernels until after updateIBBOnly
-	// has finished updating ibb arrays since they will not be
-	// called again until next update step.
-	if (resizeFlag)
-	{
 		updateBoundArr.set_argument(9, ibbArr.get_buf_add());
 		updateBoundArr.set_argument(10, ibbDistArr.get_buf_add());
-		int ibbarrsize_ = ibbArr.getBufferFullSize();
 		updateBoundArr.set_argument(12, &ibbarrsize_);
-
-
-		vlb.ibbKernel.set_argument(0, vls.ibbArr.get_buf_add());
-		vlb.ibbKernel.set_argument(1, vls.ibbDistArr.get_buf_add());
 	}
+
+	// Fill ibbArrCurIndex with 0, so that it is ready 
+	// to be re-used next vfl.update step.
+	ibbArrCurIndex.FillBuffer(0);
+
+
+
+	//ibbArrCurIndex.FillBuffer(0, LBQUEUE_REF);
+
+	//updateIBBOnly.call_kernel();
+	//
+	//ibbArrCurIndex.read_from_buffer(LBQUEUE_REF);
+
+	//bool resizeFlag = false;
+	//if (ibbArrCurIndex(0) >= ibbArr.getBufferFullSize())
+	//{
+	//	ibbArrCurIndex.FillBuffer(0, LBQUEUE_REF);
+	//	resizeFlag = true;
+	//	int newsize = ibbArr.getNewSize(ibbArrCurIndex(0));
+	//	ibbArr.reallocate_device_dynamic(newsize);
+	//	ibbDistArr.reallocate_device_dynamic(newsize);
+
+	//	updateIBBOnly.set_argument(2, ibbArr.get_buf_add());
+	//	updateIBBOnly.set_argument(3, ibbDistArr.get_buf_add());
+	//	int ibbarrsize_ = ibbArr.getBufferFullSize();
+	//	updateIBBOnly.set_argument(5, &ibbarrsize_);
+
+	//	updateIBBOnly.call_kernel();
+
+	//	ibbArrCurIndex.read_from_buffer(LBQUEUE_REF);
+	//}
+
+	//int ibbnumel_ = ibbArrCurIndex(0);
+
+	//vlb.ibbKernel.set_argument(3, &ibbnumel_);
+	//vlb.ibbKernel.reset_global_size(ibbnumel_);
+
+	//// dont need to update these kernels until after updateIBBOnly
+	//// has finished updating ibb arrays since they will not be
+	//// called again until next update step.
+	//if (resizeFlag)
+	//{
+	//	updateBoundArr.set_argument(9, ibbArr.get_buf_add());
+	//	updateBoundArr.set_argument(10, ibbDistArr.get_buf_add());
+	//	int ibbarrsize_ = ibbArr.getBufferFullSize();
+	//	updateBoundArr.set_argument(12, &ibbarrsize_);
+
+
+	//	vlb.ibbKernel.set_argument(0, vls.ibbArr.get_buf_add());
+	//	vlb.ibbKernel.set_argument(1, vls.ibbDistArr.get_buf_add());
+	//}
 }
 
 // Move to vfl
@@ -1163,6 +1207,7 @@ void clVariablesLS::updatedXArr()
 bool clVariablesLS::updateShearArrays()
 {
 	nType.read_from_buffer();
+
 	// TODO: check if it is necessary to set this to zeros, or if
 	// resetting the current index is sufficient
 	ssArr.reset();

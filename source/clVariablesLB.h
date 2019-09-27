@@ -174,6 +174,7 @@ public:
 	// Flags used to indicate if simulation is being restarted from
 	// a checkpoint
 	bool fLoadedFlag, restartRunFlag;
+	bool vLoadedFlag, loadVelTxtFlag;
 
 	// Flag indicating whether or not to use turbulent velocity BC's
 	// at boundary nodes
@@ -337,6 +338,9 @@ public:
 	//initializes F distributions to Weight values
 	void iniDists();
 
+	// Creates dists from loaded velocities
+	void iniDistsFromVel(); 
+
 	//initializes F distributions to parabolic flow
 	void iniDists(double Umaxval);
 
@@ -368,7 +372,74 @@ public:
 	double calcUmean();
 
 	//Enqueues LB kernels
-	void Solve();
+	void Solve()
+	{
+		collisionKernel.call_kernel();
+
+		//FINISH_QUEUES;
+		//FB.save_txt_from_device_as_multi2D("lbf");
+
+		//Array1Di xArr1("xArr1"), xArr2("xArr2"), xArr3("xArr3");
+		//Array1Di yArr1("yArr1"), yArr2("yArr2"), yArr3("yArr3");
+		//Array1Di dirArr1("dirArr1"), dirArr2("dirArr2"), dirArr3("dirArr3");
+		//int numInds = 12544;// vls.ibbArr.curSize();
+		//xArr1.zeros(numInds);
+		//xArr1.allocate_buffer_w_copy();
+		//yArr1.zeros(numInds);
+		//yArr1.allocate_buffer_w_copy();
+		//dirArr1.zeros(numInds);
+		//dirArr1.allocate_buffer_w_copy();
+		//xArr2.zeros(numInds);
+		//xArr2.allocate_buffer_w_copy();
+		//yArr2.zeros(numInds);
+		//yArr2.allocate_buffer_w_copy();
+		//dirArr2.zeros(numInds);
+		//dirArr2.allocate_buffer_w_copy();
+		//xArr3.zeros(numInds);
+		//xArr3.allocate_buffer_w_copy();
+		//yArr3.zeros(numInds);
+		//yArr3.allocate_buffer_w_copy();
+		//dirArr3.zeros(numInds);
+		//dirArr3.allocate_buffer_w_copy();
+
+		//ibbKernel.set_argument(4, xArr1.get_buf_add());
+		//ibbKernel.set_argument(5, yArr1.get_buf_add());
+		//ibbKernel.set_argument(6, dirArr1.get_buf_add());
+		//ibbKernel.set_argument(7, xArr2.get_buf_add());
+		//ibbKernel.set_argument(8, yArr2.get_buf_add());
+		//ibbKernel.set_argument(9, dirArr2.get_buf_add());
+		//ibbKernel.set_argument(10, xArr3.get_buf_add());
+		//ibbKernel.set_argument(11, yArr3.get_buf_add());
+		//ibbKernel.set_argument(12, dirArr3.get_buf_add());
+
+#ifndef IN_KERNEL_IBB
+		ibbKernel.call_kernel();
+#endif
+		//FINISH_QUEUES;
+		//xArr1.save_txt_from_device();
+		//yArr1.save_txt_from_device();
+		//dirArr1.save_txt_from_device();
+		//xArr2.save_txt_from_device();
+		//yArr2.save_txt_from_device();
+		//dirArr2.save_txt_from_device();
+		//xArr3.save_txt_from_device();
+		//yArr3.save_txt_from_device();
+		//dirArr3.save_txt_from_device();
+
+
+		//FINISH_QUEUES;
+		//FB.save_txt_from_device_as_multi2D("lba");
+		
+
+
+		alter ^= 1;
+		if (kOmegaClass.kOmegaSolverFlag)
+			kOmegaClass.Solve();
+		else
+			clFinish(LBQUEUE);
+
+	}
+
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                Output Functions               ///////////////
@@ -376,7 +447,7 @@ public:
 	
 	// Saves each FA/FB distribution as an individual text file for
 	// debugging purposes
-	void saveDistributions();
+	void saveDistributions(bool saveOpposite = false);
 
 
 ////////////////////////////////////////////////////////////////////////////	

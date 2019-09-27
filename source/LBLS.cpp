@@ -30,6 +30,11 @@
 //		used
 // TODO: Make sure that dynamic array updates are coupled with resetting of kernel global sizes
 
+// TODO: Make sure that when anything is updated on GPU based on vtr.BL, it will not be an
+//		issue if vls.BL is used to initialize data (since top row indicies increase from left to right
+//		for vtr.BL, and decreases for vls.BL 
+
+
 #include "StdAfx.h"
 #include "oclEnvironment.h"
 #include "clVariablesLS.h"
@@ -55,7 +60,6 @@ clVariablesFL vfl;
 void ini();
 void run();
 void finish(void);
-void Solve_LB_only();
 
 
 int main(int argc, char* argv[])
@@ -76,6 +80,10 @@ void ini()
 	omp_set_num_threads(OPENMP_NUMBER_THREADS);
 	LOGMESSAGE("Setting number of OpenMP threads to " + std::to_string(OPENMP_NUMBER_THREADS));
 
+#ifdef _DEBUG
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "GPU_DEBUG");
+#endif
+
 	vls.ini();
 	vlb.ini();
 	vfd.ini();
@@ -83,12 +91,15 @@ void ini()
 	vfl.ini();
 
 	if (vfd.calcNuFlag)
+	{
 		vfd.iniNuCoeffs();
+	}
 
 	sourceGenerator::SourceInstance()->buildSource();
 	LOGMESSAGE("OpenCL source built");
 	ReduceGenerator::ReduceInstance()->buildSource();
 	LOGMESSAGE("Reducer source built");
+
 
 	// Meta data for all CSR matricies have been generated,
 	// clSparse objects can be deleted
@@ -97,45 +108,38 @@ void ini()
 	// If f distributions are not loaded, and kappa and omega are not
 	// loaded when using turbulence model, the initial flow must be
 	// solved for.
-	//if (!vlb.fLoadedFlag && (vlb.kOmegaClass.kOmegaSolverFlag &&
-	//	!vlb.kOmegaClass.kOmegaLoadedFlag))
-	//{
-	//	LOGMESSAGE("Solving for initial flow field");
-	//	vlb.getInitialFlow();
-	//	LOGMESSAGE("Initial flow field obtained");
-	//}
+	if (!(vlb.fLoadedFlag || vlb.vLoadedFlag) || (vlb.kOmegaClass.kOmegaSolverFlag &&
+		!vlb.kOmegaClass.kOmegaLoadedFlag))
+	{
+		LOGMESSAGE("Solving for initial flow field");
+		vlb.getInitialFlow();
+		LOGMESSAGE("Initial flow field obtained");
+	}
 
 	// if using temperature solver, and no initial temperature is
-	// loaded, must get initial temperature
-	if (vfd.thermalSolverFlag && !vfd.tempLoadedFlag)
+	// loaded (or temp is loaded from text file), must get initial temperature
+	if (vfd.thermalSolverFlag && (!vfd.tempLoadedFlag))// || vlb.vLoadedFlag))
 	{
 		LOGMESSAGE("Solving for initial temperature distribution");
 		vlb.getIntialFlowAndTemp();
 		LOGMESSAGE("Solved for initial temperature distribution");
 	}
-	   
+	  
+	vtr.callRand.call_kernel();
+	clFinish(TRQUEUE);
 	if (!vtr.restartRunFlag)
+	{
 		vtr.parSort.initialSort();
+	}
 
 	clEnv::instance()->finishQueues();
 
-
-	// Shouldnt be necessary since CPU mem >> GPU mem,
-	// but may be useful when utilizing 2 GPUs on same computer
-	vls.freeHostArrays();
-	vlb.freeHostArrays();
-	vfd.freeHostArrays();
-	vtr.freeHostArrays();
-	vfl.freeHostArrays();
-
-	//vtr.TR_Node_kernel[0].call_kernel();
-	//vtr.TR_Wall_Node_kernel[0].call_kernel();
-
+	p.freeHostArrays();
 
 	if (vtr.restartRunFlag)
 	{
-		//if (vtr.parSort.Ploc(1).y > 0)
-		//	vtr.Update_Par_Rem_Args();
+		if (vtr.parSort.Ploc(1).y > 0)
+			vtr.wallShear.updateParRemArgs();
 	}
 
 	//// Not sure if need to do this after re-factoring of code.
@@ -144,16 +148,22 @@ void ini()
 	//	vfl.UpdateRestart();
 	//}
 
+
 	clEnv::instance()->finishQueues();
 	//vlb.Calculate_U_mean();
 	d.ini();
 	d.start();
+
+	//vfl.testFlUpdate();
+
+
 }
 
 void step()
 {
 	p.step();
 	d.step();
+
 #ifdef PROFILING
 	vlb.count_profile++;
 #endif
@@ -172,196 +182,207 @@ bool testFinish()
 	return false;
 };
 
-void Solve_LB_only()
+void Solve_no_TR()
 {
-	//cl_event Col_Fluid;
-	//vlb.Collision_kernel.call_kernel(LBQUEUE_REF, 0, NULL, &Col_Fluid);
-	clFlush(LBQUEUE);
-	
-	//need to implement class for calculating mass losses to make necessary adjustments
-	//vlb.Reduce_Ro.reduce();//LBQUEUE);
+	cl_event LB_Evt;
+#ifndef IN_KERNEL_IBB
+	vlb.collisionKernel.call_kernel(LBQUEUE_REF);
+	vlb.ibbKernel.call_kernel(LBQUEUE_REF, 0, nullptr, &LB_Evt);
+#else
+	vlb.collisionKernel.call_kernel(LBQUEUE_REF, 0, nullptr, &LB_Evt);
+#endif
+	if (vlb.kOmegaClass.kOmegaSolverFlag)
+		vlb.kOmegaClass.Solve();
 
-	vlb.alter ^= 1;
-	clFlush(LBQUEUE);
-	clFlush(FDQUEUE);
-//	clReleaseEvent(Col_Fluid);
+	if (p.TimeN % p.tfdSteps == 0)
+	{
+		vfd.Solve(nullptr, 1, &LB_Evt);
+	}
+
+	clEnv::instance()->finishQueues();
+
+	clReleaseEvent(LB_Evt);
 }
-
 
 void Solve_all()
 {
-//	cl_event TR_Node_Evt, Update_Flag_Evt, LB_Evt, TR_Shear_Evt;
-//
-//
-//	vtr.Update_flag.FillBuffer(p.IOqueue,0, * &Update_Flag_Evt);
-//	clFlush(p.IOqueue);
-//
-//	vtr.TR_Node_kernel[1].call_kernel();
-//	vtr.TR_Wall_Node_kernel[1].call_kernel(&TR_Node_Evt);
-//
-//
-//	vtr.TR_Update_Par_kernel.call_kernel(1, &Update_Flag_Evt);
-//
-//	vtr.call_update_wall_particles();
-//
-//#ifdef USE_OPENGL
-//	cl_event TR_Par_Evt;
-//	vtr.TR_GL_kernel.call_kernel(&TR_Par_Evt);
-//#endif
-//
-//	vlb.Collision_kernel.call_kernel(1, &TR_Node_Evt, &LB_Evt);	//updates vel
-//	
-//	vtr.Shear_kernels[vlb.alter].call_kernel();
-//
-//	vtr.Shear_kernels[2].call_kernel(&TR_Shear_Evt);
-//
-//	//vlb.Reduce_Ro.call_kernels(LBQUEUE);
-//
-//	vlb.alter ^= 1;
-//
-//	if (vtr.Ploc(1).y > 0) //particle removal
-//	{
-//		vtr.TR_Shear_Removal_kernel.call_kernel(1, &TR_Shear_Evt);
-//	}
-//
-//	if (vtr.Sort_timer <= 0)
-//	{
-//#ifdef USE_OPENGL
-//		vtr.sort_particles(&TR_Par_Evt);
-//#else
-//		vtr.sort_particles();
-//#endif
-//
-//	}
-//
-//	p.flushQueues();
-//
-//	vtr.TR_Node_kernel[0].call_kernel();
-//	vtr.TR_Wall_Node_kernel[0].call_kernel();
-//
-//	if (vtr.Sort_timer <= 0)
-//	{
-//		clFinish(p.TRqueue);
-//
-//		if (vtr.Ploc(1).y > 0)
-//			vtr.Update_Par_Rem_Args();
-//
-//		if (vtr.Ploc(0).y > 0)
-//			vtr.Re_Release_Par();
-//
-//		vtr.Sort_timer = NUM_STEPS_BTW_SORT;
-//		p.sort_called = 1;
-//	}
-//	else
-//	{
-//		p.sort_called = 0;
-//		vtr.Sort_timer -= c.trSteps;
-//	}
-//
-//	if (vfl.FL_timer <= 0)
-//	{
-//		p.update_walls = 1;
-//	}
-//	else
-//	{
-//		vfl.FL_timer -= c.trSteps;
-//	}
-//
-//	if (p.update_walls * p.sort_called)
-//	{
-//		p.finishQueues();
-//		vfl.update();
-//		p.update_walls = 0;
-//		vfl.FL_timer = UPDATE_TIME;
-//
-//	}
-//
-//	p.finishQueues();
-//
-//#ifdef USE_OPENGL
-//	d.Render_Domain();
-//	clReleaseEvent(TR_Par_Evt);
-//#endif
-//
-//	clReleaseEvent(TR_Shear_Evt);
-//	clReleaseEvent(LB_Evt);
-//	clReleaseEvent(TR_Node_Evt);
-//	clReleaseEvent(Update_Flag_Evt);
+	cl_event LB_Evt, TR_Par_Evt;
+
+	vtr.updateFlag.FillBuffer(0, TRQUEUE_REF);
+	clFlush(TRQUEUE);
+	vtr.trUpdateParKernel.call_kernel();
+
+	vtr.updateWallParticles();
+	clFinish(TRQUEUE);
+
+	if (p.useOpenGL)
+		vtr.glParticles.TR_GL_kernel.call_kernel(nullptr, 0, nullptr, &TR_Par_Evt);
+
+#ifndef IN_KERNEL_IBB
+	vlb.collisionKernel.call_kernel(LBQUEUE_REF);
+	vlb.ibbKernel.call_kernel(LBQUEUE_REF, 0, nullptr, &LB_Evt);
+#else
+	vlb.collisionKernel.call_kernel(LBQUEUE_REF, 0, nullptr, &LB_Evt);
+#endif
+	if (vlb.kOmegaClass.kOmegaSolverFlag)
+		vlb.kOmegaClass.Solve();
+
+	if (p.TimeN % p.tfdSteps == 0)
+	{
+		vfd.Solve(nullptr, 1, &LB_Evt);
+	}
+
+	vlb.alter ^= 1;
+
+	vtr.wallShear.nodeShearKernel.call_kernel(
+		static_cast<DualKernel::kernelID>(vlb.alter),
+		TRQUEUE_REF, 1, &LB_Evt, nullptr);
+
+	vtr.wallShear.wallShearKernel.call_kernel(TRQUEUE_REF);
+
+	if (vtr.parSort.Ploc(1).y > 0) //particle removal
+	{
+		vtr.wallShear.trShearRemovalKernel.call_kernel(TRQUEUE_REF);
+	}
+
+	if (vtr.parSort.sortTimer <= 0)
+	{
+		
+		p.sort_called = 1;
+		if(p.useOpenGL)
+			vtr.parSort.sortParticles(&TR_Par_Evt, 1);
+		else
+			vtr.parSort.sortParticles();
+	}
+	else
+	{
+		p.sort_called = 0;
+		vtr.parSort.sortTimer -= p.trSteps;
+	}
+
+	clEnv::instance()->flushQueues();
+		
+
+
+	if (vfl.FL_timer <= 0)
+	{
+		if (p.sort_called == 0)
+		{
+			if (p.useOpenGL)
+				vtr.parSort.sortParticles(&TR_Par_Evt, 1);
+			else
+				vtr.parSort.sortParticles();
+		}
+		clEnv::instance()->finishQueues();
+		vfl.update();
+		vfl.FL_timer = vfl.flTimePerUpdate;
+	}
+	else
+	{
+		clEnv::instance()->finishQueues();
+		vfl.FL_timer -= p.trSteps;
+	}
+
+
+	if (p.useOpenGL)
+	{
+		FINISH_QUEUES;
+		clEnv::instance()->renderDomain();
+		clReleaseEvent(TR_Par_Evt);
+	}
+
+	clReleaseEvent(LB_Evt);
 }
 
 void Solve_LB_TRwalls()
 {
-//	cl_event TR_Node_Evt, Update_Flag_Evt, TR_Shear_Evt, LB_Evt;
-//
-//	vtr.Update_flag.FillBuffer(p.IOqueue, 0, &Update_Flag_Evt);
-//	clFlush(p.IOqueue);
-//
-//	vtr.TR_Wall_Node_kernel[1].call_kernel(&TR_Node_Evt);
-//
-//	vtr.call_update_wall_particles(&Update_Flag_Evt);
-//
-//	vlb.Collision_kernel.call_kernel(1, &TR_Node_Evt, &LB_Evt);	//updates vel
-//	
-//	vtr.Shear_kernels[vlb.alter].call_kernel();
-//
-//	vtr.Shear_kernels[2].call_kernel(&TR_Shear_Evt);
-//
-//	//vlb.Reduce_Ro.call_kernels(LBQUEUE);
-//	
-//	vlb.alter ^= 1;
-//
-//	if (vtr.Ploc(1).y > 0) //particle removal
-//	{
-//		vtr.TR_Shear_Removal_kernel.call_kernel(1, &TR_Shear_Evt);
-//	}
-//
-//	p.finishQueues();
-//
-//	clReleaseEvent(TR_Shear_Evt);
-//	clReleaseEvent(TR_Node_Evt);
-//	clReleaseEvent(Update_Flag_Evt);
-//	clReleaseEvent(LB_Evt);
+	cl_event LB_Evt;
+
+	vtr.updateFlag.FillBuffer(0, TRQUEUE_REF);
+	clFlush(TRQUEUE);
+	vtr.updateWallParticles();
+	clFinish(TRQUEUE);
+
+#ifndef IN_KERNEL_IBB
+	vlb.collisionKernel.call_kernel(LBQUEUE_REF);
+	vlb.ibbKernel.call_kernel(LBQUEUE_REF, 0, nullptr, &LB_Evt);
+#else
+	vlb.collisionKernel.call_kernel(LBQUEUE_REF, 0, nullptr, &LB_Evt);
+#endif
+	if (vlb.kOmegaClass.kOmegaSolverFlag)
+		vlb.kOmegaClass.Solve();
+
+	if (p.TimeN % p.tfdSteps == 0)
+	{
+		vfd.Solve(nullptr, 1, &LB_Evt);
+	}
+	
+	vlb.alter ^= 1;
+
+	vtr.wallShear.nodeShearKernel.call_kernel(
+		static_cast<DualKernel::kernelID>(vlb.alter),
+		TRQUEUE_REF, 1, &LB_Evt, nullptr);
+
+	vtr.wallShear.wallShearKernel.call_kernel(TRQUEUE_REF);
+
+	if (vtr.parSort.Ploc(1).y > 0) //particle removal
+	{
+		vtr.wallShear.trShearRemovalKernel.call_kernel(TRQUEUE_REF);
+	}
+
+	clEnv::instance()->finishQueues();
+
+	clReleaseEvent(LB_Evt);
 }
-//
-//
+
+
 void run()
 {
-	//while (1)
-	//{
-	//	if (c.TimeN % c.trSteps_wall)
-	//	{
-	//		Solve_LB_only();
-	//	}
-	//	else
-	//	{
+	if (p.useOpenGL)
+	{
+		vtr.glParticles.TR_GL_kernel.call_kernel();
+		FINISH_QUEUES;
+		clEnv::instance()->renderDomain();
+	}
 
-	//		if (c.TimeN % c.trSteps == 0)
-	//		{
-	//			Solve_all();
-	//		}
-	//		else
-	//			Solve_LB_TRwalls();
-	//	}
+	int option = (OPTION_SAVE_MACRO_FIELDS);
+	vlb.collisionKernel.setOption(&option);
 
-	//	step();
 
-	//	if (testFinish() == true)
-	//	{
-	//		p.finishQueues();
-	//		break;
-	//	}
-	//}
+	while (1)
+	{
+		// Every trStep timestep, solve all (temp only solved if 
+		// p.TimeN % p.tfdSteps == 0
+		if(p.TimeN % p.trSteps == 0)
+		{
+			Solve_all();
+		}
+		// If not a full trStep, but is a trSteps_wall,
+		// solve lb, tracers near wall, and if necessary, temp
+		else if (p.TimeN % p.trSteps_wall == 0)
+		{
+			Solve_LB_TRwalls();
+		}
+		// if not a tr or tr_wall step, solve lb and if necessary
+		// temp
+		else
+		{
+			Solve_no_TR();
+		}
 
+		step();
+
+		if (testFinish() == true)
+		{
+			clEnv::instance()->finishQueues();
+			break;
+		}
+	}
 }
 
 void finish(void)
 {
 	d.finish();
-	//vls.Release_Objects();
-	//vlb.releaseObjects();
-	//vfd.Release_Objects();
-	//vfl.Release_Objects();
-	//vtr.Release_Objects();
 	p.finish();
 }
 

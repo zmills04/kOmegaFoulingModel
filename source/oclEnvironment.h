@@ -25,7 +25,7 @@
 #define TRQUEUE_REF		clEnv::instance()->getTRqueue()
 #define CLCONTEXT		*clEnv::instance()->getContext()
 #define CLCONTEXT_REF	clEnv::instance()->getContext()
-
+#define FINISH_QUEUES	clEnv::instance()->finishQueues()
 
 class clEnv
 {
@@ -96,6 +96,7 @@ public:
 		else // GL implementation not working at the moment
 		{
 			iniCLGLContext();
+			initGlew();
 			LOGMESSAGE("openCL-GL context initialized");
 		}
 		iniQueues();

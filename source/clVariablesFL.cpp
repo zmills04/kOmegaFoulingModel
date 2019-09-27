@@ -30,6 +30,8 @@ void clVariablesFL::allocateBuffers()
 {
 	FI.allocateBuffers();
 	RI.allocateBuffers();
+	FI.copyToDevice();
+	RI.copyToDevice();
 	blDepTot.allocate_buffer_w_copy();
 	blDepTot_temp.allocate_buffer_w_copy();
 }
@@ -37,10 +39,7 @@ void clVariablesFL::allocateBuffers()
 void clVariablesFL::createKernels()
 {
 	int shiftWallsGlobalSize = getGlobalSizeMacro(vls.nBL, WORKGROUPSIZE_FL_SHIFT);
-	int updateTRCoeffGlobalSize = getGlobalSizeMacro(vtr.nActiveNodes, WORKGROUPSIZE_TR);
-	int updateTRWallNodesGlobalSize = getGlobalSizeMacro(vls.nBL, WORKGROUPSIZE_TR_WALL);
-	int findTRWallNodesGlobalSize = getGlobalSizeMacro(vtr.nActiveNodes, WORKGROUPSIZE_UPDATEWALL);
-	int shiftParticlesGlobalSize = getGlobalSizeMacro(vtr.nN, WORKGROUPSIZE_SHIFT_PAR);
+
 
 	//updateFL[0]
 	shiftWallsKernel.create_kernel(GetSourceProgram, LBQUEUE_REF, "Shift_walls");
@@ -122,6 +121,9 @@ void clVariablesFL::ini()
 
 	iniIOVars();
 	allocateBuffers();
+
+	FINISH_QUEUES;
+	FI.saveFromDevice(true, trStructBase::saveTxtFl);
 
 	sourceGenerator::SourceInstance()->addFile2Kernel("flKernels.cl");
 	sourceGenerator::SourceInstance()->addFile2Kernel("trKernelsUpdate.cl");
@@ -508,6 +510,8 @@ void clVariablesFL::loadParams()
 
 	flTimePerUpdate = p.getParameter("FL Update Time", UPDATE_TIME);
 	FL_timer = p.getParameter<int>("Cur Fl Update Timer", flTimePerUpdate);
+	
+	mindXDist = p.getParameter<double>("Min dX Dist", MINIMUM_DX_DIST);
 
 	flTimePerSmooth = p.getParameter("Steps Btw Smoothing", NUM_UPDATES_BTW_SMOOTHING);
 	Smooth_timer = p.getParameter<int>("Cur Smooth Timer", flTimePerSmooth);
@@ -523,6 +527,14 @@ void clVariablesFL::renameSaveFiles()
 void clVariablesFL::save2file()
 {
 	blDepTot.save_txt_from_device("BLdep_tot");
+}
+
+void clVariablesFL::saveDebug()
+{
+	FI.saveFromDevice(true, trStructBase::saveTxtFl);
+	RI.saveFromDevice(true, trStructBase::saveTxtFl);
+	blDepTot.save_txt_from_device();
+	//IO_ind_dist.save_txt_from_device();
 }
 
 void clVariablesFL::saveParams()
@@ -542,6 +554,7 @@ void clVariablesFL::saveParams()
 	p.setParameter("Neighs Per Side Smoothing", neighsPerSideSmoothing);
 	p.setParameter("Number IO Indicies", Num_IO_indicies);
 	p.setParameter("Smoothing Percent", smoothingPct);
+	p.setParameter("Min dX Dist", mindXDist);
 
 	vtr.saveKernelType(kernelT);
 }
@@ -598,8 +611,12 @@ void clVariablesFL::setSourceDefines()
 	setSrcDefinePrefix "PERCENT_NOT_USED_IN_SMOOTHING", (1. - vfl.smoothingPct));
 	setSrcDefinePrefix "NEIGHS_PER_SIDE_SMOOTHING", vfl.neighsPerSideSmoothing);
 
+
 	setSrcDefinePrefix "FL_NUM_ACTIVE_NODES", static_cast<unsigned int>(Num_active_nodes));
 	setSrcDefinePrefix "FL_NUM_BL", static_cast<unsigned int>(Num_active_nodes));
+	setSrcDefinePrefix "VTR_SIZE_BLDEP", static_cast<unsigned int>(vls.nBL));
+	setSrcDefinePrefix "MINIMUM_DX_DIST", mindXDist);
+
 
 	double Ymin = vls.C0[0].y;
 	double Ymax = vls.C0[vls.nN - 1].y;
@@ -609,6 +626,70 @@ void clVariablesFL::setSourceDefines()
 	vtr.addWeightFunctionToSource(kernelT, "flWeightKernel");
 }
 #undef setSrcDefinePrefix
+
+void clVariablesFL::testFlUpdate()
+{
+	for (int i = vtr.Bounds.MIN_BL_BOT + 30; i < vtr.Bounds.MAX_BL_BOT - 30; i++)
+	{
+		for(int j = 0; j < vtr.parP.Nd; j++)
+			vtr.blDep(i,j) = static_cast<unsigned int>(vtr.rand1() *2.);
+	}
+
+	for (int i = vtr.Bounds.MIN_BL_TOP + 30; i < vtr.Bounds.MAX_BL_TOP - 30; i++)
+	{
+		for (int j = 0; j < vtr.parP.Nd; j++)
+			vtr.blDep(i, j) = static_cast<unsigned int>(vtr.rand1() *2.);
+	}
+
+	vtr.blDep.copy_to_buffer();
+	
+	FINISH_QUEUES;
+	updateFL();
+
+	vls.update();
+	vls.C.read_from_buffer(LBQUEUE_REF);
+	vtr.updateWallsDist.FillBuffer(100., TRQUEUE_REF);
+	
+	//FINISH_QUEUES;
+	//saveDebug();
+	//
+	//vtr.BL.saveFromDevice(true, trStructBase::saveTxtFl);
+	//vls.saveDebug();
+
+	// Only needs LS variables updated, so we can go ahead and
+	// spin up a thread to execute this function since it is 
+	// done on host cpu.
+	std::thread updateShearThread(&clVariablesFL::updateShearArrays, this);
+
+	vlb.update();
+
+	if (p.useOpenGL)
+		vtr.glParticles.update();
+
+	vfd.update();
+
+	clFlush(FDQUEUE);
+
+	vtr.update();
+
+	updateShearThread.join();
+
+	FINISH_QUEUES;
+
+	if (p.Time < 4000)
+		return;
+	//vtr.NodI.saveFromDevice(true, trStructBase::saveTxtFl);
+	//vtr.BL.saveFromDevice(true, trStructBase::saveTxtFl);
+	vlb.save2file();
+	vfd.save2file();
+	vls.save2file();
+
+	////saveDebug();
+	////vtr.saveDebug();
+	//vls.saveDebug();
+	//vfd.saveDebug();
+
+}
 
 
 bool clVariablesFL::testRestartRun()
@@ -641,10 +722,14 @@ void clVariablesFL::updateTimeData()
 
 void clVariablesFL::update()
 {//TODO: test if case is handled when dX becomes > 1.
+	testFlUpdate();
+	return;
+	FINISH_QUEUES;
 
 	updateFL();
 	
 	vls.update();
+
 
 	// Only needs LS variables updated, so we can go ahead and
 	// spin up a thread to execute this function since it is 
@@ -653,7 +738,8 @@ void clVariablesFL::update()
 
 	vlb.update();
 
-	vls.C.read_from_buffer(IOQUEUE_REF);
+
+    
 
 
 	if(p.useOpenGL)
@@ -666,6 +752,8 @@ void clVariablesFL::update()
 	vtr.update();
 
 	updateShearThread.join();
+
+
 }
 
 void clVariablesFL::updateFL()
@@ -695,6 +783,7 @@ void clVariablesFL::updateShearArrays()
 {
 	if (!vtr.wallShear.calcSSFlag)
 		return;
+
 	bool reSizeFlag = vls.updateShearArrays();
 	if (reSizeFlag)
 	{
@@ -726,6 +815,7 @@ void clVariablesFL::updateShearArrays()
 
 	vtr.wallShear.updateSSKernel[0].call_kernel();
 	vtr.wallShear.updateSSKernel[1].call_kernel();
+
 }
 
 void clVariablesFL::saveVariables()

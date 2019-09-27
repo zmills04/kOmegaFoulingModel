@@ -12,9 +12,16 @@
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
+
+
+
+
+
+
 #define CHECK_KERNEL_STATUS
 #define PRINT_ERROR_MESSAGES		
 //#define DEBUG_TURBARR
+//#define PRINT_BICGSTAB_RESIDUALS
 
 
 
@@ -24,7 +31,7 @@
 
 
 
-#define CREATE_BIN_FILES
+//#define CREATE_BIN_FILES
 //#define RENAME_BIN_FILES
 #define RENAME_DUMP_FILES
 
@@ -39,6 +46,8 @@
 //#define PRINT_OPENCL_INFO
 #define PRINT_BUILD_INFO
 //#define PROFILING
+
+#define KERNEL_ERROR_CHECKING
 
 #define RESIZE_MULTIPLIER		1
 
@@ -133,9 +142,9 @@
 #define CURRENT_SAVE_START_TIME_IO	(0)
 
 #define LB_STEPS					(1)
-#define TR_STEPS_PER_LB				(5)
-#define TR_STEPS_PER_LB_WALL		(3)
-#define FD_STEPS_PER_LB				(1)
+#define LB_STEPS_PER_TR				(5)
+#define LB_STEPS_PER_TR_WALL		(3)
+#define LB_STEPS_PER_FD				(1)
 
 #define CLUMP_TIME					(100000)
 /////////////////////////////////////////////////////////////
@@ -151,6 +160,7 @@
 #define USE_TURBULENCE_MODEL        true
 #define LB_SAVE_AVG_INFO			true
 #define USE_TURB_VEL_BC				true
+#define LOAD_VEL_TEXT_NO_BIN		true
 
 //#define IN_KERNEL_IBB		// cannot be set with yaml params file
 							// currently not working since vls.dXArr does not include diagonal distances
@@ -165,7 +175,7 @@
 // LBFD is number of steps solving transient LB and temp.
 #define TLBM_INI_DUMP_STEP			(100000)
 #define NUM_LB_INI_STEPS			(1000000)
-#define NUM_LBFD_INI_STEPS			(20000000)
+#define NUM_LBFD_INI_STEPS			(2000)
 
 
 // Perturb parameters
@@ -206,7 +216,7 @@
 //////                Thermal Parameters               //////
 /////////////////////////////////////////////////////////////
 #define USE_THERMAL_SOLVER			true
-#define CALC_NUSSELT				false
+#define CALC_NUSSELT				true
 #define SOLVE_SS_TEMP               true
 #define CHT_SOURCE_CORRECTION		true
 
@@ -238,7 +248,7 @@
 //////               Particle Parameters               //////
 /////////////////////////////////////////////////////////////
 #define USE_PARTICLE_SOLVER		true
-#define TR_SAVE_MACROS_ON_START	true
+#define TR_SAVE_MACROS_ON_START	false
 #define SAVE_WALL_SHEAR			true
 #define CLUMP_PARTICLES			true
 #define SAVE_IO_DISTS			true
@@ -260,21 +270,21 @@
 #define CUTOFF_RADIUS			5.
 #define LIFT_COEFFICIENT		81.2
 #define MAX_BL_PER_NODE			6
-#define TRC_NUM_TRACERS			1048576//(4194304)//(1048576)
+#define TRC_NUM_TRACERS			(32768)//1048576//(4194304)//(1048576)
 #define NUM_STEPS_BTW_SORT		(40)
 #define PARTICLE_RELEASE_TIME	(0)
 #define NUM_PAR_SIZES			(1)
 #define MEAN_FREE_PATH_AIR		(68.0e-9)
 #define FOUL_SIZE_SWITCH_SOOT2	0.5
-
+#define MIN_PARTICLES_PER_RELEASE	100
 
 #define STOP_DIST_X				1900
 #define K_coeff					0.4711
 
-#define NUM_EACH_PAR			(50.) ////Min number of particles represented in a given Particle Size
+#define NUM_EACH_PAR			(1.0) ////Min number of particles represented in a given Particle Size
 #define PARTICLE_VOL_MULTIPLIER	(NUM_EACH_PAR/(1. - DEP_POROSITY))
-#define TIME_BEFORE_RERELEASE	( 20000 / TR_STEPS_PER_LB_WALL )   //After the particle contacts surface this many times before fully depositing it is re-released
-#define TIME_BEFORE_STICK		( 20000 / TR_STEPS_PER_LB_WALL )
+#define TIME_BEFORE_RERELEASE	( 200000 / LB_STEPS_PER_TR_WALL )   //After the particle contacts surface this many times before fully depositing it is re-released
+#define TIME_BEFORE_STICK		( 20000 / LB_STEPS_PER_TR_WALL )
 #define MAX_NUM_BL_ROLL			(10)
 
 /////////SOOT PROPERTIES (IN REAL UNITS)/////////////
@@ -329,7 +339,7 @@
 #define OPENGL_DISPLAY			false	 //turn openGL on or off
 #define OPENGL_GRIDLINES		false    //Renders gridlines on window if defined
 #define NUM_PAR_GL_DIV		1	//Reduces the number of particles plotted by increasing
-#define POINT_SIZES			2.	//initial size of particles
+#define POINT_SIZES			5.	//initial size of particles
 #define LINE_SIZES			2.	//initial thickness of lines
 
 #define screenWidth  1800		//width of opengl window
@@ -340,17 +350,17 @@
 //////                 FL PARAMETERS                   //////
 /////////////////////////////////////////////////////////////
 #define USE_FL_SOLVER		false
-#define FL_SAVE_ON_START	true
+#define FL_SAVE_ON_START	false
 #define FL_WEIGHT_KERNEL		"Gaussian"
 
-#define UPDATE_TIME				(8000)
+#define UPDATE_TIME				(5000)
 #define NUM_INLET_OUTLET_NODES	30
 #define LS_SPACING				1.
 #define NUM_UPDATES_BTW_SMOOTHING	20
 #define PERCENT_USED_IN_SMOOTHING	0.05
 #define NEIGHS_PER_SIDE_SMOOTHING	3
 #define FL_UPDATE_TR_ACTIVE_FREQ	20
-
+#define MINIMUM_DX_DIST				0.001
 
 //////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
@@ -554,21 +564,21 @@
 
 
 // Defines for NodI.wallFlag 
-#define WF_EMPTY			0x0000
-#define WF_SOLID			0x0001
-#define WF_FLUID			0x0002
-#define WF_BOT_WALL			0x0004
-#define WF_TOP_WALL			0x0008
-#define WF_00_SOLID			0x0010
-#define WF_10_SOLID			0x0020
-#define WF_01_SOLID			0x0040
-#define WF_11_SOLID			0x0080
+#define WF_EMPTY			0x00 // 0000 0000
+#define WF_SOLID			0x01 // 0000 0001
+#define WF_FLUID			0x02 // 0000 0010 
+#define WF_BOT_WALL			0x04 // 0000 0100
+#define WF_TOP_WALL			0x08 // 0000 1000
+#define WF_00_SOLID			0x10 // 0001 0000
+#define WF_10_SOLID			0x20 // 0010 0000
+#define WF_01_SOLID			0x40 // 0100 0000
+#define WF_11_SOLID			0x80 // 1000 0000
 
-#define WF_WALL				0x000C
+#define WF_WALL				0x0C // 0000 1100
 
 
-#define WF_TEST_ALL_SOLID	0x00F0
-
+#define WF_TEST_ALL_SOLID	0xF0
+#define WF_SOLID_WITH_FLAGS	0xF1 // 1111 0001
 
 
 #define ERROR_OCL_INITIALIZATION							-100
@@ -594,6 +604,7 @@
 #define ERROR_INITIALIZING_VLB								-120
 #define ERROR_INITIALIZING_CSR_CLASS						-121
 #define ERROR_CREATING_REDUCER								-122
+#define ERROR_IN_VTR_SOLVER									-123
 
 
 #ifdef _DEBUG

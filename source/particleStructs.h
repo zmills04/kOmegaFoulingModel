@@ -131,12 +131,12 @@ class Par : public trStructBase
 {
 public:
 	Array1Dv2d pos;		///position vector
-	Array1Du Num_rep;	///number of particles represented by this particle
-	Array1Ds type;		///type of particle (cooresponds to Param element
-	Array1Di Dep_Flag; 	//-2 if waiting for re-release, -1 for not deposited, > 0 signifies the BL location it has deposited at.
-	Array1D<cl_ushort> Dep_timer;	//timer set to specified value once particle deposits and decrements at 0, particle is deposited
-	Array1D<cl_uint> timer;		///time for use in re-releasing
-	Array1Di loc;			// probably easier to just calculate on demand than waste space with this
+	Array1D<numRepType> Num_rep;	///number of particles represented by this particle
+	Array1D<parTypeType> type;		///type of particle (cooresponds to Param element
+	Array1D<depFlagType> Dep_Flag; 	//-2 if waiting for re-release, -1 for not deposited, > 0 signifies the BL location it has deposited at.
+	Array1D<depTimerType> Dep_timer;	//timer set to specified value once particle deposits and decrements at 0, particle is deposited
+	Array1D<parTimerType> timer;		///time for use in re-releasing
+	Array1D<parLocType> loc;			// probably easier to just calculate on demand than waste space with this
 
 	enum arrName { posArr, numRepArr, typeArr, depFlagArr, depTimerArr, timerArr, locArr };
 
@@ -195,7 +195,7 @@ public:
 	void copyToArrayOnDeviceBlocking(Par& Ptemp, arrName arrname_, int writeSize = -1,
 		cl_command_queue* que_ = nullptr, int num_wait = 0, cl_event* wait = NULL);
 
-
+	void freeHost();
 
 	void copyToHost(int readSize = -1, cl_command_queue* que_ = nullptr,
 		cl_bool bFlag_ = CL_TRUE);

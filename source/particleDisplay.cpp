@@ -37,8 +37,8 @@ void particleDisplay::allocateArrays()
 	// If gridline flag is set, create gridline arrays
 	if (glGridFlag)
 	{
-		numLinesH = p.nX + 1;
-		numLinesV = p.nY + 1;
+		numLinesH = p.nY + 1;
+		numLinesV = p.nX + 1;
 		LinesV.allocate(numLinesV * 4);
 		LinesH.allocate(numLinesH * 4);
 	}
@@ -52,9 +52,8 @@ void particleDisplay::allocateBuffers()
 	if (!p.useOpenGL)
 		return;
 
-	iniParticleColors();
+	//iniParticleColors();
 	parColorList.allocate_buffer_w_copy();
-
 
 	P_vbo.CreateVBO_position(POINT_VBO, CL_MEM_WRITE_ONLY);
 	P_vbo.copy_to_buffer();
@@ -82,17 +81,21 @@ void particleDisplay::allocateBuffers()
 	}
 
 	vtr.BL.colorInds.copy_to_buffer();
-
 }
+//
+//void particleDisplay::allocateGLBuffers()
+//{
+//
+//}
 
 void particleDisplay::createKernels()
 {
 	if (!p.useOpenGL)
 		return;
 	TR_GL_kernel.create_kernel(GetSourceProgram, TRQUEUE_REF, "TR_opengl_par");
-	TR_GL_kernel.set_size(TRC_NUM_TRACERS, WORKGROUPSIZE_TR_GL);
+	TR_GL_kernel.set_size(vtr.nN, WORKGROUPSIZE_TR_GL);
 	
-	int updateGLGlobalSize = getGlobalSizeMacro(vls.nN / 2, WORKGROUPSIZE_UPDATE_GL);
+	int updateGLGlobalSize = getGlobalSizeMacro(vls.nBL / 2, WORKGROUPSIZE_UPDATE_GL);
 	updateGLKernel.create_kernel(GetSourceProgram, IOQUEUE_REF, "update_GL_wall");
 	updateGLKernel.set_size(updateGLGlobalSize, WORKGROUPSIZE_UPDATE_GL);
 }
@@ -137,24 +140,39 @@ void particleDisplay::ini()
 	iniParticleColors();
 
 	allocateBuffers();
-	freeHostArrays();
 	LOGMESSAGE("particle display class within vtr initialized");
 }
 
 void particleDisplay::iniBLArrays()
 {
-	for (int i = 0; i < vls.nN / 2; i++)
+	for (int i = 0; i < vls.nBL / 2; i++)
 	{
-		LSb_vbo[i * 2] = vls.C[i].x;
-		LSb_vbo[i * 2 + 1] = vls.C[i].y;
-		LSb0_vbo[i * 2] = vls.C0[i].x;
-		LSb0_vbo[i * 2 + 1] = vls.C0[i].y;
-
-		LSt_vbo[i * 2] = vls.C[vls.nN - 1 - i].x;
-		LSt_vbo[i * 2 + 1] = vls.C[vls.nN - 1 - i].y;
-		LSt0_vbo[i * 2] = vls.C0[vls.nN - 1 - i].x;
-		LSt0_vbo[i * 2 + 1] = vls.C0[vls.nN - 1 - i].y;
+		int cind = vtr.BL.P01ind(i).x;
+		LSb_vbo[i * 2] = vls.C[cind].x;
+		LSb_vbo[i * 2 + 1] = vls.C[cind].y;
+		LSb0_vbo[i * 2] = vls.C0[cind].x;
+		LSb0_vbo[i * 2 + 1] = vls.C0[cind].y;
 	}
+	int cind = vtr.BL.P01ind(vls.nBL/2-1).y;
+	LSb_vbo[vls.nBL] = vls.C[cind].x;
+	LSb_vbo[vls.nBL + 1] = vls.C[cind].y;
+	LSb0_vbo[vls.nBL] = vls.C0[cind].x;
+	LSb0_vbo[vls.nBL + 1] = vls.C0[cind].y;
+
+
+	for (int i = 0; i < vls.nBL/2; i++)
+	{
+		int cind = vtr.BL.P01ind(i + vls.nBL / 2).y;
+		LSt_vbo[i * 2] = vls.C[cind].x;
+		LSt_vbo[i * 2 + 1] = vls.C[cind].y;
+		LSt0_vbo[i * 2] = vls.C0[cind].x;
+		LSt0_vbo[i * 2 + 1] = vls.C0[cind].y;
+	}
+	cind = vtr.BL.P01ind(vls.nBL-1).x;
+	LSt_vbo[vls.nBL] = vls.C[cind].x;
+	LSt_vbo[vls.nBL + 1] = vls.C[cind].y;
+	LSt0_vbo[vls.nBL] = vls.C0[cind].x;
+	LSt0_vbo[vls.nBL + 1] = vls.C0[cind].y;
 
 
 	for (int i = 0; i < vls.nBL / 2; i++)
@@ -258,7 +276,7 @@ void particleDisplay::loadParams()
 {
 	numParPerGLObj = p.getParameter("Paricles Per GL Obj", NUM_PAR_GL_DIV);
 	numParGL = (int)floor((double)vtr.nN / numParPerGLObj);
-	glGridFlag = p.getParameter<bool>("GL Use Gridlines", OPENGL_GRIDLINES);
+	glGridFlag = p.getParameter<bool>("GL Use Grid", OPENGL_GRIDLINES);
 	pointSizes = p.getParameter <double> ("GL Point Sizes", POINT_SIZES);
 	lineSizes = p.getParameter <double> ("GL Line Sizes", LINE_SIZES);
 	glScreenWidth = p.getParameter<int>("GL Screen Width", screenWidth);
@@ -293,12 +311,14 @@ void particleDisplay::setKernelArgs()
 	updateGLKernel.set_argument(ind++, vls.C.get_buf_add());
 	updateGLKernel.set_argument(ind++, LSb_vbo.get_buf_add());
 	updateGLKernel.set_argument(ind++, LSt_vbo.get_buf_add());
+	updateGLKernel.set_argument(ind++, vtr.BL.P01ind.get_buf_add());
 }
 
 #define setSrcDefinePrefix		SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(),
 void particleDisplay::setSourceDefines()
 {
 	setSrcDefinePrefix "NUM_PAR_GL_DIV", numParPerGLObj);
+	setSrcDefinePrefix "FULL_BL_ARRAY_SIZE", vls.nBL);
 }
 #undef setSrcDefinePrefix
 

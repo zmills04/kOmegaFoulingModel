@@ -415,6 +415,14 @@ bool BiCGStabSolver::reduceAndCheckConvergence(cl_command_queue *que_, bool setI
 	runReduce(bNorm, que_, num_wait, wait, evt);
 	scalarBuf.read_from_buffer_size(2);
 	double residual = scalarBuf(1) / scalarBuf(0);
+
+#ifdef _DEBUG
+	if (isnan(residual))
+	{
+		vlb.saveDebug();
+	}
+#endif
+
 	if (setInitialRes)
 	{
 		initialResidual = residual;
@@ -425,6 +433,30 @@ bool BiCGStabSolver::reduceAndCheckConvergence(cl_command_queue *que_, bool setI
 	}
 	return false;
 }
+
+
+bool BiCGStabSolver::reduceAndCheckConvergenceWithPrint(cl_command_queue* que_, int iterNum)
+{
+	runReduce(bNorm, que_);
+	scalarBuf.read_from_buffer_size(2);
+	double residual = scalarBuf(1) / scalarBuf(0);
+#ifdef _DEBUG
+	if (isnan(residual))
+	{
+		vlb.saveDebug();
+	}
+#endif
+
+
+	printf("Iteration %d Residual = %g\n", iterNum, residual);
+
+	if (residual <= relTol || residual <= absTol * initialResidual)
+	{
+		return true;
+	}
+	return false;
+}
+
 
 void BiCGStabSolver::copy_buffers(cl_mem *src_buf, cl_mem *dest_buf)
 {
@@ -466,6 +498,14 @@ void BiCGStabSolver::solve()
 	scalarBuf.read_from_buffer_size(1);
 
 	double h_norm_b = scalarBuf(0);
+
+#ifdef _DEBUG
+	if (isnan(h_norm_b))
+	{
+		vlb.saveDebug();
+	}
+#endif
+
 	if (h_norm_b <= 1.0e-16)
 	{
 		copy_buffers(bVec.get_buf_add(), xVec->get_buf_add());
@@ -509,7 +549,11 @@ void BiCGStabSolver::solve()
 		shAXPBY(calcQue);
 
 		// Step f7
+#ifdef PRINT_BICGSTAB_RESIDUALS
+		if (reduceAndCheckConvergenceWithPrint(calcQue, iter))
+#else
 		if (reduceAndCheckConvergence(calcQue, firstIter))
+#endif
 		{
 			//converged, so h is correct result and already stored in x
 			return;
@@ -788,17 +832,17 @@ bool BiCGStabSolver::saveCSR(std::string outname, bool fromDevFlag )
 	bool ret;
 	if (fromDevFlag)
 	{
-		ret &= Inds->saveIA(outname);
+		ret = Inds->saveIA(outname);
 		ret &= Inds->saveJA(outname);
 		outname.append("_A");
-		ret = Amat.save_txt_from_device(outname);
+		ret &= Amat.save_txt_from_device(outname);
 	}
 	else
 	{
-		ret &= Inds->saveIA(outname);
+		ret = Inds->saveIA(outname);
 		ret &= Inds->saveJA(outname);
 		outname.append("_A");
-		ret = Amat.savetxt(outname);
+		ret &= Amat.savetxt(outname);
 	}
 	return ret;
 }

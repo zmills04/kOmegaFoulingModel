@@ -105,9 +105,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="source\Array.h">
-      <Filter>Core</Filter>
-    </ClInclude>
     <ClInclude Include="source\clDisplay.h">
       <Filter>Core</Filter>
     </ClInclude>
@@ -191,6 +188,9 @@
     </ClInclude>
     <ClInclude Include="source\foulStructs.h">
       <Filter>Walls</Filter>
+    </ClInclude>
+    <ClInclude Include="source\Array.h">
+      <Filter>Core</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

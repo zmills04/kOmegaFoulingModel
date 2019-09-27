@@ -159,10 +159,11 @@ void clVariablesTR::allocateArrays()
 	// numWallNodes;
 	// trIndicies;
 
-	parP.allocateArrays();
-	wallShear.allocateArrays();
-	parSort.allocateArrays();
-	glParticles.allocateArrays();
+	// allocateArrays is called by testRestartRun in each subclass
+	//parP.allocateArrays();
+	//wallShear.allocateArrays();
+	//parSort.allocateArrays();
+	//glParticles.allocateArrays();
 }
 
 void clVariablesTR::allocateBuffers()
@@ -201,10 +202,10 @@ void clVariablesTR::allocateBuffers()
 	cl_double2 PVt = { { 0., 0. } };
 	PV.FillBuffer(PVt);
 
-	glParticles.allocateBuffers();
-	parSort.allocateBuffers();
-	wallShear.allocateBuffers();
-	parP.allocateBuffers();
+	//glParticles.allocateBuffers();
+	//parSort.allocateBuffers();
+	//wallShear.allocateBuffers();
+	//parP.allocateBuffers();
 
 	updateWallsDist.allocate_buffer_w_copy();
 }
@@ -227,7 +228,7 @@ void clVariablesTR::createKernels()
 	//trWallNodeKernel[1].set_size(2 * WORKGROUPSIZE_TR_WALL, WORKGROUPSIZE_TR_WALL);
 
 	trUpdateParKernel.create_kernel(GetSourceProgram, TRQUEUE_REF, "TR_update_par_no_wall");
-	trUpdateParKernel.set_size(nActiveNodes, WORKGROUPSIZE_TR);
+	trUpdateParKernel.set_size(activeInds.curSize(), WORKGROUPSIZE_TR);
 
 	trWallParKernel[0].create_kernel(GetSourceProgram, TRQUEUE_REF, "TR_update_par_along_wall");
 	trWallParKernel[0].set_size(2 * WORKGROUPSIZE_TR_WALL, WORKGROUPSIZE_TR_WALL);
@@ -248,9 +249,9 @@ void clVariablesTR::createKernels()
 	//	saveDistsKernel.create_kernel(GetSourceProgram, TRQUEUE_REF, "TR_save_dists");
 
 	int shiftWallsGlobalSize = getGlobalSizeMacro(vls.nBL, WORKGROUPSIZE_FL_SHIFT);
-	int updateTRCoeffGlobalSize = getGlobalSizeMacro(nActiveNodes, WORKGROUPSIZE_TR);
+	int updateTRCoeffGlobalSize = getGlobalSizeMacro(activeInds.curSize(), WORKGROUPSIZE_TR);
 	int updateTRWallNodesGlobalSize = getGlobalSizeMacro(vls.nBL, WORKGROUPSIZE_TR_WALL);
-	int findTRWallNodesGlobalSize = getGlobalSizeMacro(nActiveNodes, WORKGROUPSIZE_UPDATEWALL);
+	int findTRWallNodesGlobalSize = getGlobalSizeMacro(activeInds.curSize(), WORKGROUPSIZE_UPDATEWALL);
 	int shiftParticlesGlobalSize = getGlobalSizeMacro(nN, WORKGROUPSIZE_SHIFT_PAR);
 
 
@@ -268,11 +269,14 @@ void clVariablesTR::createKernels()
 
 	// updateTRKernel[2]
 	shiftParticlesKernel[0].create_kernel(GetSourceProgram, TRQUEUE_REF, "Shift_particles");
-	shiftParticlesKernel[0].set_size(TRC_NUM_TRACERS, WORKGROUPSIZE_SHIFT_PAR);
+	shiftParticlesKernel[0].set_size(nN, WORKGROUPSIZE_SHIFT_PAR);
 
 	// updateTRKernel[3]
 	shiftParticlesKernel[1].create_kernel(GetSourceProgram, TRQUEUE_REF, "Shift_deposited_particles");
-	shiftParticlesKernel[1].set_size(1, 1);
+	shiftParticlesKernel[1].set_size(1, WORKGROUPSIZE_SHIFT_PAR);
+
+	callRand.create_kernel(GetSourceProgram, TRQUEUE_REF, "callRand");
+	callRand.set_size(nN, 256);
 
 
 	glParticles.createKernels();
@@ -395,7 +399,7 @@ int clVariablesTR::getType()
 	double randval = rand1();
 	for (int j = 0; j < parP.Nd - 1; j++)
 	{
-		if (randval >= parP.D_dist[j] && randval < parP.D_dist[j + 1])
+		if (randval < parP.D_dist[j])
 			return j;
 	}
 	return parP.Nd - 1;
@@ -415,7 +419,7 @@ void clVariablesTR::ini()
 
 
 	// Initialize Random Seed Array
-	rmax = (double)RAND_MAX + 1.;
+
 	iniRand();
 
 	// If not a restart, initialize Particles
@@ -479,8 +483,8 @@ void clVariablesTR::iniBLandNodI()
 
 	// the remaining particleStructs have sizes = trDomainSize, so
 	// need to account for this when initializing other structs.
-	int xstart = trDomainXBounds.x;
-	int xstop = trDomainXBounds.y;
+	int xstart = trDomainXBounds.x-1;
+	int xstop = trDomainXBounds.y+1;
 
 
 
@@ -601,16 +605,16 @@ void clVariablesTR::iniBLinksTop()
 
 		legacyBLinks bltemp;
 
-		bltemp.P01ind = { {static_cast<cl_ushort>(vls.BL(i, 1)),
-						  static_cast<cl_ushort>(vls.BL(i, 0))} };
+		bltemp.P01ind = { {static_cast<cl_ushort>(vls.BL(i, 0)),
+						  static_cast<cl_ushort>(vls.BL(i, 1))} };
 
 		cl_double2 vP0, vP1;
 
-		vP0 = { {vls.C[vls.BL(i, 1)].x, vls.C[vls.BL(i, 1)].y} };
-		vP1 = { {vls.C[vls.BL(i, 0)].x, vls.C[vls.BL(i, 0)].y} };
+		vP0 = { {vls.C[vls.BL(i, 0)].x, vls.C[vls.BL(i, 0)].y} };
+		vP1 = { {vls.C[vls.BL(i, 1)].x, vls.C[vls.BL(i, 1)].y} };
 
 		cl_double2 tanvec = Subtract2(vP1, vP0);
-		cl_double2 normvec = { { tanvec.y, -tanvec.x } };
+		cl_double2 normvec = { { -tanvec.y, tanvec.x } };
 
 		bltemp.blLen = GETLEN(tanvec);
 		bltemp.vNvec = Divide2(normvec, bltemp.blLen);
@@ -656,14 +660,14 @@ void clVariablesTR::iniBLinksTop()
 // arrays store linear index of node in trDomain (reduced domain)
 void clVariablesTR::iniIndexInfo()
 {
-	for (int i = trDomainXBounds.x; i < trDomainXBounds.y; i++)
+	for (int i = 0; i < trDomainSize.x; i++)
 	{
 		for (int j = 0; j < trDomainSize.y; j++)
 		{
-			if (NodI.wallFlag(i - trDomainXBounds.x, j) & WF_WALL)
+			if (NodI.wallFlag(i, j) & WF_WALL)
 				wallInds.append(i + trDomainFullSizeX * j);
 
-			if (NodI.wallFlag(i - trDomainXBounds.x, j) & WF_FLUID)
+			if (NodI.wallFlag(i, j) & WF_FLUID)
 				activeInds.append(i + trDomainFullSizeX * j);
 		}
 	}
@@ -980,31 +984,34 @@ void clVariablesTR::iniNodI()
 	for (int i = 0; i < trDomainSize.x; i++)
 	{
 		int ii = i + trDomainXBounds.x;
-		for (int j = 0; i < trDomainSize.y; i++)
+		for (int j = 0; j < trDomainSize.y; j++)
 		{
+			cl_short flTemp = NodI.wallFlag(i, j);
 			// test all 4 LB nodes to see if they are
 			// solid or fluid and set appropriate
 			// flags
 			if (vls.nType(ii, j) & M_SOLID_NODE)
-				NodI.wallFlag(i, j) |= WF_00_SOLID;
+				flTemp |= WF_00_SOLID;
 			if (vls.nType(ii + 1, j) & M_SOLID_NODE)
-				NodI.wallFlag(i, j) |= WF_10_SOLID;
+				flTemp |= WF_10_SOLID;
 			if (vls.nType(ii, j + 1) & M_SOLID_NODE)
-				NodI.wallFlag(i, j) |= WF_01_SOLID;
+				flTemp |= WF_01_SOLID;
 			if (vls.nType(ii + 1, j + 1) & M_SOLID_NODE)
-				NodI.wallFlag(i, j) |= WF_11_SOLID;
+				flTemp |= WF_11_SOLID;
 
 			// if all are solid, set node as solid
-			if (NodI.wallFlag(i, j) == WF_TEST_ALL_SOLID)
+			if (flTemp == WF_TEST_ALL_SOLID)
 			{
-				NodI.wallFlag(i, j) |= WF_SOLID;
+				flTemp |= WF_SOLID;
 			}
 
 			// if any are not solid, set as fluid node
-			if (NodI.wallFlag(i, j) ^= WF_TEST_ALL_SOLID)
+			if (((flTemp & WF_TEST_ALL_SOLID) ^ WF_TEST_ALL_SOLID))
 			{
-				NodI.wallFlag(i, j) |= WF_FLUID;
+				flTemp |= WF_FLUID;
 			}
+
+			NodI.wallFlag(i, j) = flTemp;
 		}
 	}
 }
@@ -1218,22 +1225,68 @@ void clVariablesTR::iniParticles()
 	{
 		legacyPar Ptemp;
 		// Particles will be released a portion at a time using reReleasePar kernel 
-		Ptemp.pos.x = 0.;
-		Ptemp.pos.y = 0.;
+		double domainLength = (double)trDomainSize.x;
+
+		Ptemp.pos.x = xReleaseVal + domainLength*(0.75 + 0.247*rand1());
+		Ptemp.pos.y = 1.5 + (0.5 + rand1()) * p.Pipe_radius;
 
 
 		Ptemp.type = getType();
-		Ptemp.timer = 1;
-		Ptemp.Dep_Flag = -2;
-		Ptemp.Num_rep = 0;
-		Ptemp.Dep_timer = 1;
-		cl_int2 Posi = { { (int)floor(Ptemp.pos.x), (int)floor(Ptemp.pos.y) } };
 
-		Ptemp.loc = Posi.x + trDomainFullSizeX * Posi.y;
+		//if (rand1() < 0.5)
+		//{
+		//	Ptemp.Dep_Flag = -2;
+		//	Ptemp.Num_rep = static_cast<cl_uint>(10);
+		//	Ptemp.loc = -2;
+		//	Ptemp.timer = static_cast<cl_ushort>(0);
+		//}
+		//else
+		//{
+			Ptemp.timer = static_cast<cl_ushort>(30000);
+			Ptemp.Dep_Flag = -1;
+			Ptemp.Num_rep = static_cast<cl_uint>(10);
+			Ptemp.Dep_timer = static_cast<cl_ushort>(30000);
+			cl_int2 Posi = { { (int)floor(Ptemp.pos.x), (int)floor(Ptemp.pos.y) } };
+			Ptemp.loc = Posi.x + trDomainFullSizeX * Posi.y - trDomainXBounds.x;
+		//}
 		P.setStruct(Ptemp, i);
+
+
 	}
 
 }
+
+
+
+
+
+
+
+
+
+//void clVariablesTR::iniParticles()
+//{
+//	for (int i = 0; i < nN; i++)
+//	{
+//		legacyPar Ptemp;
+//		// Particles will be released a portion at a time using reReleasePar kernel 
+//		Ptemp.pos.x = 0.;
+//		Ptemp.pos.y = 0.;
+//
+//
+//		Ptemp.type = getType();
+//		Ptemp.timer = 1;
+//		Ptemp.Dep_Flag = -2;
+//		Ptemp.Num_rep = 0;
+//		Ptemp.Dep_timer = 1;
+//		cl_int2 Posi = { { (int)floor(Ptemp.pos.x), (int)floor(Ptemp.pos.y) } };
+//
+//		Ptemp.loc = Posi.x + trDomainFullSizeX * Posi.y;
+//		P.setStruct(Ptemp, i);
+//	}
+//
+//}
+
 
 void clVariablesTR::iniRand()
 {
@@ -1241,10 +1294,16 @@ void clVariablesTR::iniRand()
 		return;
 	for (int i = 0; i < nN; i++)
 	{
-		RandList[i].x = (cl_uint)rand();
-		RandList[i].y = (cl_uint)rand();
+		RandList[i].x = static_cast<cl_uint>(2) * static_cast<cl_uint>(rand());
+		RandList[i].y = static_cast<cl_uint>(2) * static_cast<cl_uint>(rand());
 	}
 }
+
+// TODO: make sure that these parameters are constant throughout
+//		simulation, since they will be written out to parameter file
+//		and need to be the same when read back in.
+
+// TODO: make sure that timers are decremented correctly
 
 void clVariablesTR::loadParams()
 {
@@ -1265,8 +1324,8 @@ void clVariablesTR::loadParams()
 	maxBLPerNode = p.getParameter("Max BL Per Node", MAX_BL_PER_NODE);
 	parReleaseTime = p.getParameter("Particle Release Time", PARTICLE_RELEASE_TIME);
 	
-	timeBeforeReRelease = p.getParameter("Time Before Re-release", TIME_BEFORE_RERELEASE) / p.trSteps_wall;
-	timeBeforeStick = p.getParameter("Time Before Stick", TIME_BEFORE_STICK) / p.trSteps_wall;
+	timeBeforeReRelease = p.getParameter("Time Before Re-release", TIME_BEFORE_RERELEASE);
+	timeBeforeStick = p.getParameter("Time Before Stick", TIME_BEFORE_STICK);
 	maxNumBLRoll = p.getParameter("Max Num BL Roll", MAX_NUM_BL_ROLL);
 
 	lsSpacing = p.getParameter("LS Spacing", LS_SPACING);
@@ -1296,7 +1355,7 @@ void clVariablesTR::loadParams()
 	ERROR_CHECKING(((reduceDepStop2 - reduceDepStop1) < 0.), "reduceDepStop1 > reduceDepStop2",
 		ERROR_INITIALIZING_VTR);
 
-	startThermoVel = p.getParameter("Start Thermo Pos", START_THERMO_VEL);
+	startThermoVel = p.getParameter("Start Vth Pos", START_THERMO_VEL);
 	ERROR_CHECKING(((startThermoVel - xReleaseVal) < 0.), "xReleaseVal > startThermoVel",
 		ERROR_INITIALIZING_VTR);
 
@@ -1365,6 +1424,7 @@ double clVariablesTR::rand1()
 
 void clVariablesTR::renameSaveFiles()
 {
+	return;
 	//parSort.renameSaveFiles();
 	//parP.renameSaveFiles();
 	//wallShear.renameSaveFiles();
@@ -1529,16 +1589,18 @@ void clVariablesTR::saveBox(double x1, double y1, double dx, double dy)
 
 void clVariablesTR::saveDebug()
 {
-	//NodI.save_txt_from_device("NodI");
-	//NodC.save_txt_from_device("NodC");
-	//NodV.save_txt_from_device("NodV");
-	//BL.save_txt_from_device("BL");
+	//NodI.saveFromDevice(true, trStructBase::saveTxtFl);
+	//NodC.saveFromDevice(true, trStructBase::saveTxtFl);
+	//BL.saveFromDevice(true, trStructBase::saveTxtFl);
+	
 	//BLind_ind.save_txt_from_device("BLind_ind");
 	//Node_neigh.save_txt_from_device("Node_neigh");
 	//Winds.save_txt_from_device("Winds");
 	//TR_indicies.save_txt_from_device("TR_indicies");
 	//Active_indicies.save_txt_from_device("Active_indicies");
 	//Active_flag.save_txt_from_device("Active_flag");
+	wallShear.saveDebug();
+	parSort.saveDebug();
 }
 
 void clVariablesTR::saveParams()
@@ -1579,15 +1641,6 @@ void clVariablesTR::saveParams()
 	p.setParameter("BL_SEARCH_RAD", blSearchRad);
 
 	saveKernelType(kernelT);
-
-
-
-
-
-
-
-
-
 
 	parSort.saveParams();
 	wallShear.saveParams();
@@ -1678,6 +1731,10 @@ void clVariablesTR::saveTimeData()
 
 void clVariablesTR::setKernelArgs()
 {
+	DebugOutData.allocate(nN);
+	DebugOutData.fill({ {-1, -1} });
+	DebugOutData.allocate_buffer_w_copy();
+
 	cl_int ind = 0;
 
 	NodC.setTempBuffers(trWallParKernel[0], ind);
@@ -1706,6 +1763,10 @@ void clVariablesTR::setKernelArgs()
 	trWallParKernel[0].set_argument(ind++, reflectInds.get_buf_add());
 	trWallParKernel[0].setOptionInd(ind);
 	trWallParKernel[0].setOption(wallInds.curSizeAdd());
+	trWallParKernel[0].reset_global_size(wallInds.curSize());
+	
+
+
 
 
 	ind = 0;
@@ -1771,6 +1832,8 @@ void clVariablesTR::setKernelArgs()
 	trUpdateParKernel.set_argument(ind++, activeInds.get_buf_add());
 	trUpdateParKernel.setOptionInd(ind);
 	trUpdateParKernel.setOption(activeInds.curSizeAdd());
+	trUpdateParKernel.reset_global_size(activeInds.curSize());
+
 
 
 	ind = 0;
@@ -1782,7 +1845,7 @@ void clVariablesTR::setKernelArgs()
 	updateTrCoeffsKernel.set_argument(ind++, vls.dXArr0.get_buf_add());
 	updateTrCoeffsKernel.set_argument(ind++, activeInds.get_buf_add());
 	updateTrCoeffsKernel.setOptionInd(ind);
-	updateTrCoeffsKernel.set_argument(ind, &nActiveNodes);
+	updateTrCoeffsKernel.set_argument(ind, activeInds.curSizeAdd());
 
 	ind = 0;
 	updateTRWallNodesKernel.set_argument(ind++, BL.P01ind.get_buf_add());
@@ -1814,8 +1877,12 @@ void clVariablesTR::setKernelArgs()
 	findTRWallNodesKernel.set_argument(ind++, wallIndsCurIndex.get_buf_add());
 	findTRWallNodesKernel.set_argument(ind++, activeInds.get_buf_add());
 	findTRWallNodesKernel.setOptionInd(ind);
-	findTRWallNodesKernel.set_argument(ind++, &nActiveNodes);
+	findTRWallNodesKernel.set_argument(ind++, activeInds.curSizeAdd());
 	findTRWallNodesKernel.set_argument(ind++, wallInds.curBufferSizeAdd());
+
+	int numRandCalls = 1000;
+	callRand.set_argument(0, RandList.get_buf_add());
+	callRand.set_argument(1, &numRandCalls);
 
 	parSort.setKernelArgs();
 	wallShear.setKernelArgs();
@@ -1857,12 +1924,14 @@ void clVariablesTR::setSourceDefines()
 	setSrcDefinePrefix "ALPHA_FLUID", vfd.Alpha_fluid);
 	setSrcDefinePrefix "ALPHA_FOUL", vfd.Alpha_foul);
 
+	// X index of particle release location in reduced tracer domain.
+	setSrcDefinePrefix "TRP_X_RELEASE_INT", ((int)xReleaseVal - trDomainXBounds.x));
+
 	int wallTimer = p.trSteps_wall;
 	int trTimer = p.trSteps;
 	int divTrSteps = trTimer / wallTimer;
-	int reReleaseTimeTemp = MIN(timeBeforeReRelease, 65000); // dont want to go above max ushort value
-	reReleaseTimeTemp /= wallTimer;
-	int stickTimeTemp = MIN(timeBeforeStick, 65000); // dont want to go above max ushort value
+	int reReleaseTimeTemp = MIN(timeBeforeReRelease, INT_MAX-1);
+	int stickTimeTemp = MIN(timeBeforeStick, MAX_DEP_TIMER_TIME); // dont want to go above max ushort value
 	stickTimeTemp /= wallTimer;
 
 	setSrcDefinePrefix "TIMER_DECREMENT", divTrSteps);
@@ -1878,9 +1947,11 @@ void clVariablesTR::setSourceDefines()
 	setSrcDefinePrefix "REFLECT_INFO_OFFSET", nN / 2);
 
 	if (calcIOFlag)
-	setSrcDefinePrefix "CALC_IO_DISTS");
-
-
+	{
+		setSrcDefinePrefix "CALC_IO_DISTS");
+		
+	}
+	setSrcDefinePrefix "PLOC_IND_SHIFT", 2);
 
 
 	if (MAX_NUM_BL_ROLL != -1)
@@ -1944,6 +2015,9 @@ bool clVariablesTR::testRestartRun()
 	if (!restartRunFlag)
 	{
 		iniParticles();
+		glParticles.allocateArrays();
+		parSort.allocateArrays();
+		//wallShear.allocateArrays();
 		parSort.sortTimer = 0;
 		return false;
 	}
@@ -1974,60 +2048,71 @@ bool clVariablesTR::testRestartRun()
 void clVariablesTR::update()
 {
 	cl_event fillEvt;
-	NodI.wallFlag.FillBuffer(static_cast<cl_short>(0), IOQUEUE_REF, 0, nullptr, &fillEvt);
-	
+	NodI.wallFlag.FillBuffer(static_cast<cl_short>(WF_SOLID_WITH_FLAGS), IOQUEUE_REF, 0, nullptr, &fillEvt);
+
 	clFlush(IOQUEUE);
-
-
 
 
 	int offset = vtr.parSort.Ploc(1).x;
 	int total_removal = vtr.parSort.Ploc(1).y - offset;
 	shiftParticlesKernel[1].setOption(&offset);
 	shiftParticlesKernel[1].setOption(&total_removal, 1);
+	shiftParticlesKernel[1].reset_global_size(total_removal);
+
+	FINISH_QUEUES; /// keep this here
+
 
 	updateTrCoeffsKernel.call_kernel(nullptr, 1, &fillEvt);  ///Update Nodes
 	updateTRWallNodesKernel.call_kernel();  ///Update Wall Nodes
+
+
 	shiftParticlesKernel[0].call_kernel();	///Update Particles
 	shiftParticlesKernel[1].call_kernel();	///Update Wall Particles
 
 	parSort.updateTrp();
-
+	updateWallNodes();
 }
 
 void clVariablesTR::updateWallNodes()
 {
-	findTRWallNodesKernel.setOption(&activeInds);
 	findTRWallNodesKernel.call_kernel();
+
+	// Reading from buffer on same queue as findTRWallNodesKernel, so no need
+	// for event to avoid race conditions. This read is blocking, so 
+	// it will return when its ready to be compared in the if statement below.
 	wallIndsCurIndex.read_from_buffer(findTRWallNodesKernel.getCommandQueue());
 
-	bool resizeFlag = false;
+	// If wallIndsCurIndex is >= current size of wallInds, resize wallInds,
+	// to current value of wallIndsCurIndex (is actual size wallInds needs to be to
+	// fill all values when rerunning findTRWallNodesKernel), re-set arguments
+	// of kernels that use wallInds, and re-run findTRWallNodesKernel.
 	if (wallIndsCurIndex(0) >= wallInds.getBufferFullSize())
 	{
-		wallIndsCurIndex.FillBuffer(0, LBQUEUE_REF);
-		resizeFlag = true;
-		wallInds.resize_device_dynamic();
+		int fullWallIndsVal = wallIndsCurIndex(0);
+		wallIndsCurIndex.FillBuffer(0, TRQUEUE_REF);
+
+		wallInds.resize_device_dynamic(fullWallIndsVal);
 		
 		findTRWallNodesKernel.set_argument(1, wallInds.get_buf_add());
 
 		findTRWallNodesKernel.setOption(wallInds.curBufferSizeAdd(), 1);
 		
 		findTRWallNodesKernel.call_kernel();
+
+		trWallParKernel[0].set_argument(0, wallInds.get_buf_add());
+
+		// re-read wallIndsCurIndex just to ensure no errors.
 		wallIndsCurIndex.read_from_buffer(findTRWallNodesKernel.getCommandQueue());
 	}
 
+	// set size of trWallParKernel[0] to number of wall nodes
 	int wallNodesNum_ = wallIndsCurIndex(0);
 	trWallParKernel[0].setOption(&wallNodesNum_);
+	trWallParKernel[0].reset_global_size(wallNodesNum_);
 
-
-	// dont need to update these kernels until after updateIBBOnly
-	// has finished updating ibb arrays since they will not be
-	// called again until next update step.
-	// TODO: make sure that all kernels which use wallInds have new buffer set here
-	if (resizeFlag)
-	{
-		trWallParKernel[0].set_argument(0, wallInds.get_buf_add());
-	}
+	// Fill wallIndsCurIndex buffer with 0, now rather than right before 
+	// calling findTRWallNodesKernel, to avoid waiting for write to finish
+	wallIndsCurIndex.FillBuffer(0, findTRWallNodesKernel.getCommandQueue());
 }
 
 
@@ -2050,6 +2135,7 @@ void clVariablesTR::updateWallParticles()
 
 	// if particles cross wall behind release location, 
 	// this function will reflect without allowing for deposition
+	// should rarely be called
 	if (reflectInds(0) > 0)
 	{
 		// set number of particles to reflect argument and global size
@@ -2057,19 +2143,20 @@ void clVariablesTR::updateWallParticles()
 		trWallParKernel[1].setOptionGlobalCallKernel(reflectInds(0));
 
 		// Fill index 0 with 0
-		reflectInds.FillBuffer(0, sizeof(int), 1, 0, TRQUEUE_REF);
+		reflectInds.FillBuffer(0, 1, TRQUEUE_REF);
 	}
 
 	// if no particles cross wall, return
 	if (reflectInds(1) == 0)
 		return;
-
+	
 	// continue until no tracers have crossed a wall
 	while (true)
 	{
 		// set number of particles to reflect argument and global size
 		// before calling kernel
 		trWallParKernel[2].setOptionGlobalCallKernel(reflectInds(1));
+
 
 		// Read reflectInds to see if any more particles need reflecting,
 		// if not exit loop
@@ -2080,11 +2167,26 @@ void clVariablesTR::updateWallParticles()
 		// fill reflectInds(1) with 0, since this will be storing
 		// the count of particles reflecting from wall in 
 		// trWallParKernel[3]
-		reflectInds.FillBuffer(0, sizeof(int), 1, 1, TRQUEUE_REF);
+		const int zer = 0;
+
+		// Directly calling clEnqueueFillBuffer due to issues with FillBuffer
+		// function in ArrayBase
+#ifdef _DEBUG
+		int	status = clEnqueueFillBuffer(TRQUEUE, reflectInds.get_buffer(),
+			&zer, sizeof(int), sizeof(int), sizeof(int), 0, nullptr, nullptr);
+
+		ERROR_CHECKING_OCL(status, "Error filling reflectInds array "\
+			"in vtr.updateWallParticles", ERROR_IN_VTR_SOLVER);
+#else
+		clEnqueueFillBuffer(TRQUEUE, reflectInds.get_buffer(),
+			&zer, sizeof(int), sizeof(int), sizeof(int), 0, nullptr, nullptr);
+#endif
 
 		// set number of particles to reflect argument and global size
 		// before calling kernel
 		trWallParKernel[3].setOptionGlobalCallKernel(reflectInds(0));
+
+
 
 		// check to see if there are still particles to reflect
 		reflectInds.read_from_buffer(TRQUEUE_REF, CL_TRUE);
@@ -2093,15 +2195,17 @@ void clVariablesTR::updateWallParticles()
 
 		// Fill index 0 with 0, since it will be used to count
 		// number of particles reflecting off of walls
-		reflectInds.FillBuffer(0, sizeof(int), 1, 0, TRQUEUE_REF);
+		reflectInds.FillBuffer(0, 1, TRQUEUE_REF);
 	}
 
-	// If there are particles that deposited, call trWallParKernel[4]
+	// If there are particles that deposited, call trWallParKernel[2]
 	if (reflectInds(2) > 0)
 	{
+
 		// set number of particles to reflect argument and global size
 		// before calling kernel
-		trWallParKernel[2].setOptionGlobalCallKernel(reflectInds(2));
+		trWallParKernel[4].setOptionGlobalCallKernel(reflectInds(2));
+
 	}
 	// Go ahead and fill reflectInds with 0s for next time.
 	reflectInds.FillBuffer(0, TRQUEUE_REF);

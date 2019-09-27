@@ -628,9 +628,9 @@ __kernel void LB_collision_SRT_Fluid_w_kOmega(__global double* __restrict__ rho_
 // Interpolated bounce back kernel
 // TODO: Test that implementation is correct
 __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_IBB, 1, 1)))
-void lbIBB(__global int *__restrict__ ibbArr,
-	__global double *__restrict__ dXCurr,
-	__global double *__restrict__ FB,
+void lbIBB(__global int* __restrict__ ibbArr,
+	__global double* __restrict__ distArr,
+	__global double* __restrict__ FB,
 	int max_el)
 {
 	int i = get_global_id(0);
@@ -639,10 +639,12 @@ void lbIBB(__global int *__restrict__ ibbArr,
 		return;
 
 	int loc = ibbArr[i];
-	
 	int dir = (loc / DIST_SIZE);
-	int revDir = loc + ibbRev[dir-1];
-	double twoQ = 2.*dXCurr[loc + (dir-1)*DIST_SIZE];
+	//int linInd = loc - (dir * DIST_SIZE);
+	//int revDir = linInd + (RevDir[dir - 1] + 1) * DIST_SIZE;
+	int revDir = loc + ibbRev[dir - 1];
+
+	double twoQ = 2. * distArr[i];
 
 	if (twoQ <= 1.0)
 	{
@@ -655,3 +657,52 @@ void lbIBB(__global int *__restrict__ ibbArr,
 	}
 }
 
+//__kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_IBB, 1, 1)))
+//void lbIBB(__global int* __restrict__ ibbArr,
+//	__global double* __restrict__ distArr,
+//	__global double* __restrict__ FB,
+//	int max_el,
+//	__global int* xArr1,
+//	__global int* yArr1,
+//	__global int* dirArr1,
+//	__global int* xArr2,
+//	__global int* yArr2,
+//	__global int* dirArr2,
+//	__global int* xArr3,
+//	__global int* yArr3,
+//	__global int* dirArr3)
+//{
+//	int i = get_global_id(0);
+//
+//	if (i >= max_el)
+//		return;
+//
+//	int loc = ibbArr[i];
+//	int dir = (loc / DIST_SIZE);
+//	int linInd = loc - (dir * DIST_SIZE);
+//	int gy = linInd / CHANNEL_LENGTH_FULL;
+//	int gx = linInd - CHANNEL_LENGTH_FULL * gy;
+//	xArr1[i] = gx;
+//	yArr1[i] = gy;
+//	dirArr1[i] = dir;
+//
+//
+//	int revDir = linInd + (RevDir[dir - 1] + 1) * DIST_SIZE;
+//
+//	int dir1 = (revDir / DIST_SIZE);
+//	int linInd1 = revDir - (dir1 * DIST_SIZE);
+//	int gy1 = linInd1 / CHANNEL_LENGTH_FULL;
+//	int gx1 = linInd1 - CHANNEL_LENGTH_FULL * gy1;
+//	xArr2[i] = gx1;
+//	yArr2[i] = gy1;
+//	dirArr2[i] = dir1;
+//
+//	int revNeigh = loc + ibbNeigh[dir - 1];
+//	int dir2 = (revNeigh / DIST_SIZE);
+//	int linInd2 = revNeigh - (dir2 * DIST_SIZE);
+//	int gy2 = linInd2 / CHANNEL_LENGTH_FULL;
+//	int gx2 = linInd2 - CHANNEL_LENGTH_FULL * gy2;
+//	xArr3[i] = gx2;
+//	yArr3[i] = gy2;
+//	dirArr3[i] = dir2;
+//}

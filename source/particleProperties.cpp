@@ -104,8 +104,8 @@ void particleProperties::createPropertyArrays()
 		if (tau_crit(i).y > Tau_crit_max)
 			Tau_crit_max = tau_crit(i).y;
 
-		D_dist(i) = Distsum;
 		Distsum += D_dist(i);
+		D_dist(i) = Distsum;
 		L_coeff(i) = liftCoeff * Dp(i) * Dp(i) * Dp(i) / vlb.MuVal / 8.;
 		D_coeff(i) = 6.0 * PI_NUMBER * Dp(i) * Dp(i) * wallCorrection / 4.;
 	}
@@ -164,7 +164,7 @@ void particleProperties::loadParams()
 	parVolMultiplier = numEachPar / (1. - depPorosity);
 
 	this->setSizes(Nd, Nd, 1);
-
+	allocateArrays();
 	D_p_real.zeros(Nd);
 	p.yamlIn["Dp Dists"] >> D_dist;
 	p.yamlIn["Par Diameters"] >> D_p_real;
@@ -180,7 +180,7 @@ void particleProperties::loadParams()
 	Estar_s = yModSoot;
 	WofA_s = surfEnergySoot;
 
-	allocateArrays();
+	
 	createPropertyArrays();
 }
 
@@ -216,15 +216,15 @@ void particleProperties::saveParams()
 
 	if (vtr.trSolverFlag)
 	{
-		*p.yamlOut << YAML::BeginMap;
+		//*p.yamlOut << YAML::BeginMap;
 		*p.yamlOut << YAML::Key << "Dp Dists";
 		*p.yamlOut << YAML::Value << D_dist;
-		*p.yamlOut << YAML::EndMap;
+		//*p.yamlOut << YAML::EndMap;
 
-		*p.yamlOut << YAML::BeginMap;
+		//*p.yamlOut << YAML::BeginMap;
 		*p.yamlOut << YAML::Key << "Par Diameters";
 		*p.yamlOut << YAML::Value << D_p_real;
-		*p.yamlOut << YAML::EndMap;
+		//*p.yamlOut << YAML::EndMap;
 	}
 }
 

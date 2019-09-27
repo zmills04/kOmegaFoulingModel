@@ -120,7 +120,6 @@ void Par::copyToParOnDevice(Par& Ptemp, bool copyLoc, int writeSize,
 	copyToArrayOnDevice(Ptemp, typeArr, writeSize, que_);
 	copyToArrayOnDevice(Ptemp, depFlagArr, writeSize, que_);
 	copyToArrayOnDevice(Ptemp, depTimerArr, writeSize, que_);
-	copyToArrayOnDevice(Ptemp, timerArr, writeSize, que_);
 	//only final call needs to be tracked by evt since all on same queue
 	if (!copyLoc)
 	{
@@ -131,6 +130,17 @@ void Par::copyToParOnDevice(Par& Ptemp, bool copyLoc, int writeSize,
 		copyToArrayOnDevice(Ptemp, timerArr, writeSize, que_);
 		copyToArrayOnDevice(Ptemp, locArr, writeSize, que_, 0, nullptr, evt);
 	}
+}
+
+void Par::freeHost()
+{
+	pos.FreeHost();
+	Num_rep.FreeHost();
+	type.FreeHost();
+	Dep_Flag.FreeHost();
+	Dep_timer.FreeHost();
+	timer.FreeHost();
+	loc.FreeHost();
 }
 
 void Par::copyToArrayOnDevice(Par& Ptemp, arrName arrname_, int writeSize,
@@ -385,6 +395,7 @@ bool Par::save(bool saveAll, saveFlags saveFlag_)
 bool Par::saveFromDevice(bool saveAll, saveFlags saveFlag_,
 	cl_command_queue * que_)
 {
+	FINISH_QUEUES;
 	bool ret = true;
 	switch (saveFlag_)
 	{
@@ -423,6 +434,7 @@ bool Par::saveFromDevice(bool saveAll, saveFlags saveFlag_,
 			ret &= Dep_Flag.save_from_device();
 			ret &= Dep_timer.save_from_device();
 			ret &= timer.save_from_device();
+			ret &= loc.save_from_device();
 			break;
 		}
 		case saveTxtFl:
@@ -430,6 +442,7 @@ bool Par::saveFromDevice(bool saveAll, saveFlags saveFlag_,
 			ret &= Dep_Flag.save_txt_from_device("", que_);
 			ret &= Dep_timer.save_txt_from_device("", que_);
 			ret &= timer.save_txt_from_device("", que_);
+			ret &= loc.save_txt_from_device("", que_);
 			break;
 		}
 		case saveBinFl:
@@ -1427,7 +1440,7 @@ void BLinks::allocateArrays()
 	Node_loc.allocate(fullSize);
 	Node_loc.fill(0);
 
-	P01ind.setName("BLinks_vT");
+	P01ind.setName("BLinks_P01ind");
 	P01ind.allocate(fullSize);
 	P01ind.fill({ 0, 0 });
 

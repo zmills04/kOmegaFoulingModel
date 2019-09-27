@@ -12,6 +12,9 @@
 #pragma warning(disable : 4244)
 #pragma warning(disable : 4477)
 #pragma warning(disable : 6054)
+#pragma warning(disable : 6387)
+#pragma warning(disable : 26444)
+#pragma warning(disable : 26451)
 
 #if !defined(AFX_STDAFX_H__24F045E1_A23A_42BE_BCBB_F3F2F6EE9AF1__INCLUDED_)
 #define AFX_STDAFX_H__24F045E1_A23A_42BE_BCBB_F3F2F6EE9AF1__INCLUDED_
@@ -172,6 +175,16 @@ enum statKernelType {
 	quarticKer, triWeightKer, triCubeKer, gaussianKer, cosineKer,
 	logisticKer, sigmoidKer
 };
+
+
+typedef cl_uint		numRepType;
+typedef cl_short	parTypeType;
+typedef int			depFlagType;
+typedef cl_ushort	depTimerType;
+typedef int			parTimerType;
+typedef int			parLocType;
+
+#define MAX_DEP_TIMER_TIME	USHRT_MAX  	
 
 //#ifndef PRINT_ERROR_MESSAGES
 //#define PRINT_ERROR					do {} while(0)

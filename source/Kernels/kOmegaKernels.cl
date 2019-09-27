@@ -260,6 +260,7 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int* __restrict__ IndArr,
 	double Jy_k = Uy - diffk_dy;
 
 	double omegaval = iO[gid], kval = iK[gid];
+
 	double F1val = iF1[gid], nutval = iNut[gid];
 	double Sxx = iSxy[gid], Sxy = iSxy[gid + DIST_SIZE], Syy = iSxy[gid + 2 * DIST_SIZE];
 	double Pk = 2. * nutval * (Sxx * Sxx + Syy * Syy + 2. * Sxy * Sxy) -
@@ -326,8 +327,8 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int* __restrict__ IndArr,
 		Sc = 0.;
 		/// get yplus value = y*0.09^(0.25)*sqrt(kappa)/nu
 		double yplus = WallD[gid];// *sqrt(kval)* KO_C_MU_0_25 / MU_NUMBER;
-		double omegaVis = (6. * MU_NUMBER / 0.075) / pown(yplus, 2);
-		double omegaLog = sqrt(kval) / (KO_C_MU_0_25 * KO_KAPPA * yplus);// (1. / (0.3 * KO_KAPPA))* fricVel / yplus;
+		double omegaVis = (6. * MU_NUMBER / 0.075) / (yplus * yplus);
+		double omegaLog = sqrt(max(kval,1.0e-16)) / (KO_C_MU_0_25 * KO_KAPPA * yplus);// (1. / (0.3 * KO_KAPPA))* fricVel / yplus;
 		omegaval = sqrt(omegaVis * omegaVis + omegaLog * omegaLog);
 	}
 
@@ -665,7 +666,7 @@ double findMinDist(int2 botSearchInds, int2 topSearchInds, double2* nLoc,
 {
 	double dmin = 1000.;
 
-	for (int i = botSearchInds.x; i < botSearchInds.x; i++)
+	for (int i = botSearchInds.x; i < botSearchInds.y; i++)
 	{
 		double2 P0 = Cvals[i], P1 = Cvals[i+1];
 		double2 vT = P1 - P0;
@@ -691,9 +692,9 @@ double findMinDist(int2 botSearchInds, int2 topSearchInds, double2* nLoc,
 		dmin = min(dmin, dtemp);
 	}
 
-	for (int i = topSearchInds.x; i < topSearchInds.x; i++)
+	for (int i = topSearchInds.x; i < topSearchInds.y; i++)
 	{
-		double2 P0 = Cvals[i], P1 = Cvals[i + 1];
+		double2 P0 = Cvals[i], P1 = Cvals[i+1];
 		double2 vT = P1 - P0;
 		double vTmag = length(vT);
 		double dtemp = fabs(vT.y * (*nLoc).x - vT.x * (*nLoc).y + P1.x * P0.y - P1.y * P0.x) / vTmag;
@@ -729,20 +730,21 @@ __kernel void updateWallD(__global double *__restrict__ WallD,
 {
 	const int gx = get_global_id(0);
 
-	if (gx > CHANNEL_LENGTH) { return; }
+	if (gx >= CHANNEL_LENGTH) { return; }
 	const int gy = get_global_id(1);
 	const int gi = GET_GLOBAL_IDX(gx, gy);
 	const NTYPE_TYPE type = nType[gi];
 	
 	double wallDistTemp = 0.;
 
-	if (!(type & M_SOLID_NODE))
+	if ((type & M_FLUID_NODE))
 	{
 
 		int2 botSearchInds = (int2)(max(lsMap[gx] - WALLD_SEARCH_RADIUS, 0),
 			min(lsMap[gx] + WALLD_SEARCH_RADIUS, LSC_NN / 2 - 1));
 		int2 topSearchInds = (int2)(max(lsMap[gx + CHANNEL_LENGTH_FULL] - WALLD_SEARCH_RADIUS, LSC_NN / 2),
 			min(lsMap[gx + CHANNEL_LENGTH_FULL] + WALLD_SEARCH_RADIUS, LSC_NN - 1));
+
 
 		double2 nLoc = (double2)((double)gx, (double)gy);
 		wallDistTemp = findMinDist(botSearchInds, topSearchInds, &nLoc, Cvals);

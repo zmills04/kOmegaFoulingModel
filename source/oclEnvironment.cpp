@@ -282,14 +282,22 @@ void clEnv::initGlew()
 		return exit(0);
 	}
 
+	//if (p.useOpenGL)
+	//{
+	//	vtr.glParticles.allocateGLBuffers();
+	//}
+
 	glClearColor(1., 1., 1., 1.);
 
 	glViewport(0., 0., screenWidth, screenHeight);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
 	double ar = (double)p.nY / (double)p.nX;
-	Window_Center = { { 100., (double)p.Channel_Height / 2. } };
-	Window_Dims = { { (double)p.Channel_Height, (double)p.Channel_Height } };
+	double windowAR = screenWidth / screenHeight;
+	double windowHeightCur = 5.;
+	double windowWidthCur = windowHeightCur * windowAR;
+	Window_Center = { { (90. - windowWidthCur/2.), (201.5 - windowHeightCur/2.) } };
+	Window_Dims = { { windowWidthCur, windowHeightCur } };
 	Window_Shift = { { 2., 2. } };
 
 	gluOrtho2D(	Window_Center.x - Window_Dims.x, 

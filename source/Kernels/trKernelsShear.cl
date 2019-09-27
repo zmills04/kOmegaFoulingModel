@@ -16,15 +16,14 @@ void TR_shear_removal(__global double2* __restrict__ lsc,
 	__global double2* __restrict__ BL_vNvec,
 	__global double* __restrict__ BL_blLen,
 	__global double* __restrict__ BL_Tau,
-	__global short* __restrict__ BL_Tau_Dir,
 	__global short* __restrict__ BL_Surf_Type,
 	__global double2* __restrict__ P_pos,
-	__global uint* __restrict__ P_Num_rep,
-	__global short* __restrict__ P_type,
-	__global short* __restrict__ P_Dep_Flag,
-	__global ushort* __restrict__ P_Dep_timer,
-	__global int* __restrict__ P_loc,
-	__global uint* __restrict__ P_timer,
+	__global numRepType* __restrict__ P_Num_rep,
+	__global parTypeType* __restrict__ P_type,
+	__global depFlagType* __restrict__ P_Dep_Flag,
+	__global depTimerType* __restrict__ P_Dep_timer,
+	__global parLocType* __restrict__ P_loc,
+	__global parTimerType* __restrict__ P_timer,
 	__global uint* BLdep,
 	int2 offsetAndMax) // offsetAndMax = {{ offset, maxel }}
 {
@@ -34,14 +33,14 @@ void TR_shear_removal(__global double2* __restrict__ lsc,
 		return;
 
 	i += offsetAndMax.x;
-	
+	depFlagType blInd = P_Dep_Flag[i];
 	// skip if already deposited
-	if (P_Dep_Flag < 0)
+	if (blInd < 0)
 		return;
 
-	int sizeInd = P_type[i];
-	int depTimer = P_Dep_timer[i] - 1;
-	int blInd = P_Dep_Flag[i];
+	parTypeType sizeInd = P_type[i];
+	depTimerType depTimer = P_Dep_timer[i] - 1;
+
 	
 	// if dep timer reaches zero, set particle to permanently deposited
 	// and return.
@@ -94,17 +93,29 @@ void TR_shear_removal(__global double2* __restrict__ lsc,
 	double dC_mag = length(dC_rem);
 
 	// make sure it is displaced sufficiently far from surface
-	dC_mag = max(dC_mag, blLen / 8.);
+	dC_mag = max(dC_mag, blLen / 20.);
 
 	// C1 becomes new particle location
 	C1 += dC_rem;
 
+
+	int2 Posi = convert_int2(C1);
+	parLocType pcur_loc = GET_PAR_LOC_INDEX(Posi);
+	depFlagType pdepFl = -1;
+
+	if (C1.x < X_MIN_VAL || C1.x >= X_MAX_VAL)
+	{
+		pcur_loc = -2;
+		P_Dep_Flag[i] = (C1.x > X_MAX_VAL) ? (-3) : (-2);
+	}
+
+
+
 	// if particle is removed and goes outside of tracer range, it must be
 	// caught here, or behavior is undefined
-	P_Dep_Flag[i] = (C1.x < X_MIN_VAL || C1.x > X_MAX_VAL) ? (-2) : (-1);
-	int2 Posi = convert_int2(C1);
-	int pcur_loc = Posi.x + FULLSIZEX_TR * Posi.y;
-	P_loc[i] = (C1.x < X_MIN_VAL || C1.x > X_MAX_VAL) ? (-2) : (pcur_loc);
+	
+	P_Dep_Flag[i] = pdepFl;
+	P_loc[i] = pcur_loc;
 	P_pos[i] = C1;
 	P_timer[i] = PAR_TIMER_START;
 }
@@ -170,7 +181,6 @@ void TR_shear_1(__global double* __restrict__ Ro_array,
 	__global int* __restrict__ Loc,
 	__global double* __restrict__ nut,
 	int TAU_ARRAY_SIZE,
-	double dp,
 	__local double8* Fvals)
 {
 	uint ii = get_global_id(0);
@@ -234,10 +244,12 @@ void TR_shear_2(__global double4* __restrict__ Weights,
 
 	double4 weight = Weights[ii];
 	int4 i = sInd[ii];
-
-	double4 Tautemp = (double4)(nodeTau[i.x], nodeTau[i.y], nodeTau[i.z], nodeTau[i.w]);
+	float fr = 1.f, fg = 1.f, fb = 1.f;
+	double4 Tautemp = (double4)(tauArray[i.x], tauArray[i.y], tauArray[i.z], tauArray[i.w]);
 	double Tau_wall = dot(weight, Tautemp);
-	blTau[ii] = Tau_wall;
+	int blInd = GET_SHEAR_BL_INDEX(ii);
+
+	blTau[blInd] = Tau_wall;
 
 	double TCRIT_MAX = TCRIT_MAX2[blType[ii]];
 	
@@ -268,18 +280,18 @@ void TR_shear_2(__global double4* __restrict__ Weights,
 		}
 	}
 	
-	int LSind = blColorInd[ii];
-	if (LSind < 0)
+	if (blInd < FULL_BL_ARRAY_SIZE/2)
 	{
-		ls_color_t[-LSind * 3] = fr;
-		ls_color_t[-LSind * 3 + 1] = fg;
-		ls_color_t[-LSind * 3 + 2] = fb;
+		ls_color_b[blInd * 3] = fr;
+		ls_color_b[blInd * 3 + 1] = fg;
+		ls_color_b[blInd * 3 + 2] = fb;
 	}
 	else
 	{
-		ls_color_b[LSind * 3] = fr;
-		ls_color_b[LSind * 3 + 1] = fg;
-		ls_color_b[LSind * 3 + 2] = fb;
+		int dispInd = (blInd - FULL_BL_ARRAY_SIZE / 2);
+		ls_color_t[dispInd * 3] = fr;
+		ls_color_t[dispInd * 3 + 1] = fg;
+		ls_color_t[dispInd * 3 + 2] = fb;
 	}
 }
 
@@ -299,7 +311,8 @@ void TR_shear_2(__global double4* __restrict__ Weights,
 	int4 i = sInd[ii];
 
 	double4 Tautemp = (double4)(tauArray[i.x], tauArray[i.y], tauArray[i.z], tauArray[i.w]);
-	blTau[ii] = dot(weight, Tautemp);
+	int blInd = GET_SHEAR_BL_INDEX(ii);
+	blTau[blInd] = dot(weight, Tautemp);
 }
 
 #endif
@@ -412,9 +425,11 @@ void TR_Find_Shear_Coeffs2(__global double2* __restrict__ lsc,
 	if (ii >= NUM_BL_TOTAL)
 		return;
 
-	ushort lscInds = BL_P01ind[ii*2];
-	double blLen = BL_blLen[ii]/2.;
-	double2 vNvec = BL_vNvec[ii];
+	int blInd = GET_SHEAR_BL_INDEX(ii);
+
+	ushort lscInds = BL_P01ind[blInd*2];
+	double blLen = BL_blLen[blInd]/2.;
+	double2 vNvec = BL_vNvec[blInd];
 	// C1 is point at center of BL slightly offset into fluid domain
 	double2 BLmiddle = lsc[lscInds] + (blLen) * (double2)(vNvec.y, -vNvec.x);
 
@@ -490,7 +505,8 @@ void TR_shear_save_out(__global double* __restrict__ blTau,
 	uint ii = get_global_id(0);
 	if (ii >= NUM_BL_TOTAL)
 		return;
-	SSout[ii + save_loc * NUM_BL_TOTAL] = blTau[ii];
+	int blInd = GET_SHEAR_BL_INDEX(ii);
+	SSout[ii + save_loc * NUM_BL_TOTAL] = blTau[blInd];
 }
 
 #elif defined(SAVE_SHEAR_TOP)
@@ -502,7 +518,7 @@ void TR_shear_save_out(__global double* __restrict__ blTau,
 	uint ii = get_global_id(0);
 	if (ii >= NUM_BL_TOP)
 		return;
-	SSout[ii + save_loc * NUM_BL_TOP] = blTau[ii + NUM_BL_BOT];
+	SSout[ii + save_loc * NUM_BL_TOP] = blTau[ii + BL_TOP_START];
 }
 #else //SAVE_SHEAR_BOT
 __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_TR_SHEAR, 1, 1)))
@@ -513,6 +529,6 @@ void TR_shear_save_out(__global double* __restrict__ blTau,
 	uint ii = get_global_id(0);
 	if (ii >= NUM_BL_BOT)
 		return;
-	SSout[ii + save_loc * NUM_BL_BOT] = blTau[ii];
+	SSout[ii + save_loc * NUM_BL_BOT] = blTau[ii+BL_BOT_START];
 }
 #endif

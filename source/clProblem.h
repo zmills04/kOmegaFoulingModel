@@ -223,7 +223,7 @@ public:
 	//void SaveIO();
 	void DumpStep();
 	void RenameOutputFiles();
-
+	void freeHostArrays();
 
 
 

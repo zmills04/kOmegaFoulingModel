@@ -188,16 +188,6 @@ void clVariablesLB::getInitialFlow()
 	while (Time < stopTime && !fLoadedFlag)
 	{
 		Solve();
-		clFinish(LBQUEUE);
-
-		if (kOmegaClass.kOmegaSolverFlag)
-			kOmegaClass.Solve();
-
-#ifdef _DEBUG
-		//vls.saveDebug();
-		//vlb.saveDebug();
-#endif
-
 
 		Time++;
 		if (Time > NextDumpSteptime)
@@ -261,9 +251,6 @@ void clVariablesLB::getIntialFlowAndTemp()
 	while (Time < stopTime)
 	{
 		Solve();
-		clFinish(LBQUEUE);
-		if (kOmegaClass.kOmegaSolverFlag)
-			kOmegaClass.Solve();
 		
 		vfd.Solve();
 
@@ -325,7 +312,18 @@ void clVariablesLB::ini()
 
 	if (!fLoadedFlag)
 	{
-		if (iniPoiseuille)
+		if (loadVelTxtFlag)
+		{
+			vLoadedFlag =	Ux_array.loadtxt("restart_files\\lbux") && 
+							Uy_array.loadtxt("restart_files\\lbuy") && 
+							Ro_array.loadtxt(("restart_files\\lbro"));
+		}
+
+		if (vLoadedFlag)
+		{
+			iniDistsFromVel();
+		}
+		else if (iniPoiseuille)
 		{
 			double Umaxxx = Re * MuVal / p.Pipe_radius * 3. / 2. * geomPenaltyFactor;
 			iniDists(Umaxxx);
@@ -366,7 +364,45 @@ void clVariablesLB::ini()
 	LOGMESSAGE("vlb initialized");
 }
 
+void clVariablesLB::iniDistsFromVel()
+{
+	double Rho_inlet = RhoVal;
+	double Feq_temp[9];
 
+	for (int i = 0; i < p.XsizeFull; i++)
+	{
+		for (int j = 0; j < p.nY; j++)
+		{
+			if (i >= p.nX)
+			{
+				for (int k = 0; k < 9; k++)
+				{
+					FA(i, j, k) = Weigh[k];
+				}
+				continue;
+			}
+
+			
+			// just in case these arent 0.
+			if (vls.nType(i, j) & M_SOLID_NODE)
+			{
+				Ro_array(i,j) = 0.;
+				Ux_array(i, j) = 0.;
+				Uy_array(i, j) = 0.;
+			}
+
+			cl_double2 uvals = { { Ux_array(i,j), Uy_array(i,j) } };
+			double rhoval = Ro_array(i, j);
+			
+			calcFeqVals(Feq_temp, rhoval, uvals);
+
+			for (int k = 0; k < 9; k++)
+			{
+				FA(i, j, k) = Feq_temp[k];
+			}
+		}
+	}
+}
 
 void clVariablesLB::iniDists()
 {
@@ -523,6 +559,7 @@ void clVariablesLB::loadParams()
 
 	lbOutSize = p.getParameter("lbOut Max Lines", OUTPUT_MAX_LINES);
 
+	loadVelTxtFlag = p.getParameter("load Vel Text", LOAD_VEL_TEXT_NO_BIN);
 
 	testRestartRun();
 	
@@ -604,6 +641,7 @@ void clVariablesLB::loadParams()
 
 void clVariablesLB::renameSaveFiles()
 {
+	return;
 	Ux_array.RenameTxtFile();
 	Uy_array.RenameTxtFile();
 	Ro_array.RenameTxtFile();
@@ -632,14 +670,18 @@ void clVariablesLB::saveDebug(int saveFl)
 	//IBB_coeff.save_txt_from_device();
 	//IBB_loc.save_txt_from_device();
 	save2file();	
+	vls.nType.save_txt_from_device_short_to_int();
+	vls.dXArr.save_txt_from_device_as_multi2D();
 	if (kOmegaClass.kOmegaSolverFlag)
 	{
 		kOmegaClass.saveDebug(saveFl);
 	}
 }
 
-void clVariablesLB::saveDistributions()
+void clVariablesLB::saveDistributions(bool saveOpposite)
 {
+	if (saveOpposite)
+		alter ^= 1;
 	if (alter)
 	{
 		FB.save_txt_from_device_as_multi2D("lbf");
@@ -648,7 +690,10 @@ void clVariablesLB::saveDistributions()
 	{
 		FA.save_txt_from_device_as_multi2D("lbf");
 	}
+	if (saveOpposite)
+		alter ^= 1;
 }
+
 
 void clVariablesLB::saveParams()
 {
@@ -683,6 +728,7 @@ void clVariablesLB::saveParams()
 	p.setParameter("Pause Between Adjust", pauseBtwAdj);
 	p.setParameter("Flowrate Max Percent Diff", flowrateMaxPercentDiff);
 	p.setParameter("Use Turb Vel BC", turbVelBCFlag);
+	p.setParameter("load Vel Text", loadVelTxtFlag);
 
 	p.setParameter("Geometric Penalty Factor", geomPenaltyFactor);
 
@@ -801,10 +847,10 @@ void clVariablesLB::setKernelArgs()
 	ibbKernel.set_separate_arguments(2, FB.get_buf_add(),
 		FA.get_buf_add());
 
-	vls.ibbArrCurIndex.read_from_buffer();
 	int ibbnumel_ = vls.ibbArrCurIndex(0);
 	ibbKernel.set_argument(3, &ibbnumel_);
 	ibbKernel.setOptionInd(3);
+	ibbKernel.reset_global_size(ibbnumel_);
 #endif
 
 	if (kOmegaClass.kOmegaSolverFlag)
@@ -834,18 +880,6 @@ void clVariablesLB::setSourceDefines()
 
 #undef SETSOURCEDEFINE
 
-void clVariablesLB::Solve()
-{
-	//cl_event col_evt;
-	collisionKernel.call_kernel(NULL, 0, NULL, NULL);
-#ifndef IN_KERNEL_IBB
-	ibbKernel.call_kernel();
-#endif
-	clFinish(LBQUEUE);
-
-//	clReleaseEvent(col_evt);
-	alter ^= 1;
-}
 
 
 bool clVariablesLB::testRestartRun()
@@ -873,8 +907,11 @@ bool clVariablesLB::testRestartRun()
 void clVariablesLB::update()
 {
 	// vls updates IBB arrays, so only need to update wall Distances for kOmega
+
 	if (kOmegaClass.kOmegaSolverFlag)
 		kOmegaClass.updateWallDKernel.call_kernel(LBQUEUE_REF);
+
+
 }
 
 //void clVariablesLB::updateIBBArrays(bool reSizeFlag)

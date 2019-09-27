@@ -168,7 +168,7 @@ void clVariablesFD::createKernels()
 	updateNuKernel[1].set_size(2 * nuNumNodes, WORKGROUPSIZE_NU);
 
 	calcNuMeanKernel.create_kernel(GetSourceProgram, FDQUEUE_REF, "getNuMean");
-	int wgSizeNuMean = getGlobalSizeMacro(p.nY, 32);
+	wgSizeNuMean = getGlobalSizeMacro(p.nY/2, 32);
 	calcNuMeanKernel.set_size(nuMeanNumNodes, 1, wgSizeNuMean, wgSizeNuMean);
 }
 
@@ -325,9 +325,6 @@ void clVariablesFD::iniDerivativeArrays()
 // Utilizes variables from vtr, so must be called after 
 // initializing vtr, and will throw error if simulation 
 // does not have flag set to use vtr.
-
-// TODO: set up to allow for Nu to be calculated without vtr
-// being needed
 void clVariablesFD::iniNuCoeffs()
 {
 	// Need to make sure info about wavy periods is provided, and throw error if not
@@ -336,8 +333,8 @@ void clVariablesFD::iniNuCoeffs()
 		"when calculating Nusselt number.", ERROR_INITIALIZING_VFD);
 
 	NuMean.iniFile(restartRunFlag);
-	nuMeanNumNodes = p.numWavyPeriods + 1;
-	nuMeanNumNodesFull = getGlobalSizeMacro(nuMeanNumNodes * 2, WORKGROUPSIZE_NU);
+	nuMeanNumNodes = 2*(p.numWavyPeriods + 1);
+	nuMeanNumNodesFull = getGlobalSizeMacro(nuMeanNumNodes, WORKGROUPSIZE_NU);
 	NuMean.zeros(nuMeanNumNodes, nuMeanNumNodesFull, maxOutputLinesNu, maxOutputLinesNu);
 	NuMean.createTimeArray();
 
@@ -376,9 +373,9 @@ void clVariablesFD::iniNuCoeffs()
 		int nodeType = 0x0;
 		if (jj != -1)
 		{
-			// Note: nuDist corresponds to direction from BL to node,
-			// so nuDist.x > 0 indicates that BL is to the left of node
-			// and nuDist.y > 0 indicates that BL is below node.
+			// Note: nuDistVec corresponds to direction from BL to node,
+			// so nuDistVec.x > 0 indicates that BL is to the left of node
+			// and nuDistVec.y > 0 indicates that BL is below node.
 
 			// nodeType defines which values of dXcur should be used when
 			// calculating the derivative.
@@ -390,6 +387,7 @@ void clVariablesFD::iniNuCoeffs()
 			{
 				nodeType |= 0x2;
 			}
+			
 		}
 		nuYInds(i) = (nuYInds(i) << 2) | nodeType;
 	}
@@ -465,7 +463,8 @@ void clVariablesFD::loadParams()
 
 void clVariablesFD::nuFindNearestNode(const int i, const int shiftInd)
 {
-	cl_double2 C0 = vls.C[vls.BL(i, 0)], C1 = vls.C[vls.BL(i, 1)];
+	cl_ushort2 P01i = vtr.BL.P01ind(i);
+	cl_double2 C0 = vls.C[P01i.x], C1 = vls.C[P01i.y];
 	cl_int2 C0i = vls.min2(C0, C1), C1i = vls.max2(C0, C1);
 	C0i = { { C0i.x - 1, C0i.y - 1 } };
 	C1i = { { C1i.x + 1, C1i.y + 1 } };
@@ -505,6 +504,7 @@ void clVariablesFD::nuFindNearestNode(const int i, const int shiftInd)
 
 void clVariablesFD::renameSaveFiles()
 {
+	return;
 	Temp.xVec->RenameTxtFile();
 }
 
@@ -522,6 +522,7 @@ void clVariablesFD::saveDebug()
 {
 	alphaDer.save_txt_from_device();
 	rhoCpDer.save_txt_from_device();
+	Temp.saveAxb_w_indicies_from_device();
 }
 
 // Saves time output data (i.e. avg velocity, shear, Nu, etc)
@@ -596,7 +597,7 @@ void clVariablesFD::setKernelArgs()
 	calcNuKernel.set_argument(ind++, vlb.Ux_array.get_buf_add());
 	calcNuKernel.set_argument(ind++, vlb.Uy_array.get_buf_add());
 	calcNuKernel.set_argument(ind++, nuYInds.get_buf_add());
-	calcNuKernel.set_argument(ind++, nuDist.get_buf_add());
+	calcNuKernel.set_argument(ind++, nuDistVec.get_buf_add());
 	calcNuKernel.set_argument(ind++, vls.dXArr.get_buf_add());
 	calcNuKernel.set_argument(ind++, vls.dXArr0.get_buf_add());
 	calcNuKernel.setOptionInd(ind);
@@ -710,12 +711,7 @@ void clVariablesFD::solveSSThermal()
 }
 
 
-void clVariablesFD::Solve()
-{
-	TempUpdateCoeffs.call_kernel();
-	clFinish(FDQUEUE);
-	Temp.solve();
-}
+
 
 void clVariablesFD::saveParams()
 {
@@ -767,6 +763,19 @@ bool clVariablesFD::testRestartRun()
 	{
 		tempLoadedFlag = true;
 	}
+	else if (vlb.loadVelTxtFlag)
+	{
+		restartRunFlag = false;
+		if (tempArray.load("restart_files\\tempSolver"))
+		{
+			tempLoadedFlag = true;
+		}
+		else
+		{
+			tempLoadedFlag = false;
+			tempArray.fill(ROE0);
+		}
+	}
 	else
 	{
 		restartRunFlag = false;
@@ -789,40 +798,36 @@ void clVariablesFD::updateDerivativeArrays()
 
 void clVariablesFD::updateNuCoeffs()
 {
-	nuYInds.FillBuffer(-1);
-	nuDist.FillBuffer(100.);
+	nuYInds.FillBuffer(-1, FDQUEUE_REF);
+	nuDist.FillBuffer(100., FDQUEUE_REF);
+
 
 	updateNuKernel[0].call_kernel();
 	updateNuKernel[1].call_kernel();
-
-
-	//clFinish(FDQUEUE);
-	//nuYInds.save_txt_from_device();
-	//nuDistVec.save_txt_from_device();
-	//nuDist.save_txt_from_device();
-
-
-
-
-
 }
 
 void clVariablesFD::updateTimeData()
 {
 	if (calcNuFlag)
 	{
-		// need to update coefficients to account
-		// for shifted walls
 		updateNuCoeffs();
 
 		calcNuKernel.setOptionCallKernel(Nu.getCurIndAdd());
-		if (Nu.setTimeAndIncrement(p.Time, FDQUEUE_REF))
-		{
-			// need to fill buffer with set value in order to know
-			// which nodes do not have correct values at any given time.
-			Nu.FillBuffer(-1000.);
-		}
-			   
+
+		
+
+		//if (Nu.setTimeAndIncrement(p.Time, FDQUEUE_REF))
+		//{
+		//	// need to fill buffer with set value in order to know
+		//	// which nodes do not have correct values at any given time.
+		//	Nu.FillBuffer(-1000.);
+		//}
+		// SHouldnt need to fill this with -1000, because it will set empty nodes
+		// in kernel
+		Nu.setTimeAndIncrement(p.Time, FDQUEUE_REF);
+
+
+
 		calcNuMeanKernel.setOptionCallKernel(NuMean.getCurIndAdd());
 		NuMean.setTimeAndIncrement(p.Time, FDQUEUE_REF);
 	}

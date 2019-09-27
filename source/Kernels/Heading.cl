@@ -6,6 +6,16 @@
 
 #define FTYPE	double
 
+
+
+
+typedef uint		numRepType;
+typedef short		parTypeType;
+typedef int			depFlagType;
+typedef ushort		depTimerType;
+typedef int			parTimerType;
+typedef int			parLocType;
+
 #define MAX(A, B)		(((A) > (B)) ? (A) : (B))
 #define MIN(A, B)		(((A) < (B)) ? (A) : (B))
 #define EPSILON			1.11e-16
@@ -174,11 +184,11 @@ uint2 MWC64X_NextUint2(uint2 s, double2* resd)
 
 	res = Xn ^ Cn;
 	(*resd).y = convert_double(res) / RAND_MAX;
-	Xn = MWC64X_A * X + C;
-	carry = (uint)(Xn < C);				// The (Xn<C) will be zero or one for scalar
-	Cn = mad_hi(MWC64X_A, X, carry);
+	uint Xnn = MWC64X_A * Xn + Cn;
+	carry = (uint)(Xnn < Cn);				// The (Xn<C) will be zero or one for scalar
+	Cn = mad_hi(MWC64X_A, Xn, carry);
 
-	s.x = Xn;
+	s.x = Xnn;
 	s.y = Cn;
 	return s;
 }
@@ -235,7 +245,10 @@ uint2 MWC64X_NextUint2(uint2 s, double2* resd)
 #define FD_BOUNDARY_NODE		0x0F10	//SOLID_BOUNDARY_NODE | NESW_BOUNDARY_NODE
 #define BOUNDARY_NODE			0xFF00  // E_BOUND | W_BOUND | ... | NW_BOUND
 #define FD_BOUNDARY_NODE0		0x0060	//SOLID_BOUNDARY_NODE0 | NESW_BOUNDARY_NODE0
-
+#define CLEAR_M_FLUID_BIT		0xFFF7  // &= CLEAR_FLUID_BIT will clear M_FLUID_NODE
+#define SWITCH_FLUID_TO_SOLID	0x0003	// ^= SWITCH_FLUID_TO_SOLID sets solid bit to 1 and fluid to 0
+#define RESET_NTYPE_NODE		0x00EF	// &= RESET_NTYPE_NODE sets all bits which will be re-calculated to
+										// 0 (0000 0000 1110 1111)
 
 #else
 #define C_BOUND					0x00000000 //just a placeholder. Not actually used
@@ -309,20 +322,20 @@ uint2 MWC64X_NextUint2(uint2 s, double2* resd)
 #define SW_NEIGH (-CHANNEL_LENGTH_FULL-1)
 
 
-#define WF_EMPTY			0x0000
-#define WF_SOLID			0x0001
-#define WF_FLUID			0x0002
-#define WF_BOT_WALL			0x0004
-#define WF_TOP_WALL			0x0008
-#define WF_00_SOLID			0x0010
-#define WF_10_SOLID			0x0020
-#define WF_01_SOLID			0x0040
-#define WF_11_SOLID			0x0080
+#define WF_EMPTY			0x00
+#define WF_SOLID			0x01
+#define WF_FLUID			0x02
+#define WF_BOT_WALL			0x04
+#define WF_TOP_WALL			0x08
+#define WF_00_SOLID			0x10
+#define WF_10_SOLID			0x20
+#define WF_01_SOLID			0x40
+#define WF_11_SOLID			0x80
 
-#define WF_WALL				0x000C
+#define WF_WALL				0x0C
 
 
-#define WF_TEST_ALL_SOLID	0x00F0
+#define WF_TEST_ALL_SOLID	0xF0
 
 
 // adding ibbRev[dir-1] to ibb index give index of the 
@@ -339,8 +352,8 @@ __constant int ibbNeigh[8] = { DIST_SIZE - 1,
 								-DIST_SIZE + CHANNEL_LENGTH_FULL,
 								DIST_SIZE - (CHANNEL_LENGTH_FULL + 1),
 								-DIST_SIZE + (CHANNEL_LENGTH_FULL + 1),
-								DIST_SIZE - CHANNEL_LENGTH_FULL + 1,
-								-DIST_SIZE + CHANNEL_LENGTH_FULL - 1 };
+								DIST_SIZE + (CHANNEL_LENGTH_FULL - 1),
+								-DIST_SIZE - (CHANNEL_LENGTH_FULL - 1) };
 
 
 #define EVAL1(...) __VA_ARGS__
@@ -397,11 +410,21 @@ __constant int ibbNeigh[8] = { DIST_SIZE - 1,
 #define KO_GAMMA2			(0.44)
 
 
-#define GET_GLOBAL_IDX(gx,gy)	(gx + gy*CHANNEL_LENGTH_FULL)
+#define GET_GLOBAL_IDX(gx,gy)			(gx + gy*CHANNEL_LENGTH_FULL)
 
 #define GET_FULL_GLOBAL_IDX(gx,gy,gdir)	(gx + gy*CHANNEL_LENGTH_FULL + gdir*DIST_SIZE)
 
-#define GET_TR_GLOBAL_IDX(gx,gy)	(gx + gy*FULLSIZEX_TR_PADDED)
+// Gives linear index for TR domain from x,y indicies in TR domain
+#define GET_TR_GLOBAL_IDX(gx,gy)		(gx + gy*FULLSIZEX_TR_PADDED)
+
+// Gives linear index for full domain from x,y indicies in TR domain
+#define GET_GLOBAL_IDX_FROM_TR(gx, gy)	(gx + TR_X_IND_START + gy*CHANNEL_LENGTH_FULL)
+
+#define GET_PAR_LOC_INDEX(parLoci)		(parLoci.x - TR_X_IND_START + parLoci.y * FULLSIZEX_TR_PADDED)
+
+#define GET_SHEAR_BL_OFFSET(ii) ((ii < NUM_BL_BOT) ? BL_BOT_START : (BL_TOP_START - NUM_BL_BOT))
+
+#define GET_SHEAR_BL_INDEX(ii) ((ii < NUM_BL_BOT) ? (ii + BL_BOT_START) : (ii + BL_TOP_START - NUM_BL_BOT))
 
 void decodeFullGlobalIdx(const int gid, int* xval, int* yval, int* qval)
 {
@@ -413,8 +436,15 @@ void decodeFullGlobalIdx(const int gid, int* xval, int* yval, int* qval)
 
 void decodeGlobalIdx(const int gid, int* xval, int* yval)
 {
-	*xval = gid % CHANNEL_LENGTH_FULL;
 	*yval = gid / CHANNEL_LENGTH_FULL;
+	*xval = gid - (*yval) * CHANNEL_LENGTH_FULL;
+}
+
+void decodeGlobalTrIdx(const int gid, int* xval, int* yval)
+{
+	*yval = gid / FULLSIZEX_TR_PADDED;
+	*xval = gid - (*yval) * FULLSIZEX_TR_PADDED;
+	//*yval = gid / FULLSIZEX_TR_PADDED;
 }
 
 double2 getLocFromGlobalIdx(const int gid)
@@ -430,15 +460,14 @@ int getTRPaddedPosFromLBPos(int gid)
 	return xval - TR_X_IND_START + FULLSIZEX_TR_PADDED * yval;
 }
 
-uint getRevDist(const int gid)
-{
-	// gid/DIST_SIZE = dist number
-	// gid % DIST_SIZE = i + j*CHANNEL_LENGTH_FULL
-
-
-	return gid % DIST_SIZE + RevDir[(gid / DIST_SIZE) + 1] *
-		DIST_SIZE;
-}
+//int getRevDist(const int gid)
+//{
+//	// gid/DIST_SIZE = dist number
+//	// gid % DIST_SIZE = i + j*CHANNEL_LENGTH_FULL
+//
+//
+//	return (gid % DIST_SIZE) + RevDir[(gid / DIST_SIZE) + 1] * DIST_SIZE;
+//}
 
 // BL_TOP_STOP and BL_BOT_STOP is index last element, so test for outside bounds
 // is > BL_*_STOP not >= BL_*_STOP

@@ -220,6 +220,8 @@ public:
 	bool reduceAndCheckConvergence(cl_command_queue *que_, bool setInitialRes = false, int num_wait = 0,
 		cl_event *wait = NULL, cl_event* evt = NULL);
 
+	bool reduceAndCheckConvergenceWithPrint(cl_command_queue* que_, int iterNum);
+
 	void copy_buffers(cl_mem *src_buf, cl_mem *dest_buf);
 
 	void solve();

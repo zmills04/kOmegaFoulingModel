@@ -21,12 +21,15 @@
 // ssArrInds - updated with ssArr
 // lsMap - not updated
 
-
+// calculates cross product of two vectors
 double Cross2(double2 v1, double2 v2)
 {//absolute value of cross product
 	return fabs(v1.x * v2.y - v1.y * v2.x);
 }
 
+// tests if point L0 falls with triangle defined by P0,P1,P2
+// by comparing area of P0,P1,P2 triangle with sum of areas
+// of three triangles formed by P0,P1,P2 and L0
 int test_inside(double2 P0, double2 P1, double2 P2, double2 L0)
 {
 	double2 v10 = P1 - P0, v20 = P2 - P0, v21 = P2 - P1, vd0 = L0 - P0, vd1 = L0 - P1;
@@ -49,8 +52,10 @@ void updateNType(__global NTYPE_TYPE * __restrict__ Map,
 	__global double* __restrict__ Ro_array,
 	__global double* __restrict__ kAmat,
 	__global double* __restrict__ kbmat,
+	__global double* __restrict__ kxmat,
 	__global double* __restrict__ oAmat,
 	__global double* __restrict__ obmat,
+	__global double* __restrict__ oxmat,
 	__global double* __restrict__ nutArray,
 	__global int* __restrict__ IndArr)
 {
@@ -64,6 +69,8 @@ void updateNType(__global NTYPE_TYPE * __restrict__ Map,
 	bool neq02 = EQUALS2D(P0, P2);
 	bool neq13 = EQUALS2D(P1, P3);
 
+	// if neq02 and neq13 == true, no fouling layer,
+	// so skip
 	if (neq02 && neq13)
 		return;
 
@@ -103,64 +110,21 @@ void updateNType(__global NTYPE_TYPE * __restrict__ Map,
 			if (type & M_SOLID_NODE)
 				continue;
 
-			// If P0 == P2, no fouling layer, or if test_inside == 0
+			// If P0 == P2, no fouling layer, or if test_inside(P0,P1,P2) == 0
 			// node does not fall within layer, so skip
-			if (!neq02 && test_inside(P0, P1, P2, (double2)(ii, jj)))
+			// same for P1 == P3 and test_inside(P3,P2,P1)
+			if ((!neq13 && test_inside(P3, P2, P1, (double2)(ii, jj)) ) ||
+				(!neq02 && test_inside(P0, P1, P2, (double2)(ii, jj)) ))
 			{
 				// Change from fluid node to solid node (will still have M0_FLUID_NODE
 				// flag, so it can be tested to see if it is a fouled node
-				type &= !M_FLUID_NODE;
-				type |= M_SOLID_NODE;
+				type ^= SWITCH_FLUID_TO_SOLID;
+				//type |= M_SOLID_NODE;
 
-				// Not sure about this. Cannot figure out why this was included.
-				// Maybe not needed, or possible incorrect implementation. 
-				if (!(type & M_FOUL_NODE))
-					Map[gid] = type;
-
-					// Set A matrix C location to 1. and rest of terms
-					// along with element in b vector to 0. so it always
-					// solves as 0.
-				int KOind = IndArr[gid + DIST_SIZE * 4];
-				kAmat[KOind] = 0.;
-				oAmat[KOind] = 0.;
-
-				KOind = IndArr[gid + DIST_SIZE * 2];
-				kAmat[KOind] = 0.;
-				oAmat[KOind] = 0.;
-
-				KOind = IndArr[gid];
-				kAmat[KOind] = 1.;
-				oAmat[KOind] = 1.;
-
-				KOind = IndArr[gid + DIST_SIZE];
-				kAmat[KOind] = 0.;
-				oAmat[KOind] = 0.;
-
-				KOind = IndArr[gid + DIST_SIZE * 3];
-				kAmat[KOind] = 0.;
-				oAmat[KOind] = 0.;
-
-				kbmat[gid] = 0.;
-				obmat[gid] = 0.;
-
-				nutArray[gid] = 0.;
-
-				Ux_array[gid] = 0.;
-				Uy_array[gid] = 0.;
-				Ro_array[gid] = 1.;
-				continue;
-			}
-			if (!neq13 && test_inside(P3, P2, P1, (double2)(ii, jj)))
-			{
-				// Change from fluid node to solid node (will still have M0_FLUID_NODE
-				// flag, so it can be tested to see if it is a fouled node
-				type &= !M_FLUID_NODE;
-				type |= M_SOLID_NODE;
 
 				// Set A matrix C location to 1. and rest of terms
 				// along with element in b vector to 0. so it always
 				// solves as 0.
-				int gid = ii + CHANNEL_LENGTH_FULL * jj;
 				int KOind = IndArr[gid + DIST_SIZE * 4];
 				kAmat[KOind] = 0.;
 				oAmat[KOind] = 0.;
@@ -184,12 +148,16 @@ void updateNType(__global NTYPE_TYPE * __restrict__ Map,
 				kbmat[gid] = 0.;
 				obmat[gid] = 0.;
 
+				// Setting macroscopic arrays to
+				// appropriate values
+				//kxmat[gid] = 0.;
+				oxmat[gid] = 0.;
 				nutArray[gid] = 0.;
-
 				Ux_array[gid] = 0.;
 				Uy_array[gid] = 0.;
 				Ro_array[gid] = 1.;
 			}
+			Map[gid] = type;
 		}
 	}
 }
@@ -248,17 +216,9 @@ int bcFindIntersectionLS(double* dist, int *dir, double2 vL0, double2 *vLd,
 }
 
 //// This kernel also updates vtr.BL arrays even though it is grouped with LS kernels
-
-
-// Note: vtr.BL has been re-ordered so that both the x location of the BL is increasing
-//		as the index increases. This is done by not only reordering BL on the top wall,
-//		but having P0.x > P1.x for top wall BL.
-
-// TODO: Make sure there arent any issues with the re-ordering explained above.
-
-
+// Updates vtr.BL arrays, vls.nType and ibb arrays by iterating through BL
 __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_UPDATEM, 1, 1)))
-void updateBoundaryNodes(__global ushort* __restrict__ BL_P01ind,
+void updateBoundaryNodes(__global ushort2* __restrict__ BL_P01ind,
 	__global double2* __restrict__ BL_vNvec,
 	__global double2* __restrict__ BL_blLen,
 	__global int* __restrict__ BL_nodeLoc,
@@ -276,18 +236,19 @@ void updateBoundaryNodes(__global ushort* __restrict__ BL_P01ind,
 )
 {
 	int i = get_global_id(0);
-	if (i >= NUM_BL_TOTAL)
+	if (i >= FULL_BL_ARRAY_SIZE)
 		return;
 
 	ushort2 p01Ind = BL_P01ind[i];
 
-	double2 vC0 = C[p01Ind.x], vC1 = C[p01Ind.x];
-	double2 vC0not = Cnot[p01Ind.x], vC1not = Cnot[p01Ind.x];
+	double2 vC0 = C[p01Ind.x], vC1 = C[p01Ind.y];
+	double2 vC0not = Cnot[p01Ind.x], vC1not = Cnot[p01Ind.y];
 	
 	double2 vT = vC1 - vC0;
 	double2 vTnot = vC1not - vC0not;
 
-	double2 CenterDist = vC0 + vT / 2. - vC0not - vTnot / 2.;
+
+	double2 CenterDist = (vC0 + vT / 2.) - (vC0not + vTnot / 2.);
 	BL_intType[i] = (length(CenterDist) >= FOUL_SIZE_SWITCH_SOOT2) ? ((ushort)1) : ((ushort)0);
 
 	double blLen = length(vT);
@@ -325,8 +286,8 @@ void updateBoundaryNodes(__global ushort* __restrict__ BL_P01ind,
 	{
 		for (int jj = vCmin.y; jj <= vCmax.y; jj++)
 		{
-			int ii0_1D = ii + CHANNEL_LENGTH_FULL * jj;
-			NTYPE_TYPE ntype = Map[ii0_1D];
+			int iiF_1D = ii + CHANNEL_LENGTH_FULL * jj;
+			NTYPE_TYPE ntype = Map[iiF_1D];
 
 			if (ntype & M_SOLID_NODE)
 				continue;
@@ -340,21 +301,21 @@ void updateBoundaryNodes(__global ushort* __restrict__ BL_P01ind,
 			if (bcFindIntersectionLS(&dist, &dir, vL0, &Cdir,
 				vC0, vC1, blLen, vCn))
 			{
-				// need to take modulus of x index since its periodic
-				int ii1_1D = MODFAST(ii + CDirX[dir], CHANNEL_LENGTH) +
-					CHANNEL_LENGTH_FULL * jj;
-
-				// Set appropriate flag for boundary type at ii0
-				Map[ii0_1D] |= (dir == 0) ? E_BOUND : W_BOUND;
+				// With simple straight inlet and outlet that doesmt 
+				// have any fouling, will never have E or W direction
+				// of first or last node cross BL, therefore no
+				// need to worry about indexing out of bounds when
+				// getting neighboring index
+				int iiS_1D = iiF_1D + CDirX[dir];
 
 				//////////// Set required info for IBB.//////////
 #ifndef IN_KERNEL_IBB
 				// get index of next element to add to array
 				int ibbind = atomic_add(&ibbIndCount[0], 1);
-				ibbind = min(ibbind, ibbArrSize);
+				ibbind = min(ibbind, ibbArrSize-1);
 
 				ibbDistArr[ibbind] = dist;
-				ibbArr[ibbind] = ii0_1D + DIST_SIZE * (dir + 1);
+				ibbArr[ibbind] = iiF_1D + DIST_SIZE * (dir + 1);
 #endif
 				//////////// Set required info for dXArr //////////
 
@@ -367,19 +328,20 @@ void updateBoundaryNodes(__global ushort* __restrict__ BL_P01ind,
 				// a BL falls in between two nodes, this will be accounted
 				// for in the ibb method, but ignored in the finite difference
 				// methods.
-				NTYPE_TYPE ntype2 = Map[ii1_1D];
+				NTYPE_TYPE ntype2 = Map[iiS_1D];
 				if (ntype2 & M_SOLID_NODE)
 				{
-					ntype2 |= SOLID_BOUNDARY_NODE;
-					Map[ii1_1D] = ntype2;
-
 					// Set corresponding element in dXArr
-					dXArr[ii0_1D + dir * DIST_SIZE] = dist;
+					dXArr[iiF_1D + dir * DIST_SIZE] = max(dist, MINIMUM_DX_DIST);
 
 					// if node is M0_FLUID_NODE, it is now a fouling
 					// layer node and the distance needs to be tracked
 					if (ntype2 & M0_FLUID_NODE)
-						dXArr[ii1_1D + RevDir[dir]] = 1. - dist;
+						dXArr[iiS_1D + RevDir[dir] * DIST_SIZE] = max(1. - dist, MINIMUM_DX_DIST);
+#ifdef GPU_DEBUG
+					else
+						dXArr[iiS_1D + RevDir[dir] * DIST_SIZE] = 0.0;
+#endif
 				}
 			}
 
@@ -391,37 +353,36 @@ void updateBoundaryNodes(__global ushort* __restrict__ BL_P01ind,
 			if (bcFindIntersectionLS(&dist, &dir, vL0, &Cdir,
 				vC0, vC1, blLen, vCn))
 			{
-				// need to take modulus of x index since its periodic
-				int ii1_1D = ii + CHANNEL_LENGTH_FULL * (jj+ CDirY[dir]);
-
-				// Set appropriate flag for boundary type at ii0
-				Map[ii0_1D] |= (dir == 2) ? N_BOUND : S_BOUND;
+				// no need to worry about y being periodic
+				int iiS_1D = ii + CHANNEL_LENGTH_FULL * (jj + CDirY[dir]);
 
 				//////////// Set required info for IBB.//////////
 #ifndef IN_KERNEL_IBB
 				// get index of next element to add to array
 				int ibbind = atomic_add(&ibbIndCount[0], 1);
-				ibbind = min(ibbind, ibbArrSize);
+				ibbind = min(ibbind, ibbArrSize-1);
 
 				ibbDistArr[ibbind] = dist;
-				ibbArr[ibbind] = ii0_1D + DIST_SIZE * (dir + 1);
+				ibbArr[ibbind] = iiF_1D + DIST_SIZE * (dir + 1);
 #endif
 				//////////// Set required info for dXArr //////////
-				NTYPE_TYPE ntype2 = Map[ii1_1D];
+				NTYPE_TYPE ntype2 = Map[iiS_1D];
 				if (ntype2 & M_SOLID_NODE)
 				{
-					ntype2 |= SOLID_BOUNDARY_NODE;
-					Map[ii1_1D] = ntype2;
-
 					// Set corresponding element in dXArr
-					dXArr[ii0_1D + dir * DIST_SIZE] = dist;
+					dXArr[iiF_1D + dir * DIST_SIZE] = max(dist, MINIMUM_DX_DIST);
 
 					// if node is M0_FLUID_NODE, it is now a fouling
 					// layer node and the distance needs to be tracked
 					if (ntype2 & M0_FLUID_NODE)
-						dXArr[ii1_1D + RevDir[dir]] = 1. - dist;
+						dXArr[iiS_1D + RevDir[dir]*DIST_SIZE] = max(1. - dist, MINIMUM_DX_DIST);
+#ifdef GPU_DEBUG
+					else
+						dXArr[iiS_1D + RevDir[dir] * DIST_SIZE] = 0.0;
+#endif
 				}
 			}
+					   			 
 #ifndef IN_KERNEL_IBB
 			dir = 4;
 			Cdir = (double2)(1., 1.);
@@ -429,29 +390,15 @@ void updateBoundaryNodes(__global ushort* __restrict__ BL_P01ind,
 			if (bcFindIntersectionLS(&dist, &dir, vL0, &Cdir,
 				vC0, vC1, blLen, vCn))
 			{
-				// need to take modulus of x index since its periodic
-				int ii1_1D = MODFAST(ii + CDirX[dir], CHANNEL_LENGTH) +
-					CHANNEL_LENGTH_FULL * (jj + CDirY[dir]);
-
-				// Set appropriate flag for boundary type at ii0
-				Map[ii0_1D] |= (dir == 4) ? NE_BOUND : SW_BOUND;
-
 				//////////// Set required info for IBB.//////////
 
 				// get index of next element to add to array
 				int ibbind = atomic_add(&ibbIndCount[0], 1);
-				ibbind = min(ibbind, ibbArrSize);
+				ibbind = min(ibbind, ibbArrSize-1);
 
 				ibbDistArr[ibbind] = dist;
-				ibbArr[ibbind] = ii0_1D + DIST_SIZE * (dir + 1);
+				ibbArr[ibbind] = iiF_1D + DIST_SIZE * (dir + 1);
 
-				//////////// Set required info for dXArr //////////
-				NTYPE_TYPE ntype2 = Map[ii1_1D];
-				if (ntype2 & M_SOLID_NODE)
-				{
-					ntype2 |= SOLID_BOUNDARY_NODE;
-					Map[ii1_1D] = ntype2;
-				}
 			}
 
 			dir = 6;
@@ -460,29 +407,15 @@ void updateBoundaryNodes(__global ushort* __restrict__ BL_P01ind,
 			if (bcFindIntersectionLS(&dist, &dir, vL0, &Cdir,
 				vC0, vC1, blLen, vCn))
 			{
-				// need to take modulus of x index since its periodic
-				int ii1_1D = MODFAST(ii + CDirX[dir], CHANNEL_LENGTH) +
-					CHANNEL_LENGTH_FULL * (jj + CDirY[dir]);
-
-				// Set appropriate flag for boundary type at ii0
-				Map[ii0_1D] |= (dir == 4) ? SE_BOUND : NW_BOUND;
 
 				//////////// Set required info for IBB.//////////
 
 				// get index of next element to add to array
 				int ibbind = atomic_add(&ibbIndCount[0], 1);
-				ibbind = min(ibbind, ibbArrSize);
+				ibbind = min(ibbind, ibbArrSize-1);
 
 				ibbDistArr[ibbind] = dist;
-				ibbArr[ibbind] = ii0_1D + DIST_SIZE * (dir + 1);
-
-				//////////// Set required info for dXArr //////////
-				NTYPE_TYPE ntype2 = Map[ii1_1D];
-				if (ntype2 & M_SOLID_NODE)
-				{
-					ntype2 |= SOLID_BOUNDARY_NODE;
-					Map[ii1_1D] = ntype2;
-				}
+				ibbArr[ibbind] = iiF_1D + DIST_SIZE * (dir + 1);
 			}
 #endif
 		}
@@ -493,6 +426,7 @@ void updateBoundaryNodes(__global ushort* __restrict__ BL_P01ind,
 // if the ibb arrays need to be reallocated, they will also need to be updated again
 // so instead of calling updateBoundaryNodes again which does other things,
 // this can be called which will only update ibb arrays
+__kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_UPDATEFD, 1, 1)))
 __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_UPDATEFD, 1, 1)))
 void updateIBBOnly(__global double2* C,
 	__global NTYPE_TYPE* Map,
@@ -518,10 +452,16 @@ void updateIBBOnly(__global double2* C,
 	int2 vCmin = min2(vC0, vC1), vCmax = max2(vC0, vC1);
 	//vCmin -= 1;
 	//vCmax += 1;
-	if (vCmin.x < 0) vCmin.x = 0;
-	if (vCmin.x >= CHANNEL_LENGTH) return;
+
+	// Note, simple bounce back is implemented at x = 0 and x = CHANNEL_LENGTH-1
+	// so these locations are skipped in the search. (simple bounce back is automatically
+	// implemented in collision kernel, so this is what LB code defaults to when the ibb
+	// information arrays do not include a distribution direction)
+
+	if (vCmin.x < 1) vCmin.x = 1;
+	if (vCmin.x >= (CHANNEL_LENGTH-1)) return;
 	if (vCmax.x < 0) return;
-	if (vCmax.x >= CHANNEL_LENGTH) vCmax.x = CHANNEL_LENGTH-1;
+	if (vCmax.x >= (CHANNEL_LENGTH-1)) vCmax.x = CHANNEL_LENGTH-2;
 
 	if (vCmin.y < 0) vCmin.y = 0;
 	if (vCmin.y >= CHANNEL_HEIGHT) return;
@@ -566,6 +506,80 @@ void updateIBBOnly(__global double2* C,
 }
 
 
+
+
+
+__kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_UPDATEM, 1, 1)))
+void updateNodeBoundaryInfo(__global NTYPE_TYPE* Map)
+{
+	int i = get_global_id(0);
+	if (i >= CHANNEL_LENGTH)
+		return;
+
+	int j = get_global_id(1);
+
+	int gid = GET_GLOBAL_IDX(i, j);
+
+	NTYPE_TYPE ntype = Map[gid] & RESET_NTYPE_NODE;
+	NTYPE_TYPE ntypeMod = 0x0000;
+	NTYPE_TYPE nCompare = ((ntype & 0x0003) ^ 0x0003);
+
+
+	// test each direction
+	// east
+	int gide = (i < CHANNEL_LENGTH - 1) ? gid + 1 : (j * CHANNEL_LENGTH_FULL);
+	if ((Map[gide] & nCompare))
+		ntypeMod |= (E_BOUND);
+
+	// West
+	int gidw = (i > 0) ? gid - 1 : (CHANNEL_LENGTH - 1 + j * CHANNEL_LENGTH_FULL);
+	if ((Map[gidw] & nCompare))
+		ntypeMod |= (W_BOUND);
+
+	// North
+	if (j < (CHANNEL_HEIGHT - 1))
+	{
+		// North
+		if ((Map[gid + CHANNEL_LENGTH_FULL] & nCompare))
+			ntypeMod |= (N_BOUND);
+		// NE
+		if ((Map[gide + CHANNEL_LENGTH_FULL] & nCompare))
+			ntypeMod |= (NE_BOUND);
+		// NW		
+		if ((Map[gidw + CHANNEL_LENGTH_FULL] & nCompare))
+			ntypeMod |= (NW_BOUND);
+	}
+
+	// South
+	if (j > 0)
+	{
+		// South
+		if ((Map[gid - CHANNEL_LENGTH_FULL] & nCompare))
+			ntypeMod |= (S_BOUND);
+		// SE
+		if ((Map[gide - CHANNEL_LENGTH_FULL] & nCompare))
+			ntypeMod |= (SE_BOUND);
+		// SW		
+		if ((Map[gidw - CHANNEL_LENGTH_FULL] & nCompare))
+			ntypeMod |= (SW_BOUND);
+	}
+
+	// set all bits which are re-calculated here to 0
+	// i.e. set SOLID_BOUNDARY_NODE, and all direction bits to 0
+	
+
+	// if node is a solid, and any neighs in E,W,N,S direction are not solid,
+	// then this node is a solid boundary node.
+	// !ntypeMod will set any boundary direction bit to 1 if node
+	// in that direction is fluid, & 0x0F00 will have a non-zero bit only
+	// if N,E,S,W has a non-zero, so will only be true if neighbor is a fluid.
+	if (ntype & M_SOLID_NODE)
+	{
+		ntypeMod = ((ntypeMod & 0x0F00)) ? SOLID_BOUNDARY_NODE : 0x0000;
+	}
+
+	Map[gid] = ntype | ntypeMod;
+}
 
 
 

@@ -15,8 +15,8 @@
 /////////////////     AMD's bolt library           ///////////////////
 /////////////////                                  ///////////////////
 //////////////////////////////////////////////////////////////////////
-int lowerBoundBinarylocal(local int* __restrict__ data_loc, int left, 
-	int right, int searchVal_loc)
+int lowerBoundBinarylocal(local parLocType* __restrict__ data_loc, int left,
+	int right, parLocType searchVal_loc)
 {
 	int firstIndex = left;
 	int lastIndex = right;
@@ -37,8 +37,8 @@ int lowerBoundBinarylocal(local int* __restrict__ data_loc, int left,
 	return firstIndex;
 }
 
-int upperBoundBinarylocal(local int* __restrict__ data_loc, int left, 
-	int right, int searchVal_loc)
+int upperBoundBinarylocal(local parLocType* __restrict__ data_loc, int left,
+	int right, parLocType searchVal_loc)
 {
 	int upperBound = lowerBoundBinarylocal(data_loc, left, right, searchVal_loc);
 
@@ -64,7 +64,7 @@ int upperBoundBinarylocal(local int* __restrict__ data_loc, int left,
 	return upperBound;
 }
 
-int lowerBoundLinear(global int* __restrict__ data_loc, int left, int right, int searchVal_loc)
+int lowerBoundLinear(global parLocType* __restrict__ data_loc, int left, int right, parLocType searchVal_loc)
 {
 	int firstIndex = left;
 	int lastIndex = right;
@@ -84,7 +84,8 @@ int lowerBoundLinear(global int* __restrict__ data_loc, int left, int right, int
 	return firstIndex;
 }
 
-int lowerBoundBinary(__global int* __restrict__ source_ptr_loc, int left, int right, int searchVal_loc)
+int lowerBoundBinary(__global parLocType* __restrict__ source_ptr_loc,
+	int left, int right, parLocType searchVal_loc)
 {
 	int firstIndex = left;
 	int lastIndex = right;
@@ -105,14 +106,15 @@ int lowerBoundBinary(__global int* __restrict__ source_ptr_loc, int left, int ri
 	return firstIndex;
 }
 
-int upperBoundBinary(__global int* __restrict__ source_ptr_loc, int left, int right, int searchVal_loc)
+int upperBoundBinary(__global parLocType* __restrict__ source_ptr_loc, 
+	int left, int right, parLocType searchVal_loc)
 {
 	int upperBound = lowerBoundBinary(source_ptr_loc, left, right, searchVal_loc);
 
 	if (upperBound != right)
 	{
 		int mid = 0;
-		int upperValue_loc = source_ptr_loc[upperBound];
+		parLocType upperValue_loc = source_ptr_loc[upperBound];
 		while ((searchVal_loc == upperValue_loc) && (upperBound < right))
 		{
 			mid = (upperBound + right) / 2;
@@ -136,9 +138,9 @@ int upperBoundBinary(__global int* __restrict__ source_ptr_loc, int left, int ri
 // This version sorts loc array only and tracks original location
 // Sorting of remaining arrays performed in Sort_update_loc
 kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_SORT, 1, 1)))
-void Sort_merge_global(__global int* __restrict__ source_loc,
+void Sort_merge_global(__global parLocType* __restrict__ source_loc,
 	__global int* __restrict__ source_loc_orig, 
-	__global int* __restrict__ result_loc,
+	__global parLocType* __restrict__ result_loc,
 	__global int* __restrict__ result_loc_orig,
 	const int srcLogicalBlockSize)
 {
@@ -165,7 +167,7 @@ void Sort_merge_global(__global int* __restrict__ source_loc,
 
 	int insertionIndex = 0;
 
-	int search_val = source_loc[globalID];
+	parLocType search_val = source_loc[globalID];
 
 	if ((srcBlockNum & 0x1) == 0)
 	{
@@ -184,11 +186,11 @@ void Sort_merge_global(__global int* __restrict__ source_loc,
 }
 
 kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_SORT, 1, 1)))
-void Sort_merge_local(__global int* __restrict__ source_loc,
+void Sort_merge_local(__global parLocType* __restrict__ source_loc,
 	__global int* __restrict__ source_loc_orig,
-	__local int* __restrict__ lds_loc,
+	__local parLocType* __restrict__ lds_loc,
 	__local int* __restrict__ lds_loc_orig,
-	__local int* __restrict__ lds2_loc,
+	__local parLocType* __restrict__ lds2_loc,
 	__local int* __restrict__ lds2_loc_orig)
 {
 	size_t gloId = get_global_id(0);// *get_global_size(0) + get_global_id(0);
@@ -285,21 +287,21 @@ void Sort_merge_local(__global int* __restrict__ source_loc,
 // Creates Ploc array, which specifies the starting index in particle arrays
 // for a given cell index.
 __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_PLOC, 1, 1)))
-void Sort_update_loc(global double2* __restrict__ source_pos, 
-	global uint* __restrict__ source_Num_rep,
-	global short* __restrict__ source_type,
-	global short* __restrict__ source_Dep_Flag,
-	global ushort* __restrict__ source_Dep_timer,
-	global ushort* __restrict__ source_timer,
+void Sort_update_loc(global double2* __restrict__ source_pos,
+	global numRepType* __restrict__ source_Num_rep,
+	global parTypeType* __restrict__ source_type,
+	global depFlagType* __restrict__ source_Dep_Flag,
+	global depTimerType* __restrict__ source_Dep_timer,
+	global parTimerType* __restrict__ source_timer,
 	global double2* __restrict__ result_pos,
-	global uint* __restrict__ result_Num_rep,
-	global short* __restrict__ result_type,
-	global short* __restrict__ result_Dep_Flag,
-	global ushort* __restrict__ result_Dep_timer,
-	global ushort* __restrict__ result_timer,
-	__global int* __restrict__ P_loc,
+	global numRepType* __restrict__ result_Num_rep,
+	global parTypeType* __restrict__ result_type,
+	global depFlagType* __restrict__ result_Dep_Flag,
+	global depTimerType* __restrict__ result_Dep_timer,
+	global parTimerType* __restrict__ result_timer,
+	__global parLocType* __restrict__ P_loc,
 #ifdef ODD_NUM_MERGES
-	__global int* __restrict__ result_loc,
+	__global parLocType* __restrict__ result_loc,
 #endif
 	__global int* __restrict__ reOrderInfo,
 	__global int* Ploc_array)
@@ -317,36 +319,64 @@ void Sort_update_loc(global double2* __restrict__ source_pos,
 	result_Dep_timer[i] = source_Dep_timer[oldLoc];
 	result_timer[i] = source_timer[oldLoc];
 
-	// Fill Ploc_array
-	int ploc = P_loc[i];
+	// Below fills Ploc_array
 
+	// ploc = cell particle is located in and
+	// is monotonically increasing
+	parLocType ploc = P_loc[i];
+
+	// if Odd number of merges, need to write ploc to P.loc array,
+	// since it is currently in the Ptemp.loc array
 #ifdef ODD_NUM_MERGES
 	result_loc[i] = ploc;
 #endif
+	// Since Ploc_array[0] and Ploc_array[1] refer to
+	// store index info of ready to be released and deposited
+	// particles, respectively, all indicies are shifted by two
+	// when indexing Ploc_array since ready for release particles
+	// have loc = -2 and deposited particles have loc = -1
 
+
+	// if this is last particle, only need to fill Ploc_array[ploc+2].y with
+	// particle index (i+1 since we are using <, not <= in loops)
 	if (i == TRC_NUM_TRACERS - 1)
 	{
-		Ploc_array[2 * (ploc + 2) + 1] = i + 1;
+		Ploc_array[2 * (ploc + PLOC_IND_SHIFT) + 1] = i + 1;
 		return;
 	}
 
-	int next_loc = P_loc[i + 1];
+	// get location of next particle in array
+	parLocType next_loc = P_loc[i + 1];
 
+	// if first particle, need to set Ploc_array[ploc+2].x to 0 
+	// regardless of next particles location.
 	if (i == 0)
 	{
-		Ploc_array[2 * (ploc + 2)] = 0;
+		Ploc_array[2 * (ploc + PLOC_IND_SHIFT)] = 0;
 	}
 
+
+	// if ploc != next_loc, the i is index of last particle in a given cell and
+	// i + 1 is first index particle in next cell containing particles. 
 	if (ploc != next_loc)
 	{
-		Ploc_array[2 * (ploc + 2) + 1] = i + 1;
-		Ploc_array[2 * (next_loc + 2)] = i + 1;
-		for (int k = ploc + 1; k < next_loc; k++)
-		{
-			Ploc_array[2 * (k + 2)] = -1;
-		}
+		// Ploc_array[ploc + 2].y = i+1 (using <, not <= in loops so setting to i+1)
+		Ploc_array[2 * (ploc + PLOC_IND_SHIFT) + 1] = i + 1; 
+
+		// Ploc_array[next_loc+2].x = i+1 (next particle is first in cell)
+		Ploc_array[2 * (next_loc + PLOC_IND_SHIFT)] = i + 1;
+
+		// Sets all empty cells between ploc and next_loc to -1
+		// shouldnt be needed
+		//for (int k = ploc + 1; k < next_loc; k++)
+		//{
+		//	Ploc_array[2 * (k + 2)] = -1;
+		//}
 	}
 }
+
+
+
 
 //////////////////////////////////////////////////////////////////////
 /////////////////                                    /////////////////
@@ -355,13 +385,13 @@ void Sort_update_loc(global double2* __restrict__ source_pos,
 /////////////////                                    /////////////////
 //////////////////////////////////////////////////////////////////////
 
-int Get_Par_Type(double randval)
+short Get_Par_Type(double randval)
 {
-	int j = 0;
+	short j = 0;
 
 	while (j < NUM_PAR_SIZES - 1)
 	{
-		if (randval >= paramDdist[j] && randval < paramDdist[j+1])
+		if (randval < paramDdist[j])
 			return j;
 		j++;
 	}
@@ -371,29 +401,75 @@ int Get_Par_Type(double randval)
 
 // Returns velocity value at y = Xloc. Used to randomly generate particles
 // in distribution corresponding to velocity distribution.
-double find_lineval(double Xloc, __global double* trP, __global double* U_array)
+
+// Yloc has been shifted so that Yloc = 0 is location of first LB node (at index uStartIndex)
+// therefore Yloc < 0 indicated particle between bottom wall and first LB node
+
+double find_lineval(__global double* U_array, 
+	double Yloc, double curBotWallLoc, double curBotLBNodeLoc,
+	double curTopLBNodeLoc, double distWallFirstNode, 
+	double distLastNodeWall)
 {
-	if (Xloc < trP[TRP_BOT_LOC_IND])
-	{
-		return Xloc * U_array[UVALS_START_INDEX] / trP[TRP_BOT_LOC_IND];
+	// Index of U_array location above particle 
+	int uArrayIndex = X_START_VAL_INT + convert_int_rtz(Yloc) * CHANNEL_LENGTH_FULL;
+
+	if (Yloc < curBotLBNodeLoc)
+	{ // Between bottom wall and first LB node
+		Yloc = (Yloc - curBotWallLoc) / distWallFirstNode;
 	}
-	else if (Xloc < trP[TRP_TOP_LOC_IND])
+	else if (Yloc < curTopLBNodeLoc)
+	{ // Between first and last LB nodes
+		Yloc = (Yloc - floor(Yloc));
+	}
+	else
 	{
-		double Xp = Xloc - trP[TRP_BOT_LOC_IND];
-		double X1 = floor(Xp);
-		int Xint = convert_int(X1) + UVALS_START_INDEX;
-		double dX = Xp - X1;
-		return U_array[Xint] * (1. - dX) + dX * U_array[Xint + 1];
+		Yloc = (Yloc - curTopLBNodeLoc) / distLastNodeWall;
 	}
 
-	double Xp = Xloc - trP[TRP_BOT_LOC_IND];
-	double X1 = floor(Xp);
-	int Xint = convert_int(X1) + UVALS_START_INDEX;
-	double dX = trP[TRP_TOP_LOC_IND] - X1;
-	double dX1 = trP[TRP_BVAL_IND] - Xp;
-	return dX1 * U_array[Xint] / dX;
+	return U_array[uArrayIndex + CHANNEL_LENGTH_FULL] * Yloc +
+		U_array[uArrayIndex] * (1.0 - Yloc);
 }
 
+
+
+__kernel void callRand(__global uint2* RandArray, int numIters)
+{
+	int i = get_global_id(0);
+
+	if (i >= TRC_NUM_TRACERS)
+		return;
+
+	uint2 RandEl = RandArray[i];
+	double2 randval;
+	
+	for(int j = 0; j < numIters; j++)
+		RandEl = MWC64X_NextUint2(RandEl, &randval);
+
+	RandArray[i] = RandEl;
+}
+
+
+
+//__kernel void testRand(__global uint2* RandArray, int numIters,
+//	__global double2* outRand)
+//{
+//	int i = get_global_id(0);
+//
+//	if (i >= 1)
+//		return;
+//
+//	uint2 RandEl = RandArray[i];
+//	double2 randval;
+//	double randval_single;
+//
+//	for (int j = 0; j < numIters; j++)
+//	{
+//		RandEl = MWC64X_NextUint2(RandEl, &randval);
+//		outRand[j] = randval;
+//	}
+//
+//	RandArray[i] = RandEl;
+//}
 
 
 // Called after sort.
@@ -403,35 +479,41 @@ double find_lineval(double Xloc, __global double* trP, __global double* U_array)
 // Particle is kept if its location falls within velocity distribution plotted
 // within box and re-generated if it falls outside.
 __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_RERELEASE, 1, 1)))
-void TR_release_par(global double2* __restrict__ source_pos, 
-	__global uint* __restrict__ source_Num_rep,
-	__global short* __restrict__ source_type,
-	__global short* __restrict__ source_Dep_Flag,
-	__global ushort* __restrict__ source_timer,
-	__global int* __restrict__ source_loc,
+void TR_release_par(global double2* __restrict__ source_pos,
+	__global numRepType* __restrict__ source_Num_rep,
+	__global parTypeType* __restrict__ source_type,
+	__global depFlagType* __restrict__ source_Dep_Flag,
+	__global parTimerType* __restrict__ source_timer,
+	__global parLocType* __restrict__ source_loc,
 	__global uint2* RandArray,
-	__global double* __restrict__ trP,
 	__global double* U_array,
+	__global double* UmaxVal,
 #ifdef CALC_IO_DISTS
 	__global uint* __restrict__ ioDists,
 	int ioDistsInd,
 #endif
 	uint maxel,
-	uint Conc_number)
+	uint Conc_number,
+	double curBotWallLoc,
+	double curBotLBNodeLoc,
+	double curTopLBNodeLoc,
+	double distWallFirstNode,
+	double distLastNodeWall,
+	double curChannelHeight)
 {
 	int i = get_global_id(0);
 
 	if (i >= maxel)
 		return;
 
-	if (source_timer[i] > 0)
-	{
-		source_timer[i] -= 1;
-		return;
-	}
+	//if (source_timer[i] > 0)
+	//{
+	//	source_timer[i] -= 1;
+	//	return;
+	//}
 
 #ifdef CALC_IO_DISTS
-	if(source_Dep_Flag[i] == 3)
+	if(source_Dep_Flag[i] == -3)
 	{
 		int indexSave = NUM_PAR_SIZES * ioDistsInd + source_type[i];
 		atomic_add(&ioDists[indexSave], source_Num_rep[i]);
@@ -439,22 +521,18 @@ void TR_release_par(global double2* __restrict__ source_pos,
 #endif
 
 	uint2 RandEl = RandArray[i];
-	double Umv = trP[TRP_UMAX_VAL_IND];
-	double Bval = trP[TRP_BVAL_IND];
+	double Umv = UmaxVal[0];
 	double2 randval;
-	RandEl = MWC64X_NextUint2(RandEl, &randval);
-	double Xt = randval.x * Bval;
-	double Yt = randval.y * Umv;
+	double Xt, Yt, Fxx;
 
-	double Fxx = find_lineval(Xt, trP, U_array);
-
-	while (Yt > Fxx)
+	do 
 	{
 		RandEl = MWC64X_NextUint2(RandEl, &randval);
-		Xt = randval.x * Bval;
+		Xt = randval.x * curChannelHeight + curBotWallLoc;
 		Yt = randval.y * Umv;
-		Fxx = find_lineval(Xt, trP, U_array);
-	}
+		Fxx = find_lineval(U_array, Xt, curBotWallLoc, curBotLBNodeLoc, 
+			curTopLBNodeLoc, distWallFirstNode, distLastNodeWall);
+	} while (Yt > Fxx);
 
 	double randval_single;
 	RandEl = MWC64X_NextUint(RandEl, &randval_single);
@@ -462,13 +540,12 @@ void TR_release_par(global double2* __restrict__ source_pos,
 
 	source_type[i] = Get_Par_Type(randval_single);
 	source_timer[i] = PAR_TIMER_START;
-	source_pos[i].y = Xt + trP[TRP_OFFSET_Y_IND];
+	source_pos[i].y = Xt;
 	source_pos[i].x = TRP_X_RELEASE;
 	source_Dep_Flag[i] = -1;
-	int2 Posi = convert_int2(source_pos[i]);
-	source_loc[i] = Posi.x + FULLSIZEX_TR * Posi.y;
+	source_loc[i] = TRP_X_RELEASE_INT + FULLSIZEX_TR_PADDED * convert_int_rtz(Xt);
+	
 	source_Num_rep[i] = Conc_number;
-
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -481,9 +558,8 @@ void TR_release_par(global double2* __restrict__ source_pos,
 // per simulation. Function finds BL above and below particle and determines if it
 // is located between them (and therefore is in domain).
 __kernel void Test_Bounds_Clumped_Particles(__global double2* __restrict__ P_pos,
-	__global int* __restrict__ P_Dep_Flag,
-	__global int* __restrict__ P_loc,
-	__global double* __restrict__ trP,
+	__global depFlagType* __restrict__ P_Dep_Flag,
+	__global parLocType* __restrict__ P_loc,
 	__global double2* __restrict__ lsc,
 	int num_pars,
 	int start_ind)
@@ -495,7 +571,7 @@ __kernel void Test_Bounds_Clumped_Particles(__global double2* __restrict__ P_pos
 
 	double2 Parpos = P_pos[i];
 
-	int depFl = P_Dep_Flag[i];
+	depFlagType depFl = P_Dep_Flag[i];
 
 	// return if particle is deposited
 	if (depFl == -2 || depFl > -1)
@@ -506,7 +582,7 @@ __kernel void Test_Bounds_Clumped_Particles(__global double2* __restrict__ P_pos
 	{
 		P_Dep_Flag[i] = -2;
 		P_loc[i] = -2;
-		P_pos[i] = (double2)(X_START_VAL, trP[TRP_OFFSET_Y_IND] + trP[TRP_BVAL_IND] / 2.);
+		//P_pos[i] = (double2)(X_START_VAL, trP[TRP_OFFSET_Y_IND] + trP[TRP_BVAL_IND] / 2.);
 		return;
 	}
 
@@ -564,7 +640,7 @@ __kernel void Test_Bounds_Clumped_Particles(__global double2* __restrict__ P_pos
 
 #ifdef OPENCL_VERSION_1_2
 __kernel void find_umax(__global double* input,
-	__global double* trP,
+	__global double* UmaxVal,
 	__local double* sdata)
 {
 	const int tid = get_global_id(0); // = local_id(0)
@@ -587,13 +663,13 @@ __kernel void find_umax(__global double* input,
 	}
 	if (tid == 0) 
 	{
-		trP[TRP_UMAX_VAL_IND] = sdata[0];
+		UmaxVal[0] = sdata[0];
 	}
 }
 #else
 
 __kernel void find_umax(__global double* U_array,
-	__global double* trP)
+	__global double* UmaxVal)
 {
 	int i = get_global_id(0);
 
@@ -601,7 +677,7 @@ __kernel void find_umax(__global double* U_array,
 	
 	barrier(CLK_LOCAL_MEM_FENCE);
 
-	trP[TRP_UMAX_VAL_IND] = work_group_reduce_max(Uval);
+	UmaxVal[0] = work_group_reduce_max(Uval);
 }
 
 #endif

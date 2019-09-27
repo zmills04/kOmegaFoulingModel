@@ -263,8 +263,7 @@ public:
 	void set_argument(int ind, T *kerArg)
 	{
 		int status = clSetKernelArg(ker, ind, sizeof(T), (void*)kerArg);
-		CHECK_KERNEL_ERROR(status, "Error setting kernel argument number " +\
-			std::to_string(ind), status);
+		CHECK_KERNEL_ERROR(status, "Error setting kernel argument number " + std::to_string(ind), status);
 	}
 
 	template <typename T>
@@ -290,7 +289,7 @@ public:
 	void set_local_memory(int ind, size_t size_)
 	{
 		int status = clSetKernelArg(ker, ind, size_, NULL);
-		CHECK_KERNEL_ERROR(status, "Error setting local mem size for kernel" +\
+		CHECK_KERNEL_ERROR(status, "Error setting local mem size for kernel" \
 			" argument number " + std::to_string(ind), status);
 	}
 
@@ -331,7 +330,7 @@ protected:
 	int alter;
 	
 public:
-	enum kernelID { kernelA, kernelB, bothKernels };
+	enum kernelID { kernelA = 0, kernelB = 1, bothKernels = 2 };
 	Kernel* getKernelAdd(kernelID kerid_)
 	{
 		if (kerid_ == kernelA)

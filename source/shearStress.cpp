@@ -20,12 +20,11 @@ void shearStress::allocateArrays()
 	shearBLStartTop = vtr.Bounds.MIN_BL_TOP;
 	shearBLStopBot = vtr.Bounds.MAX_BL_BOT;
 	shearBLStopTop = vtr.Bounds.MAX_BL_TOP;
-	shearBLSizeTop = shearBLStartTop - shearBLStopTop + 1;
-	shearBLSizeBot = shearBLStartTop - shearBLStopTop + 1;
+	shearBLSizeTop = shearBLStopTop - shearBLStartTop + 1;
+	shearBLSizeBot = shearBLStopBot - shearBLStartBot + 1;
 	shearBLSizeTotal = shearBLSizeTop + shearBLSizeBot;
 
 	sInds.allocate(shearBLSizeTotal);
-	blInds.allocate(shearBLSizeTotal);
 	ssWeights.allocate(shearBLSizeTotal);
 
 	shearCoeffs.allocate(shearNodeSize*2, shearNodeDynSize * 2);
@@ -60,8 +59,6 @@ void shearStress::allocateBuffers()
 	ssWeights.allocate_buffer_w_copy();
 	
 	shearCoeffs.allocate_buffer_w_copy();
-
-	blInds.allocate_buffer_w_copy(CL_MEM_READ_ONLY);
 	
 	if(calcSSFlag)
 		ssOutput.allocate_buffer_w_copy();
@@ -119,11 +116,12 @@ void shearStress::freeHostArrays()
 	sInds.FreeHost();
 	ssWeights.FreeHost();
 	shearCoeffs.FreeHost();
-	blInds.FreeHost();
 }
 
 void shearStress::ini()
 {
+	allocateArrays();
+
 	allocateBuffers();
 
 	// Add kernels to kernel source string for compilation
@@ -171,16 +169,11 @@ void shearStress::save2file()
 
 void shearStress::saveDebug()
 {
-	Tau.save_from_device();
-	vtr.BL.saveFromDevice(true, trStructBase::saveTxtFl);
-	ssWeights.save_from_device();
-	blInds.save_from_device();
-	shearCoeffs.save_from_device();
-	vlb.Ux_array.save_txt_from_device();
-	vlb.Uy_array.save_txt_from_device();
-	vlb.Ro_array.save_txt_from_device();
-	vlb.FA.save_txt_from_device();
-	vlb.FB.save_txt_from_device();
+	//Tau.save_from_device();
+	//sInds.save_txt_from_device();
+	//ssWeights.save_from_device();
+	//shearCoeffs.save_from_device();
+	//vls.ssArrIndMap.savetxt();
 }
 
 void shearStress::saveParams()
@@ -257,6 +250,8 @@ void shearStress::setKernelArgs()
 		Par::typeArr, Par::depFlagArr, Par::depTimerArr, Par::locArr, Par::timerArr };
 
 	ind = 0;
+
+
 	cl_int2 zer2 = { {0,0} };
 	trShearRemovalKernel.set_argument(ind++, vls.C.get_buf_add());
 	vtr.BL.setBuffers(trShearRemovalKernel, ind, BLArrList, 5);
@@ -265,6 +260,8 @@ void shearStress::setKernelArgs()
 	trShearRemovalKernel.setOptionInd(ind);
 	trShearRemovalKernel.set_argument(ind++, &zer2);
 
+
+	ind = 0;
 	updateSSKernel[0].set_argument(ind++, vls.ssArr.get_buf_add());
 	updateSSKernel[0].set_argument(ind++, vls.nType.get_buf_add());
 	updateSSKernel[0].set_argument(ind++, shearCoeffs.get_buf_add());
@@ -322,7 +319,8 @@ void shearStress::shearRemoval(cl_command_queue *que_,
 
 bool shearStress::testRestartRun()
 {
-	allocateArrays();
+	// This will be called after vls.iniShearArrays is called.
+	//allocateArrays();
 	return true;
 }
 

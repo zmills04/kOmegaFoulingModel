@@ -3,8 +3,8 @@ void Shift_walls(__global uint* __restrict__ BLdep,
 	__global double* __restrict__ BLdep_tot,
 	__global double2* __restrict__ C,
 	__global double2* __restrict__ C0,
-	const __global double* __restrict__ weightsL,
-	const __global double* __restrict__ weightsR,
+	const __global double4* __restrict__ weightsL,
+	const __global double4* __restrict__ weightsR,
 	__global uint* __restrict__ blInds,
 	__global uint* __restrict__ cInds,
 	__global double* __restrict__ flDisp,
@@ -18,22 +18,22 @@ void Shift_walls(__global uint* __restrict__ BLdep,
 
 	uint BLstart = blInds[i];
 	
-	double4 WeightL = vload4(i,weightsL);
-	double4 WeightR = vload4(i, weightsR);
-
+	double4 WeightL = weightsL[i];
+	double4 WeightR = weightsR[i];
+	
 	double disp = 0.;
 
 	for (int j = 0; j < NUM_PAR_SIZES; j++)
 	{
-		uint CurBLstart = BLstart * NUM_PAR_SIZES + j;
-		double8 Depf = convert_double8((uint8)(BLdep[CurBLstart], BLdep[CurBLstart + NUM_PAR_SIZES],
-			BLdep[CurBLstart + 2 * NUM_PAR_SIZES], BLdep[CurBLstart + 3 * NUM_PAR_SIZES],
-			BLdep[CurBLstart + 4 * NUM_PAR_SIZES], BLdep[CurBLstart + 5 * NUM_PAR_SIZES],
-			BLdep[CurBLstart + 6 * NUM_PAR_SIZES], BLdep[CurBLstart + 7 * NUM_PAR_SIZES]));
+		uint CurBLstart = BLstart + VTR_SIZE_BLDEP * j;
+		double8 Depf = convert_double8((uint8)(BLdep[CurBLstart], BLdep[CurBLstart + 1],
+			BLdep[CurBLstart + 2], BLdep[CurBLstart + 3],
+			BLdep[CurBLstart + 4], BLdep[CurBLstart + 5],
+			BLdep[CurBLstart + 6], BLdep[CurBLstart + 7]));
 
 		double disttemp = dot(Depf.lo, WeightL) + dot(Depf.hi, WeightR);
-		disttemp += BLdep_tot[i + NUM_PAR_SIZES * j];
-		BLdep_tot[i + NUM_PAR_SIZES + j] = disttemp;
+		disttemp += BLdep_tot[i + FL_NUM_ACTIVE_NODES * j];
+		BLdep_tot[i + FL_NUM_ACTIVE_NODES*j] = disttemp;
 		disp += (disttemp * Par_multiplier[j]);
 	}
 	flDisp[i] = disp;

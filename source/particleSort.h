@@ -34,18 +34,12 @@ public:
 ////////////////////////////////////////////////////////////////////////////
 
 	particleSort() : Ploc("trPloc"), Umax_val("trUmaxVal"), Ptemp("ParTemp"),
-		trP("TrParam"), clMemIniFlag(false)
+		sortLocs1("sortLocs1"), sortLocs2("sortLocs2")
 	{}
 
 	~particleSort()
 	{
-		// need to release buffers if they have been initialized
-		if (clMemIniFlag)
-		{
-			clReleaseMemObject(sortLocs1);
-			clReleaseMemObject(sortLocs2);
-		}
-		clMemIniFlag = false;
+
 	}
 
 ////////////////////////////////////////////////////////////////////////////
@@ -102,15 +96,18 @@ public:
 ////////////////////////////////////////////////////////////////////////////
 
 	//parameters used to re-release particles
-	TrParam trP;
+	//TrParam trP;
 
 	// Single element array used for storing max inlet velocity
-	// Array is used to simplify reading from device, etc.
 	Array1Dd Umax_val;
 
 	// Temp array for particles used during clumping (host mem) and 
 	// during sort (device mem)
 	Par Ptemp;
+
+	// Array used for tracking new location of sorted particles
+	Array1Di sortLocs1, sortLocs2;
+
 
 
 ////////////////////////////////////////////////////////////////////////////	
@@ -134,8 +131,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 
-	// Array used for tracking new location of sorted particles
-	cl_mem sortLocs1, sortLocs2;
 
 
 ////////////////////////////////////////////////////////////////////////////
@@ -178,7 +173,9 @@ public:
 							// to be released after a given sort step (where # of
 							// particles is the represented particles, not number
 							// of tracers)
-
+	int minParticlesPerRelease; // Minimum number of particles per release step.
+								// Release step is skipped if number of particles
+								// waiting to be released is less than this value.
 	// lsc.C, and BL info that can be set as defines,
 	// and might be useful for other things such as 
 	// calculating kernel sizes, etc.
@@ -187,7 +184,13 @@ public:
 	int LSC_rel_bot, LSC_rel_top;
 	int LSC_stop_bot, LSC_stop_top;
 
-	bool clMemIniFlag; // flag indicating that cl_mem was initialized
+
+	// Values use for particle release, which used to be stored
+	// in trParam struct.
+	double botWallYLoc, topWallYLoc;// y location of walls
+	double curChannelHeight;		// Current height of channel at particle
+									// release location
+
 
 
 ////////////////////////////////////////////////////////////////////////////
@@ -308,9 +311,15 @@ public:
 	// Releases particles which have been deposited or removed by clumping 
 	void reReleasePar();
 
+	// Sets parameters necessary for release particles
+	void setReleaseParameters();
+
 	// Sorts particles before clumping is performed
 	void sortParticlesForClumping();
 
+	void sortParticles(cl_event* TR_prev_evt, int numevt);
+
+	void sortParticles();
 
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////                Output Functions               ///////////////

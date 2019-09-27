@@ -99,6 +99,7 @@ public:
 	////////////////////////////////////////////////////////////////////////////
 
 	Kernel updateNType;
+	Kernel setBoundaryFlags;
 	Kernel updateBoundArr;
 	Kernel updateIBBOnly;
 
@@ -140,7 +141,7 @@ public:
 							// and BOUNDARY_NODE0 for each node
 							// Will be generated from nType after it is
 							// created and initialized. Before calling 
-							// updateM kernel during vlf update step,
+							// updateM kernel during vfl update step,
 							// contents of nTypePrev will be copied over
 							// to nType. updateM will be called, and the updated
 							// nType contents will be copied back over to nTypePrev
@@ -461,6 +462,9 @@ public:
 
 	// Fills nType with boundary info
 	void iniNodeBoundaryInfo();
+
+	// Fills nType with boundary info for base domain
+	void iniNodeBoundaryInfo0();
 
 	//Initializes IBB arrays and calls update_IBB_arrays
 	void iniShearArray();

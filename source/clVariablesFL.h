@@ -133,7 +133,7 @@ public:
 	double smoothingPct;
 	int updateTRActiveFreq;
 	statKernelType kernelT;
-
+	double mindXDist;
 
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////             Run Parameter Variables           ///////////////
@@ -231,6 +231,7 @@ public:
 
 	
 	cl_double2 get_center(cl_double2 P0, cl_double2 P1);
+	void testFlUpdate();
 	
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////            Initialization Functions           ///////////////

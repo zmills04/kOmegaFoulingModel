@@ -313,7 +313,16 @@ public:
 //////////////               Solving Functions               ///////////////
 ////////////////////////////////////////////////////////////////////////////
 
-	void Solve();
+	void Solve()
+	{
+		kOmegaUpdateDiffCoeffs.call_kernel();
+		kOmegaUpdateCoeffs.call_kernel();
+		clFinish(LBQUEUE);
+
+		Kappa.solve();
+		Omega.solve();
+	}
+
 
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                Output Functions               ///////////////
