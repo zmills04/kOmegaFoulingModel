@@ -34,8 +34,25 @@ __kernel void Update_kOmega_Diffusivities(__global NTYPE_TYPE *__restrict__ map,
 	double dx_e = dXcur[gid], dx_w = dXcur[gid + DIST_SIZE], dx_c = dx_e + dx_w;
 	double dy_n = dXcur[gid + DIST_SIZE * 2], dy_s = dXcur[gid + DIST_SIZE * 3], dy_c = dy_n + dy_s;
 
+	//double dx_e = max(dXcur[gid]), dx_w = max(dXcur[gid + DIST_SIZE], 0.1), dx_c = max(dx_e + dx_w, 0.1);
+	//double dy_n = max(dXcur[gid + DIST_SIZE * 2], 0.1), dy_s = max(dXcur[gid + DIST_SIZE * 3], 0.1), dy_c = max(dy_n + dy_s, 0.1);
+
 	double Xe_coeff = dx_w / (dx_e * dx_c), Xw_coeff = -dx_e / (dx_w * dx_c), Xc_coeff = (dx_e - dx_w) / (dx_e * dx_w);
 	double Yn_coeff = dy_s / (dy_n * dy_c), Ys_coeff = -dy_n / (dy_s * dy_c), Yc_coeff = (dy_n - dy_s) / (dy_n * dy_s);
+
+	if (fabs(Xc_coeff) > 10.)
+	{
+		Xe_coeff = 1.0 / dx_c;
+		Xw_coeff = -1.0 / dx_c;
+		Xc_coeff = 0.0;
+	}
+
+	if (fabs(Yc_coeff) > 10.)
+	{
+		Yn_coeff = 1.0 / dy_c;
+		Ys_coeff = -1.0 / dy_c;
+		Yc_coeff = 0.0;
+	}
 
 	int gidw = (i > 0) ? gid - 1 : (CHANNEL_LENGTH - 1 + j*CHANNEL_LENGTH_FULL);
 	int gide = (i < CHANNEL_LENGTH - 1) ? gid + 1 : (j*CHANNEL_LENGTH_FULL);
@@ -167,35 +184,33 @@ __kernel void Update_kOmega_Diffusivities(__global NTYPE_TYPE *__restrict__ map,
 				
 
 
-__kernel void Update_kOmega_Coeffs_Implicit(__global int* __restrict__ IndArr,
-	__global double* __restrict__ iK,
-	__global double* __restrict__ iO,
-	__global double* __restrict__ iNut,
-	__global double* __restrict__ iDk,
-	__global double* __restrict__ iDo,
-	__global double* __restrict__ iF1,
-	__global double* __restrict__ idkdo,
-	__global double* __restrict__ iSxy,
-	__global double* __restrict__ irho,
-	__global double* __restrict__ ivx,
-	__global double* __restrict__ ivy,
-	__global double* __restrict__ kAmat,
-	__global double* __restrict__ oAmat,
-	__global double* __restrict__ kbvec,
-	__global double* __restrict__ obvec,
-	__global double* __restrict__ dXcur,
-	__global double* __restrict__ WallD,
-	__global int* __restrict__ ssIndMap,
-	__global double* __restrict__ wallShearArr,
-	__global NTYPE_TYPE* __restrict__ Map,
-	double DTFD
+__kernel void Update_kOmega_Coeffs_Implicit(__global int* __restrict__ IndArr,//0
+	__global double* __restrict__ iK,//1
+	__global double* __restrict__ iO,//2
+	__global double* __restrict__ iNut,//3
+	__global double* __restrict__ iDk,//4
+	__global double* __restrict__ iDo,//5
+	__global double* __restrict__ iF1,//6
+	__global double* __restrict__ idkdo,//7
+	__global double* __restrict__ iSxy,//8
+	__global double* __restrict__ irho,//9
+	__global double* __restrict__ ivx,//10
+	__global double* __restrict__ ivy,//11
+	__global double* __restrict__ kAmat,//12
+	__global double* __restrict__ oAmat,//13
+	__global double* __restrict__ kbvec,//14
+	__global double* __restrict__ obvec,//15
+	__global double* __restrict__ dXcur,//16
+	__global double* __restrict__ WallD,//17
+	__global int* __restrict__ ssIndMap,//18
+	__global double* __restrict__ wallShearArr,//19
+	__global NTYPE_TYPE* __restrict__ Map,//20
+	double DTFD//21
 #ifndef DEBUG_ARRAYS
 )
 #else
 	, __global double* __restrict__ DebugArrs)
 #endif
-	//, __global double* __restrict__ kappaDebug,
-	//__global double* __restrict__ omegaDebug)
 {
 
 	int i = get_global_id(0);
@@ -214,11 +229,28 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int* __restrict__ IndArr,
 	int Eind = IndArr[gid + DIST_SIZE], Wind = IndArr[gid + DIST_SIZE * 2];
 	int Nind = IndArr[gid + DIST_SIZE * 3], Sind = IndArr[gid + DIST_SIZE * 4];
 
-	double dx_e = dXcur[gid], dx_w = dXcur[gid + DIST_SIZE], dx_c = dx_e + dx_w;
-	double dy_n = dXcur[gid + DIST_SIZE * 2], dy_s = dXcur[gid + DIST_SIZE * 3], dy_c = dy_n + dy_s;
+	//double dx_e = dXcur[gid], dx_w = dXcur[gid + DIST_SIZE], dx_c = dx_e + dx_w;
+	//double dy_n = dXcur[gid + DIST_SIZE * 2], dy_s = dXcur[gid + DIST_SIZE * 3], dy_c = dy_n + dy_s;
+
+	double dx_e = max(dXcur[gid], 0.1), dx_w = max(dXcur[gid + DIST_SIZE], 0.1), dx_c = max(dx_e + dx_w, 0.1);
+	double dy_n = max(dXcur[gid + DIST_SIZE * 2], 0.1), dy_s = max(dXcur[gid + DIST_SIZE * 3], 0.1), dy_c = max(dy_n + dy_s, 0.1);
+
 
 	double Xe_coeff = dx_w / (dx_e * dx_c), Xw_coeff = -dx_e / (dx_w * dx_c), Xc_coeff = (dx_e - dx_w) / (dx_e * dx_w);
 	double Yn_coeff = dy_s / (dy_n * dy_c), Ys_coeff = -dy_n / (dy_s * dy_c), Yc_coeff = (dy_n - dy_s) / (dy_n * dy_s);
+	if (fabs(Xc_coeff) > 10.)
+	{
+		Xe_coeff = 1.0 / dx_c;
+		Xw_coeff = -1.0 / dx_c;
+		Xc_coeff = 0.0;
+	}
+
+	if (fabs(Yc_coeff) > 10.)
+	{
+		Yn_coeff = 1.0 / dy_c;
+		Ys_coeff = -1.0 / dy_c;
+		Yc_coeff = 0.0;
+	}
 
 
 	double Xe2_coeff = 2. / (dx_e * dx_c), Xw2_coeff = 2. / (dx_w * dx_c), Xc2_coeff = -2. / (dx_e * dx_w);
@@ -246,6 +278,19 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int* __restrict__ IndArr,
 	DBGARR(1, diffk_dy);
 	DBGARR(2, diffo_dx);
 	DBGARR(3, diffo_dy);
+	DBGARR(23, Xe_coeff);
+	DBGARR(24, Xw_coeff);
+	DBGARR(25, Xc_coeff);
+	DBGARR(26, Yn_coeff);
+	DBGARR(27, Ys_coeff);
+	DBGARR(28, Yc_coeff);
+	DBGARR(29, Xe2_coeff);
+	DBGARR(30, Xw2_coeff);
+	DBGARR(31, Xc2_coeff);
+	DBGARR(32, Yn2_coeff);
+	DBGARR(33, Ys2_coeff);
+	DBGARR(34, Yc2_coeff);
+
 #endif
 
 
@@ -259,14 +304,17 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int* __restrict__ IndArr,
 	double Jx_k = Ux - diffk_dx;
 	double Jy_k = Uy - diffk_dy;
 
-	double omegaval = iO[gid], kval = iK[gid];
+	double omegaval = max(0.0, iO[gid]), kval = max(0.0, iK[gid]);
 
 	double F1val = iF1[gid], nutval = iNut[gid];
 	double Sxx = iSxy[gid], Sxy = iSxy[gid + DIST_SIZE], Syy = iSxy[gid + 2 * DIST_SIZE];
 	double Pk = 2. * nutval * (Sxx * Sxx + Syy * Syy + 2. * Sxy * Sxy) -
 		2. / 3. * kval * Rho * (Sxx + Syy);
 
-	Pk = min(Pk, 10. * KO_BETA_STAR * kval * omegaval);
+#ifdef DEBUG_ARRAYS
+	double pkTemp = Pk;
+#endif
+	Pk = max(min(Pk, 10. * KO_BETA_STAR * kval * omegaval),0.0);
 	double gammaval = (F1val * KO_GAMMA1 + (1. - F1val) * KO_GAMMA2) / nutval;
 
 
@@ -277,8 +325,10 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int* __restrict__ IndArr,
 	DBGARR(5, Jy_omega);
 	DBGARR(6, Jx_k);
 	DBGARR(7, Jy_k);
-	DBGARR(8, Pk);
-	DBGARR(9, Sc);
+	DBGARR(8, pkTemp);
+	double pkAlt = 10.*KO_BETA_STAR*kval*omegaval;
+	DBGARR(9, pkAlt);
+	DBGARR(10, Sc);
 #endif
 
 	// C coefficient set to 1 while remaining coefficients and value in b vec
@@ -300,6 +350,13 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int* __restrict__ IndArr,
 	double Kn = DTFD * (Jy_k * Yn_coeff - diffk * Yn2_coeff);
 	double Ks = DTFD * (Jy_k * Ys_coeff - diffk * Ys2_coeff);
 	double Ksrc = kval + DTFD * Pk;
+	double OdKc = 1. / Kc;
+	Kc = 1.;
+	Ke *= OdKc;
+	Kw *= OdKc;
+	Kn *= OdKc;
+	Ks *= OdKc;
+	Ksrc *= OdKc;
 
 	//if (ntype & NESW_BOUNDARY_NODE)
 	//{
@@ -321,6 +378,14 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int* __restrict__ IndArr,
 	//		}
 	//	}
 	//}
+
+	DBGARR(11, gammaval);//kc
+	DBGARR(12, 0.);//ke
+	DBGARR(13, 0.);//kw
+	DBGARR(14, 0.);//kn
+	DBGARR(15, 0.);//ks
+	DBGARR(16, 0.);//ksrc
+
 	if (ntype & NESW_BOUNDARY_NODE)
 	{
 		DTFD = 0.;
@@ -328,8 +393,13 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int* __restrict__ IndArr,
 		/// get yplus value = y*0.09^(0.25)*sqrt(kappa)/nu
 		double yplus = WallD[gid];// *sqrt(kval)* KO_C_MU_0_25 / MU_NUMBER;
 		double omegaVis = (6. * MU_NUMBER / 0.075) / (yplus * yplus);
-		double omegaLog = sqrt(max(kval,1.0e-16)) / (KO_C_MU_0_25 * KO_KAPPA * yplus);// (1. / (0.3 * KO_KAPPA))* fricVel / yplus;
-		omegaval = sqrt(omegaVis * omegaVis + omegaLog * omegaLog);
+		double omegaLog = sqrt(kval) / (KO_C_MU_0_25 * KO_KAPPA * yplus);// (1. / (0.3 * KO_KAPPA))* fricVel / yplus;
+		omegaval = min(1000.,sqrt(omegaVis * omegaVis + omegaLog * omegaLog));
+		DBGARR(12, omegaVis);//ke
+		DBGARR(13, omegaLog);//kw
+		DBGARR(14, omegaval);//kn
+		DBGARR(15, yplus);//ks
+		DBGARR(16, kval);//ksrc
 	}
 
 
@@ -339,6 +409,14 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int* __restrict__ IndArr,
 	double Wn = DTFD * (Jy_omega * Yn_coeff - diffo * Yn2_coeff);
 	double Ws = DTFD * (Jy_omega * Ys_coeff - diffo * Ys2_coeff);
 	double Wsrc = omegaval + DTFD * (gammaval * Pk);
+
+	double OdOc = 1. / Wc;
+	Wc = 1.;
+	We *= OdOc;
+	Ww *= OdOc;
+	Wn *= OdOc;
+	Ws *= OdOc;
+	Wsrc *= OdOc;
 
 	//kappaDebug[gid] = Kc;
 	//kappaDebug[gid + DIST_SIZE] = Ke;
@@ -355,22 +433,31 @@ __kernel void Update_kOmega_Coeffs_Implicit(__global int* __restrict__ IndArr,
 	//omegaDebug[gid + DIST_SIZE * 5] = Wsrc;
 
 
-
-
 #ifdef DEBUG_ARRAYS
-	DBGARR(10, Kc);
-	DBGARR(11, Ke);
-	DBGARR(12, Kw);
-	DBGARR(13, Kn);
-	DBGARR(14, Ks);
-	DBGARR(15, Ksrc);
-	DBGARR(16, Wc);
-	DBGARR(17, We);
-	DBGARR(18, Ww);
-	DBGARR(19, Wn);
-	DBGARR(20, Ws);
-	DBGARR(21, Wsrc);
+
+	DBGARR(17, Wc);
+	DBGARR(18, We);
+	DBGARR(19, Ww);
+	DBGARR(20, Wn);
+	DBGARR(21, Ws);
+	DBGARR(22, Wsrc);
 #endif
+
+
+//#ifdef DEBUG_ARRAYS
+//	DBGARR(11, Kc);
+//	DBGARR(12, Ke);
+//	DBGARR(13, Kw);
+//	DBGARR(14, Kn);
+//	DBGARR(15, Ks);
+//	DBGARR(16, Ksrc);
+//	DBGARR(17, Wc);
+//	DBGARR(18, We);
+//	DBGARR(19, Ww);
+//	DBGARR(20, Wn);
+//	DBGARR(21, Ws);
+//	DBGARR(22, Wsrc);
+//#endif
 
 
 	kAmat[Cind] = Kc;

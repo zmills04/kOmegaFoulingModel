@@ -332,6 +332,7 @@ public:
 	// Enqueues kernels to solve T for current time step
 	void Solve(cl_command_queue* que = nullptr, int num_list = 0, cl_event* wait = nullptr)
 	{
+		return;
 		TempUpdateCoeffs.call_kernel(que, num_list, wait);
 		clFinish(FDQUEUE);
 		Temp.solve();

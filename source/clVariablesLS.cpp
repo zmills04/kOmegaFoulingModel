@@ -544,19 +544,17 @@ void clVariablesLS::save2file()
 
 void clVariablesLS::saveDebug()
 {
-	ibbArr.saveTxtFromDeviceDynamic();
+	//ibbArr.saveTxtFromDeviceDynamic();
 	dXArr.save_txt_from_device_as_multi2D("dXarr");
-	C.save_txt_from_device();
+	//C.save_txt_from_device();
 	nType.save_txt_from_device_short_to_int();
-	//dXArr0.save_txt_from_device_as_multi2D("dX0arr");
 	ibbDistArr.saveTxtFromDeviceDynamic();
-	//ssArr.save_txt_from_device();
+	ssArr.save_txt_from_device();
 	//BL.save_txt_from_device();
-	//ssArrInds.save_txt_from_device();
-	//ssArrIndMap.save_txt_from_device();
+	ssArrInds.save_txt_from_device();
+	ssArrIndMap.save_txt_from_device();
 	//lsMap.save_txt_from_device();
 	//save2file();
-
 }
 
 
@@ -1024,7 +1022,6 @@ void clVariablesLS::update()
 	// Prepares dXArr for updating.
 	dXArr.enqueue_copy_to_buffer(dXArr0.get_buffer(), -1, LBQUEUE_REF);
 
-
 	// updates nType
 	updateNType.call_kernel();
 	FINISH_QUEUES;
@@ -1040,6 +1037,9 @@ void clVariablesLS::updateBoundaryArrays()
 {
 	updateBoundArr.call_kernel();
 	ibbArrCurIndex.read_from_buffer(LBQUEUE_REF);
+	
+	FINISH_QUEUES;
+	vtr.BL.P01ind.save_txt_from_device("P01ind_state1");
 
 	if (ibbArrCurIndex(0) >= ibbArr.getBufferFullSize())
 	{
@@ -1056,6 +1056,10 @@ void clVariablesLS::updateBoundaryArrays()
 		updateIBBOnly.set_argument(5, &ibbarrsize_);
 
 		updateIBBOnly.call_kernel();
+
+		FINISH_QUEUES;
+		vtr.BL.P01ind.save_txt_from_device("P01ind_state2");
+
 
 		ibbArrCurIndex.read_from_buffer(LBQUEUE_REF);
 

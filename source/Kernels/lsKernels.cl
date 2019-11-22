@@ -150,7 +150,7 @@ void updateNType(__global NTYPE_TYPE * __restrict__ Map,
 
 				// Setting macroscopic arrays to
 				// appropriate values
-				//kxmat[gid] = 0.;
+				kxmat[gid] = 0.;
 				oxmat[gid] = 0.;
 				nutArray[gid] = 0.;
 				Ux_array[gid] = 0.;
@@ -210,7 +210,7 @@ int bcFindIntersectionLS(double* dist, int *dir, double2 vL0, double2 *vLd,
 
 	// Limiting the minimum value of dX to avoid instabilities that
 	// it might lead to.
-	(*dist) = max((*dist), CEPS);
+	//(*dist) = max((*dist), CEPS);
 
 	return 1;
 }
@@ -220,7 +220,7 @@ int bcFindIntersectionLS(double* dist, int *dir, double2 vL0, double2 *vLd,
 __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_UPDATEM, 1, 1)))
 void updateBoundaryNodes(__global ushort2* __restrict__ BL_P01ind,
 	__global double2* __restrict__ BL_vNvec,
-	__global double2* __restrict__ BL_blLen,
+	__global double* __restrict__ BL_blLen,
 	__global int* __restrict__ BL_nodeLoc,
 	__global short* __restrict__ BL_intType,
 	__global double2* C,
@@ -426,7 +426,6 @@ void updateBoundaryNodes(__global ushort2* __restrict__ BL_P01ind,
 // if the ibb arrays need to be reallocated, they will also need to be updated again
 // so instead of calling updateBoundaryNodes again which does other things,
 // this can be called which will only update ibb arrays
-__kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_UPDATEFD, 1, 1)))
 __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_UPDATEFD, 1, 1)))
 void updateIBBOnly(__global double2* C,
 	__global NTYPE_TYPE* Map,

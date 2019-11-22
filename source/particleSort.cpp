@@ -452,7 +452,7 @@ void particleSort::save2file()
 
 void particleSort::saveDebug()
 {
-	//Ploc.save_txt_from_device();
+	Ploc.save_txt_from_device();
 }
 
 

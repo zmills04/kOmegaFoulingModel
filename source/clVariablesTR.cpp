@@ -24,7 +24,8 @@
 //		will increment the row index.
 // TODO: Make sure that re-ordering of BL indicies (both top and bottom go from left to right)
 //		doesnt create any issues by assuming that the x location of the right node is < left node
-
+// TODO: Fix shift particles to ensure that kernel checks for BL in all surrounding trCells
+//		to ensure that no particles are missed
 #include "StdAfx.h"
 #include "clVariablesLS.h"
 #include "clVariablesLB.h"
@@ -1589,16 +1590,12 @@ void clVariablesTR::saveBox(double x1, double y1, double dx, double dy)
 
 void clVariablesTR::saveDebug()
 {
-	//NodI.saveFromDevice(true, trStructBase::saveTxtFl);
-	//NodC.saveFromDevice(true, trStructBase::saveTxtFl);
-	//BL.saveFromDevice(true, trStructBase::saveTxtFl);
-	
-	//BLind_ind.save_txt_from_device("BLind_ind");
-	//Node_neigh.save_txt_from_device("Node_neigh");
-	//Winds.save_txt_from_device("Winds");
-	//TR_indicies.save_txt_from_device("TR_indicies");
-	//Active_indicies.save_txt_from_device("Active_indicies");
-	//Active_flag.save_txt_from_device("Active_flag");
+	NodI.saveFromDevice(true, trStructBase::saveTxtFl);
+	NodC.saveFromDevice(true, trStructBase::saveTxtFl);
+	BL.saveFromDevice(true, trStructBase::saveTxtFl);
+	activeInds.saveTxtFromDeviceDynamic();
+	wallInds.saveTxtFromDeviceDynamic();
+	P.saveFromDevice(true, trStructBase::saveTxtFl);
 	wallShear.saveDebug();
 	parSort.saveDebug();
 }
@@ -1734,6 +1731,9 @@ void clVariablesTR::setKernelArgs()
 	DebugOutData.allocate(nN);
 	DebugOutData.fill({ {-1, -1} });
 	DebugOutData.allocate_buffer_w_copy();
+	movedParticles.zeros(nN);
+	movedParticles.allocate_buffer_w_copy();
+
 
 	cl_int ind = 0;
 
@@ -1862,6 +1862,9 @@ void clVariablesTR::setKernelArgs()
 	shiftParticlesKernel[0].set_argument(ind++, vls.C.get_buf_add());
 	shiftParticlesKernel[0].set_argument(ind++, NodI.wallFlag.get_buf_add());
 	shiftParticlesKernel[0].set_argument(ind++, NodI.BLind.get_buf_add());
+	shiftParticlesKernel[0].set_argument(ind++, movedParticles.get_buf_add());
+
+	
 
 	ind = 0;
 	shiftParticlesKernel[1].set_argument(ind++, P.Dep_Flag.get_buf_add());
@@ -2067,6 +2070,11 @@ void clVariablesTR::update()
 
 
 	shiftParticlesKernel[0].call_kernel();	///Update Particles
+
+	// Remove this
+	movedParticles.save_txt_from_device("moveParticles", shiftParticlesKernel[0].getDefaultQueue());
+
+
 	shiftParticlesKernel[1].call_kernel();	///Update Wall Particles
 
 	parSort.updateTrp();

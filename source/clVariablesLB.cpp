@@ -670,11 +670,9 @@ void clVariablesLB::saveDebug(int saveFl)
 	//IBB_coeff.save_txt_from_device();
 	//IBB_loc.save_txt_from_device();
 	save2file();	
-	vls.nType.save_txt_from_device_short_to_int();
-	vls.dXArr.save_txt_from_device_as_multi2D();
 	if (kOmegaClass.kOmegaSolverFlag)
 	{
-		kOmegaClass.saveDebug(saveFl);
+		kOmegaClass.saveDebug();
 	}
 }
 

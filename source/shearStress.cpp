@@ -27,8 +27,8 @@ void shearStress::allocateArrays()
 	sInds.allocate(shearBLSizeTotal);
 	ssWeights.allocate(shearBLSizeTotal);
 
-	shearCoeffs.allocate(shearNodeSize*2, shearNodeDynSize * 2);
-	Tau.allocate(shearNodeSize, shearNodeDynSize);
+	shearCoeffs.allocate(shearNodeDynSize * 2);
+	Tau.allocate(shearNodeDynSize);
 
 	// Not necessary for restart, so no need to place this in
 	// testRestartRun
@@ -169,10 +169,11 @@ void shearStress::save2file()
 
 void shearStress::saveDebug()
 {
-	//Tau.save_from_device();
-	//sInds.save_txt_from_device();
-	//ssWeights.save_from_device();
-	//shearCoeffs.save_from_device();
+	Tau.save_txt_from_device();
+	sInds.save_txt_from_device();
+	ssWeights.save_txt_from_device();
+	shearCoeffs.save_txt_from_device();
+	blIndsLoc.save_txt_from_device();
 	//vls.ssArrIndMap.savetxt();
 }
 

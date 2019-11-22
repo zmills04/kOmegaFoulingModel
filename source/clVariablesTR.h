@@ -64,7 +64,7 @@ public:
 	////////////////////////////////////
 
 	Array1Dv2i DebugOutData;
-
+	Array1Di movedParticles;
 
 	// Func Pointer for calling loadParams
 	std::function<void(void)> loadParamsPtr;
@@ -75,7 +75,7 @@ public:
 		activeInds("activeInds", WORKGROUPSIZE_TR, 2),
 		wallInds("wallInds", WORKGROUPSIZE_TR, 2), BL("trBL"),
 		P("trP"), NodC("trNodC"), NodI("trNodI"), updateWallsDist("updateWallsDist"),
-		DebugOutData("debugOutData")
+		DebugOutData("debugOutData"), movedParticles("movedParticles")
 	{
 		loadParamsPtr = std::bind(&clVariablesTR::loadParams, this);
 		rmax = (double)(RAND_MAX + 1);

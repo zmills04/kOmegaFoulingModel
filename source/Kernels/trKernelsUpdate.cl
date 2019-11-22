@@ -657,7 +657,7 @@ int bcFindIntersectionLinePlane_shift(double* dist, double2 vL0, double2 vP0, do
 	*vN = normalize((double2)(vP0.y - vP1.y, vP1.x - vP0.x));
 	double2 vLd = (vP0 - vL0);
 	*dist = dot(*vN, vLd);
-	if ((*dist) <= 0.)
+	if ((*dist) < 0.)
 		return 0;
 	double2 vCcut = vL0 + (*vN) * (*dist);
 	return testInside_Shift(vCcut, vP0, vP1);
@@ -705,12 +705,19 @@ void Shift_particles(__global depFlagType* __restrict__ pDepFlag,
 	__global ushort2 * __restrict__ blP01,
 	__global double2 * __restrict__ Cvals,
 	__global short* __restrict__ niWallFlag,
-	__global int* __restrict__ niBLInd)
+	__global int* __restrict__ niBLInd,
+	__global int* __restrict__ movedFlag)
 {
 
 	int i = get_global_id(0);
 	if (i >= TRC_NUM_TRACERS)
 		return;
+
+	movedFlag[i] = 0;
+	// Remove This
+	//debugData = Px, Py + 12*(bl, vC0x, vC0y, vC1x, vC1y, Px, Py, vNx, vNy, dist)
+	//for (int k = 0; k < 98; k++)
+	//	debugData[i * 98 + k] = 0.0;
 
 	double2 C2 = pPos[i];
 
@@ -723,7 +730,6 @@ void Shift_particles(__global depFlagType* __restrict__ pDepFlag,
 
 	int trLoc = pLoc[i];
 
-
 	short wallFlag = niWallFlag[trLoc];
 	if (!(wallFlag & WF_WALL))
 		return;
@@ -731,7 +737,7 @@ void Shift_particles(__global depFlagType* __restrict__ pDepFlag,
 	double dist, dist_use = 100.;	//||dCc||/||dC|| where dCc is the distance between  
 	double2 vN, vN_use;				//Intersection pt, Normal vector, Velocity of surf at vCcut
 
-	int bl, bl_use = -1;			//boundary link index (value stored in each linked list element
+	int bl_use = -1;			//boundary link index (value stored in each linked list element
 	int blInd = niBLInd[trLoc];
 
 	int minBl = (wallFlag & WF_BOT_WALL) ? MIN_BL_BOT : MIN_BL_TOP;
@@ -741,15 +747,21 @@ void Shift_particles(__global depFlagType* __restrict__ pDepFlag,
 	int indStop = min(maxBl, blInd + 6);
 
 
+	//remove this
+	//debugData[i * 98] = C2.x;
+	//debugData[i * 98+1] = C2.y;
+	//int count = 0;
+	movedFlag[i] = -1;
 	for (int k = indStart; k < indStop; k++)
 	{
+		//debugData[i*98 + 2 + count*8] = double(k)
 		ushort2 p01ind = blP01[k];
 		double2 vC0 = Cvals[p01ind.x], vC1 = Cvals[p01ind.y];
 		if (bcFindIntersectionLinePlane_shift(&dist, C2, vC0, vC1, &vN))
 		{
 			if (dist < dist_use)
 			{
-				bl_use = bl;
+				bl_use = k;
 				dist_use = dist;
 				vN_use = vN;
 			}
@@ -759,6 +771,7 @@ void Shift_particles(__global depFlagType* __restrict__ pDepFlag,
 
 	if (bl_use != -1)
 	{
+		movedFlag[i] = bl_use;
 		C2 += vN_use * 2. * dist_use;
 		int2 Posi = convert_int2(C2);
 		trLoc = Posi.x + FULLSIZEX_TR_PADDED * Posi.y;
@@ -772,6 +785,78 @@ void Shift_particles(__global depFlagType* __restrict__ pDepFlag,
 	}
 }
 
+//__kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_SHIFT_PAR, 1, 1)))
+//void Shift_particles(__global depFlagType* __restrict__ pDepFlag,
+//	__global parLocType* __restrict__ pLoc,
+//	__global double2* __restrict__ pPos,
+//	__global ushort2* __restrict__ blP01,
+//	__global double2* __restrict__ Cvals,
+//	__global short* __restrict__ niWallFlag,
+//	__global int* __restrict__ niBLInd)
+//{
+//
+//	int i = get_global_id(0);
+//	if (i >= TRC_NUM_TRACERS)
+//		return;
+//
+//	double2 C2 = pPos[i];
+//
+//	if ((C2.x < X_release) && (C2.y > FL_YMAX || C2.y < FL_YMIN))
+//	{
+//		pDepFlag[i] = -2;
+//		pLoc[i] = -2;
+//		return;
+//	}
+//
+//	int trLoc = pLoc[i];
+//
+//	short wallFlag = niWallFlag[trLoc];
+//	if (!(wallFlag & WF_WALL))
+//		return;
+//
+//	double dist, dist_use = 100.;	//||dCc||/||dC|| where dCc is the distance between  
+//	double2 vN, vN_use;				//Intersection pt, Normal vector, Velocity of surf at vCcut
+//
+//	int bl, bl_use = -1;			//boundary link index (value stored in each linked list element
+//	int blInd = niBLInd[trLoc];
+//
+//	int minBl = (wallFlag & WF_BOT_WALL) ? MIN_BL_BOT : MIN_BL_TOP;
+//	int maxBl = (wallFlag & WF_BOT_WALL) ? MAX_BL_BOT : MAX_BL_TOP;
+//
+//	int indStart = max(minBl, blInd - 5);
+//	int indStop = min(maxBl, blInd + 6);
+//
+//
+//	for (int k = indStart; k < indStop; k++)
+//	{
+//		ushort2 p01ind = blP01[k];
+//		double2 vC0 = Cvals[p01ind.x], vC1 = Cvals[p01ind.y];
+//		if (bcFindIntersectionLinePlane_shift(&dist, C2, vC0, vC1, &vN))
+//		{
+//			if (dist < dist_use)
+//			{
+//				bl_use = bl;
+//				dist_use = dist;
+//				vN_use = vN;
+//			}
+//		}
+//	}
+//
+//
+//	if (bl_use != -1)
+//	{
+//		C2 += vN_use * 2. * dist_use;
+//		int2 Posi = convert_int2(C2);
+//		trLoc = Posi.x + FULLSIZEX_TR_PADDED * Posi.y;
+//		if (C2.x >= X_MAX_VAL)
+//		{
+//			pDepFlag[i] = -2;
+//			trLoc = -2;
+//		}
+//		pLoc[i] = trLoc;
+//		pPos[i] = C2;
+//	}
+//}
 
 
 

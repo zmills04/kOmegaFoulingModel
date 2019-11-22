@@ -1460,7 +1460,7 @@ void BLinks::allocateBuffers(int bufSize)
 	Tau.allocate_buffer_size(bufFullSize);
 	blLen.allocate_buffer_size(bufFullSize);
 	Node_loc.allocate_buffer_size(bufFullSize);
-	P01ind.allocate_buffer_size(bufFullSize);
+	P01ind.allocate_buffer_size(CL_MEM_READ_ONLY,bufFullSize);
 	int_type.allocate_buffer_size(bufFullSize);
 }
 

@@ -30,7 +30,7 @@ void sourceGenerator::addFile2Kernel(const std::string &fname_)
 void sourceGenerator::addDefine(std::string &kerstr, const std::string varname, const double value)
 {
 	char char_temp[100];
-	sprintf(char_temp, "(%12.11g)\n", value);
+	sprintf(char_temp, "(%16.15e)\n", value);
 	kerstr.append("#define " + varname + "\t\t" + char_temp);
 }
 

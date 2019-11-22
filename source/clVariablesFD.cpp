@@ -419,7 +419,7 @@ void clVariablesFD::loadParams()
 	
 	testRestartRun();
 	
-	double PrNum = p.getParameter<double>("Pr Number", PR_NUMBER);
+	PrNum = p.getParameter<double>("Pr Number", PR_NUMBER);
 	PrTurbNum = p.getParameter<double>("Pr Number", PR_TURB_NUMBER);
 	Alpha_fluid = vlb.MuVal / PrNum;
 	kSoot = p.getParameter<double>("K Soot", THERMAL_CONDUCTIVITY_FOUL);
@@ -660,7 +660,7 @@ void clVariablesFD::setSourceDefines()
 
 
 	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "PR_NUMBER", PrNum);
-	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "TFD_X_IN_VAL", TFD_X_IN);
+	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "TFD_X_IN_VAL", ROE_INX);
 	SOURCEINSTANCE->addDefine(SOURCEINSTANCE->getDefineStr(), "NU_CUTOFF_RADIUS", nuCutoffRadius);
 	if (chtCorrectionFlag)
 	{

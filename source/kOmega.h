@@ -19,7 +19,8 @@
 class kOmega
 {
 public:
-
+	int timeBtwIncreaseTimeStep = 20;
+	bool saveFlagDebug = false;
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                                               ///////////////
@@ -27,6 +28,7 @@ public:
 //////////////                                               ///////////////
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
+
 
 	kOmega() : WallD("wallD"),
 		Diff_Omega("diffOmega"), Diff_K("diffK"), Fval_array("Fvals"),
@@ -90,7 +92,7 @@ public:
 	// directly addressed during initialization/reading bin files
 	// pointers to these arrays are passed to Solvers, which
 	// allows for arrays to be accessed from those classes
-	Array2Dd Kappa_array, Omega_array; 
+	Array2Dd Kappa_array, Omega_array, kappaPrev, omegaPrev; 
 	
 	Array2Dd Nut_array; // turbulent viscosity 			
 
@@ -188,7 +190,11 @@ public:
 	// Wall function values
 	double kappaWallVal, omegaWallVal, nutWallVal, yPlusWallVal;
 
+	// Max value for turbulent viscosity
+	double maxTurbVisc;
 
+	int stepsPerLB, curIter, timeSinceTimeStepChange;
+	double timeStep;
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                Method Variables               ///////////////
 ////////////////////////////////////////////////////////////////////////////	
@@ -237,7 +243,7 @@ public:
 	void save2file();
 
 	// Writes additional data to file for debugging purposes
-	void saveDebug(int saveFl = lbDbgSave);
+	void saveDebug(int saveFl = koDbgSave);
 
 	// Saves parameters to yaml file used for restarting runs
 	void saveParams();
@@ -307,21 +313,22 @@ public:
 ////////////////////////////////////////////////////////////////////////////	
 //////////////              Updating Functions               ///////////////
 ////////////////////////////////////////////////////////////////////////////
-
-
+	void halveTimeStep();
+	void doubleTimeStep();
 ////////////////////////////////////////////////////////////////////////////	
 //////////////               Solving Functions               ///////////////
 ////////////////////////////////////////////////////////////////////////////
 
-	void Solve()
-	{
-		kOmegaUpdateDiffCoeffs.call_kernel();
-		kOmegaUpdateCoeffs.call_kernel();
-		clFinish(LBQUEUE);
-
-		Kappa.solve();
-		Omega.solve();
-	}
+	void Solve();
+	//{
+	//	kOmegaUpdateDiffCoeffs.call_kernel();
+	//	kOmegaUpdateCoeffs.call_kernel();
+	//	clFinish(LBQUEUE);
+	//	if (saveFlagDebug)
+	//		vlb.saveDebug();
+	//	Kappa.solve();
+	//	Omega.solve();
+	//}
 
 
 ////////////////////////////////////////////////////////////////////////////	

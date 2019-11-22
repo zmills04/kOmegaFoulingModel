@@ -534,7 +534,10 @@ void clVariablesFL::saveDebug()
 	FI.saveFromDevice(true, trStructBase::saveTxtFl);
 	RI.saveFromDevice(true, trStructBase::saveTxtFl);
 	blDepTot.save_txt_from_device();
-	//IO_ind_dist.save_txt_from_device();
+	vlb.save2file();
+	vfd.save2file();
+	vls.save2file();
+	vtr.saveDebug();
 }
 
 void clVariablesFL::saveParams()
@@ -647,6 +650,10 @@ void clVariablesFL::testFlUpdate()
 	updateFL();
 
 	vls.update();
+
+	//FINISH_QUEUES;
+	//vtr.BL.saveFromDevice(true, trStructBase::saveTxtFl);
+
 	vls.C.read_from_buffer(LBQUEUE_REF);
 	vtr.updateWallsDist.FillBuffer(100., TRQUEUE_REF);
 	
@@ -659,36 +666,51 @@ void clVariablesFL::testFlUpdate()
 	// Only needs LS variables updated, so we can go ahead and
 	// spin up a thread to execute this function since it is 
 	// done on host cpu.
-	std::thread updateShearThread(&clVariablesFL::updateShearArrays, this);
+	//std::thread updateShearThread(&clVariablesFL::updateShearArrays, this);
+	
+	
+	updateShearArrays();
+	//FINISH_QUEUES;
+	//vtr.BL.saveFromDevice(true, trStructBase::saveTxtFl);
 
+	
 	vlb.update();
+	//FINISH_QUEUES;
+	//vtr.BL.saveFromDevice(true, trStructBase::saveTxtFl);
 
 	if (p.useOpenGL)
+	{
 		vtr.glParticles.update();
+		FINISH_QUEUES;
+	}
+
+	//FINISH_QUEUES;
+	//vtr.BL.saveFromDevice(true, trStructBase::saveTxtFl);
 
 	vfd.update();
 
-	clFlush(FDQUEUE);
+	//FINISH_QUEUES;
+	//vtr.BL.saveFromDevice(true, trStructBase::saveTxtFl);
 
+	clFlush(FDQUEUE);
 	vtr.update();
 
-	updateShearThread.join();
+	//updateShearThread.join();
 
 	FINISH_QUEUES;
+	vtr.BL.saveFromDevice(true, trStructBase::saveTxtFl);
 
-	if (p.Time < 4000)
+
+
+	if (p.Time < 5000)
 		return;
-	//vtr.NodI.saveFromDevice(true, trStructBase::saveTxtFl);
-	//vtr.BL.saveFromDevice(true, trStructBase::saveTxtFl);
-	vlb.save2file();
-	vfd.save2file();
-	vls.save2file();
-
-	////saveDebug();
-	////vtr.saveDebug();
+	vlb.kOmegaClass.saveFlagDebug = true;
+	//vlb.save2file();
+	//vfd.save2file();
+	//saveDebug();
+	//vls.save2file();
+	//vtr.saveDebug();
 	//vls.saveDebug();
-	//vfd.saveDebug();
-
 }
 
 
@@ -813,9 +835,10 @@ void clVariablesFL::updateShearArrays()
 	vtr.wallShear.nodeShearKernel.reset_global_size(vtr.wallShear.shearNodeSize);
 	vtr.wallShear.updateSSKernel[0].reset_global_size(vtr.wallShear.shearNodeSize);
 
+
+
 	vtr.wallShear.updateSSKernel[0].call_kernel();
 	vtr.wallShear.updateSSKernel[1].call_kernel();
-
 }
 
 void clVariablesFL::saveVariables()

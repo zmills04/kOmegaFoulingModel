@@ -398,6 +398,16 @@ __kernel void LB_collision_SRT_Fluid_w_kOmega(__global double* __restrict__ rho_
 	// Read in and calculate necessary terms for calculation of 
 	// turbulent viscosity
 	double omegaval = iO[gi], kval = iK[gi], yval = wallD[gi];
+	if (omegaval < 0.0)
+	{
+		omegaval = fabs(omegaval);
+		iO[gi] = omegaval;
+	}
+	if (kval < 0.0)
+	{
+		kval = 1e-16;
+		iK[gi] = 1e-16;
+	}
 	double F2arg = max(2. * sqrt(kval) / (KO_BETA_STAR * omegaval * yval), 500. * MU_NUMBER / (yval * yval * omegaval));
 	double F2val = tanh(F2arg * F2arg);
 
@@ -407,7 +417,7 @@ __kernel void LB_collision_SRT_Fluid_w_kOmega(__global double* __restrict__ rho_
 	F2val *= sqrt(2. * (sxx_val * sxx_val + 2. * sxy_val * sxy_val + syy_val * syy_val));
 
 	// Calculate Nu_turbulent
-	double nut = KO_A1 * kval / max(KO_A1 * omegaval, F2val);
+	double nut = max(min(MAX_TURB_VISC, KO_A1 * kval / max(KO_A1 * omegaval, F2val)), 1e-16);
 
 	// Use SST boundary condition for any node with N,E,S,W neighbors
 	// on other side of boundary (i.e. these nodes have tau_wall already

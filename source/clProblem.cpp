@@ -128,13 +128,13 @@ void clProblem::step()
 	bool saveDumpFlag = false;
 	bool dumpFlag = false;
 
-	//if (nextDumpStepTime < TimeN)
-	//{
-	//	p.DumpStep();
-	//	dumpFlag = true;
-	//	clFinish(*clEnv::instance()->getIOqueue());
-	//	nextDumpStepTime += dumpTimeStep;
-	//}
+	if (nextDumpStepTime < TimeN)
+	{
+		p.DumpStep();
+		dumpFlag = true;
+		clFinish(*clEnv::instance()->getIOqueue());
+		nextDumpStepTime += dumpTimeStep;
+	}
 
 	// if time to save bin files, do so
 	if (nextDumpBin < currentDumpStep)

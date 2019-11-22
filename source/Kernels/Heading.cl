@@ -529,4 +529,18 @@ int2 max4(double2 v0, double2 v1, double2 v2, double2 v3)
 	return convert_int2(ceil(v0));
 }
 
-
+__kernel void checkForNans(__global double* arrTest,
+	__global bool *nanFlag,
+	int xSize,
+	int ySize,
+	int zSize)
+{
+	int i = get_global_id(0);
+	int j = get_global_id(1);
+	int k = get_global_id(2);
+	if (i >= xSize || j >= ySize || k >= zSize)
+		return;
+	int gid = i + xSize * j + xSize * ySize * k;
+	if (!isfinite(arrTest[gid]))
+		nanFlag[0] = true;
+}

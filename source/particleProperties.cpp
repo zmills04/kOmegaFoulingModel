@@ -79,7 +79,7 @@ void particleProperties::createPropertyArrays()
 
 		double Mpi = PI_NUMBER*D_p_real(i)*D_p_real(i)*vfd.rhoSoot / 4.;
 		Mpi *= p.DELTA_M;
-		Mp(i) = Mpi;
+		Mp(i) = Mpi; 
 
 		double F_poi = 625.*hamakerConst / 3. / D_p_real(i);
 		F_poi *= p.DELTA_F;
@@ -88,7 +88,7 @@ void particleProperties::createPropertyArrays()
 		double Dpi = D_p_real(i)*p.DELTA_L;
 		Dp(i) = Dpi;
 
-		double Vpi = Dp(i) * Dp(i) * PI_NUMBER / 4. / (1. - depPorosity);
+		double Vpi = Dp(i) * Dp(i) * PI_NUMBER / 4. * parVolMultiplier;
 		V_par(i) = Vpi;
 
 		double Tci = 4.*F_po(i)*R_d(i, 0) / (3. * PI_NUMBER * pow(Dp(i), 3.) * wallCorrection);
@@ -157,7 +157,7 @@ void particleProperties::loadParams()
 	yModSoot = p.getParameter("Youngs Modulus Soot", Y_MOD_SOOT);
 	mfpAir = p.getParameter("MFP Air", MEAN_FREE_PATH_AIR);
 	hamakerConst = p.getParameter("Hamaker Constant", HAMAKER_CONST);
-	depPorosity = p.getParameter("Deposit Porosity", DEP_POROSITY);
+	depPorosity = p.getParameter("Dep Porosity", DEP_POROSITY);
 	wallCorrection = p.getParameter("Wall Correction", WALL_CORRECTION);
 	liftCoeff = p.getParameter("Lift Coefficient", LIFT_COEFFICIENT);
 	numEachPar = p.getParameter("Num Each Par", NUM_EACH_PAR);
@@ -209,7 +209,7 @@ void particleProperties::saveParams()
 	p.setParameter("Youngs Modulus Soot", yModSoot);
 	p.setParameter("MFP Air", mfpAir);
 	p.setParameter("Hamaker Constant", hamakerConst);
-	p.setParameter("Deposit Porosity", depPorosity);
+	p.setParameter("Dep Porosity", depPorosity);
 	p.setParameter("Wall Correction", wallCorrection);
 	p.setParameter("Lift Coefficient", liftCoeff);
 	p.setParameter("Num Each Par", numEachPar);

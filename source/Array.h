@@ -518,6 +518,52 @@ public:
 	int getDeviceAllocFlag() { return Device_Alloc_Flag; }
 	int getclFlags() { return clFlags; }
 
+	bool checkForNans(bool readFromDevice = true)
+	{
+		if (readFromDevice)
+		{
+			ArrayBase<T>::read_from_buffer();
+		}
+
+		for (int i = 0; i < SizeX; i++)
+		{
+			for (int j = 0; j < SizeY; j++)
+			{
+				for (int k = 0; k < SizeZ; k++)
+				{
+					if (!isfinite(Array[i + FullSizeX * j + FullSizeX * FullSizeY * k]))
+						return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	bool checkForNans(int &iout, int &jout, int &kout, bool readFromDevice=true)
+	{
+		if (readFromDevice)
+		{
+			ArrayBase<T>::read_from_buffer();
+		}
+
+		for (int i = 0; i < SizeX; i++)
+		{
+			for (int j = 0; j < SizeY; j++)
+			{
+				for (int k = 0; k < SizeZ; k++)
+				{
+					if (!isfinite(Array[i + FullSizeX * j + FullSizeX * FullSizeY * k]))
+					{
+						iout = i;
+						jout = j;
+						kout = k;
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
 /////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////
 ///////////                                               ///////////

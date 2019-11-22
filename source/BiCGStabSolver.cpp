@@ -5,6 +5,22 @@
 #include "ReduceGenerator.h"
 //#include "BiCGStabGenerator.h"
 
+
+
+
+#define TEST_RESIDUAL_DEBUG(residual_)	if (isnan(residual_))\
+										{\
+											bVec_copy.save_txt_from_device();\
+											xVec_copy.save_txt_from_device();\
+											vlb.saveDebug();\
+										}
+
+
+
+
+
+
+
 int BiCGStabSolver::fullSize = 0;
 int BiCGStabSolver::colSize = 0; 
 int BiCGStabSolver::Xsize = 0;
@@ -307,6 +323,14 @@ void BiCGStabSolver::getCSRMeta()
 	meta_ptr->clear();
 }
 
+void BiCGStabSolver::CreateSolverWithVarTime(Array2Dd* macro_, Array2Dd* macroPrev_, std::function<void(void)>& resetTimeFunc_,
+	CSR_Inds* inds_, cl_command_queue* calcque_, int maxiters_, double reltol_, double abstol_)
+{
+	resetTimeFunc = resetTimeFunc_;
+	xVecPrev = macroPrev_;
+	resetTimeFlag = true;
+	CreateSolver(macro_, inds_, calcque_, maxiters_, reltol_, abstol_);
+}
 
 //size_t globalSizeCSRMV, globalSizeAXPBY;
 void BiCGStabSolver::CreateSolver(Array2Dd *macro_, CSR_Inds *inds_, cl_command_queue *calcque_, int maxiters_, double reltol_, double abstol_)
@@ -330,6 +354,18 @@ void BiCGStabSolver::CreateSolver(Array2Dd *macro_, CSR_Inds *inds_, cl_command_
 	std::string bname = Name + "_bVec";
 	std::string xname = Name + "_xVec";
 	std::string scalarname = Name + "_Scalar";
+
+#ifdef _DEBUG
+	std::string bVecName_copy = Name + "_bVec_copy";
+	std::string xVecName_copy = Name + "_xVec_copy";
+	bVec_copy.zeros(Xsize, XsizeFull, Ysize, Ysize);
+	xVec_copy.zeros(Xsize, XsizeFull, Ysize, Ysize);
+	bVec_copy.setName(bVecName_copy);
+	xVec_copy.setName(xVecName_copy);
+	bVec_copy.allocate_buffer_w_copy();
+	xVec_copy.allocate_buffer_w_copy();
+#endif
+
 
 	// Only want to call these once when a CSR_Inds instance is shared
 	// between BiCGStabSolver instances
@@ -364,6 +400,12 @@ void BiCGStabSolver::CreateSolver(Array2Dd *macro_, CSR_Inds *inds_, cl_command_
 	// Will be reducing this possibly, so allocating correct size
 	xVec->allocate_buffer_size(p.FullSize);
 	xVec->copy_to_buffer();
+
+	if (resetTimeFlag)
+	{
+		xVecPrev->allocate_buffer_size(p.FullSize);
+		xVecPrev->FreeHost();
+	}
 
 	// AXPBY kernel sizes
 	int blocksNum = (colSize + WORKGROUPSIZE_AXPBY - 1) / WORKGROUPSIZE_AXPBY;
@@ -409,24 +451,29 @@ void BiCGStabSolver::runReduce(RedKernelList &redlist_, cl_command_queue* que_, 
 	}
 }
 
-bool BiCGStabSolver::reduceAndCheckConvergence(cl_command_queue *que_, bool setInitialRes, int num_wait,
+bool BiCGStabSolver::reduceAndCheckConvergence(cl_command_queue *que_, int iternum, bool setInitialRes, int num_wait,
 	cl_event *wait, cl_event* evt)
 {
 	runReduce(bNorm, que_, num_wait, wait, evt);
 	scalarBuf.read_from_buffer_size(2);
 	double residual = scalarBuf(1) / scalarBuf(0);
 
-#ifdef _DEBUG
-	if (isnan(residual))
-	{
-		vlb.saveDebug();
-	}
-#endif
-
 	if (setInitialRes)
 	{
 		initialResidual = residual;
 	}
+
+	
+	if (resetTimeFlag & (isnan(residual)))
+	{
+		resetTimeFunc();
+		return true;
+	}
+
+#ifdef _DEBUG
+	TEST_RESIDUAL_DEBUG(residual)
+#endif
+
 	if (residual <= relTol || residual <= absTol * initialResidual)
 	{
 		return true;
@@ -440,16 +487,27 @@ bool BiCGStabSolver::reduceAndCheckConvergenceWithPrint(cl_command_queue* que_, 
 	runReduce(bNorm, que_);
 	scalarBuf.read_from_buffer_size(2);
 	double residual = scalarBuf(1) / scalarBuf(0);
-#ifdef _DEBUG
-	if (isnan(residual))
+
+	if (iterNum == 1)
 	{
-		vlb.saveDebug();
+		initialResidual = residual;
 	}
+
+
+	if (resetTimeFlag & (isnan(residual)))
+	{
+		resetTimeFunc();
+		return true;
+	}
+
+#ifdef _DEBUG
+	TEST_RESIDUAL_DEBUG(residual)
 #endif
 
 
+#ifdef PRINT_BICGSTAB_RESIDUALS
 	printf("Iteration %d Residual = %g\n", iterNum, residual);
-
+#endif
 	if (residual <= relTol || residual <= absTol * initialResidual)
 	{
 		return true;
@@ -482,9 +540,52 @@ void BiCGStabSolver::printScalars()
 
 }
 
+void BiCGStabSolver::copyToPrevSolution()
+{
+	if (resetTimeFlag)
+	{
+		xVecPrev->enqueue_copy_to_buffer_blocking(xVec->get_buffer());
+	}
+}
+
+void BiCGStabSolver::copyFromPrevSolution()
+{
+	if (resetTimeFlag)
+	{
+		xVec->enqueue_copy_to_buffer_blocking(xVecPrev->get_buffer());
+	}
+}
+
 void BiCGStabSolver::solve()
 {
-
+#ifdef _DEBUG
+	bVec_copy.enqueue_copy_to_buffer_blocking(bVec.get_buffer());
+	xVec_copy.enqueue_copy_to_buffer_blocking(xVec->get_buffer());
+	if (p.Time > 40000)
+	{
+		if (bVec.checkForNans() || xVec->checkForNans() || Amat.checkForNans())
+		{
+			int iout, jout, kout;
+			if (bVec.checkForNans(iout, jout, kout, false))
+			{
+				std::cout << "nan in bVec at (" << iout << ", " <<
+					jout << ", " << kout << ") at time" << p.Time << std::endl;
+			}
+			if (Amat.checkForNans(iout, jout, kout, false))
+			{
+				std::cout << "nan in Amat at (" << iout << ", " <<
+					jout << ", " << kout << ") at time" << p.Time << std::endl;
+			}
+			if (xVec->checkForNans(iout, jout, kout, false))
+			{
+				std::cout << "nan in xVec at (" << iout << ", " <<
+					jout << ", " << kout << ") at time" << p.Time << std::endl;
+			}
+			vlb.saveDebug();
+		}
+	}
+#endif
+	avgRes = 0.;
 
 	scalarBuf.FillBuffer(1.);
 	bNorm.setOutputIndex(indNormB);
@@ -500,10 +601,7 @@ void BiCGStabSolver::solve()
 	double h_norm_b = scalarBuf(0);
 
 #ifdef _DEBUG
-	if (isnan(h_norm_b))
-	{
-		vlb.saveDebug();
-	}
+	TEST_RESIDUAL_DEBUG(h_norm_b)
 #endif
 
 	if (h_norm_b <= 1.0e-16)
@@ -549,7 +647,7 @@ void BiCGStabSolver::solve()
 		shAXPBY(calcQue);
 
 		// Step f7
-#ifdef PRINT_BICGSTAB_RESIDUALS
+#if defined(PRINT_BICGSTAB_RESIDUALS) | defined(_DEBUG)
 		if (reduceAndCheckConvergenceWithPrint(calcQue, iter))
 #else
 		if (reduceAndCheckConvergence(calcQue, firstIter))
@@ -682,7 +780,9 @@ bool BiCGStabSolver::saveAxb_w_indicies_from_device()
 {
 	bool ret = savetxt_from_device();
 	ret &= save_bvec_from_device();
-	ret &= save_w_indicies(Name.append("_A"), true);
+	std::string nameOut = Name;
+	nameOut.append("_A");
+	ret &= save_w_indicies(nameOut, true);
 	return ret;
 }
 
@@ -690,7 +790,9 @@ bool BiCGStabSolver::saveAxb_w_indicies_from_device_as_bin()
 {
 	bool ret = xVec->save_bin_from_device(Name);
 	ret &= bVec.save_bin_from_device();
-	ret &= save_w_indicies_as_bin(Name + "_A", true);
+	std::string nameOut = Name;
+	nameOut.append("_A");
+	ret &= save_w_indicies_as_bin(nameOut, true);
 	return ret;
 }
 

@@ -50,7 +50,7 @@ public:
 	cl_command_queue *calcQue; // can be different for each sparse solver
 	
 	std::string Name;
-
+	
 	static int fullSize; // size of vectors including padding(>= XsizeFull*nY)
 	static int colSize; // actual size of vectors w/out padding, and size(IA) - 1
 	int NNZ; // number of nonzeros sinze of A and JA
@@ -71,6 +71,11 @@ public:
 	// instances, but right now, its not currently working, so use a different one for each
 	CSR_Inds *Inds;
 
+
+#ifdef _DEBUG
+	Array2Dd bVec_copy, xVec_copy;
+#endif
+
 	// A matrix
 	Array1Dd Amat;
 
@@ -78,7 +83,13 @@ public:
 
 	// Actual values of macroscopic variable being solved for (pointer to array in containing class)
 	Array2Dd *xVec; // also used as storage for h vector during iterations
-
+	
+	// used for when resetting time after solution blows up
+	Array2Dd* xVecPrev; 
+	bool resetTimeFlag;
+	std::function<void(void)> resetTimeFunc;
+	
+	
 	// Stores scalars 
 	// { norm_b, norm_r, norm_s, rho, omega, alpha, beta }
 	Array1Dd scalarBuf;
@@ -141,14 +152,14 @@ public:
 	thinKerWrapper addKer, subKer, multKer, divKer;
 
 
-
+	double avgRes;
 
 	// Step f11: uses bNorm from step 1
 
 	enum ScalarIndex { indNormB = 0, indNormR = 1, indNormS = 2, indRho = 3, indOmega = 4, indAlpha = 5, indBeta = 6 };
 	enum { C, E, W, N, S };
 
-	BiCGStabSolver() : scalarBuf(7, "scalarBuf")
+	BiCGStabSolver() : scalarBuf(7, "scalarBuf"), resetTimeFlag(false)
 	{
 		rowBlocks = nullptr;
 	}
@@ -214,15 +225,24 @@ public:
 	//size_t globalSizeCSRMV, globalSizeAXPBY;
 	void CreateSolver(Array2Dd *macro_, CSR_Inds *inds_, cl_command_queue *calcque_, int maxiters_, double reltol_, double abstol_);
 
+	//size_t globalSizeCSRMV, globalSizeAXPBY;
+	void CreateSolverWithVarTime(Array2Dd* macro_, Array2Dd* macroPrev_, std::function<void(void)>& resetTimeFunc_,
+		CSR_Inds* inds_, cl_command_queue* calcque_, int maxiters_, double reltol_, double abstol_);
+
+
 	void runReduce(RedKernelList &redlist_, cl_command_queue* que_, int num_wait = 0,
 		cl_event *wait = NULL, cl_event* evt = NULL);
 
-	bool reduceAndCheckConvergence(cl_command_queue *que_, bool setInitialRes = false, int num_wait = 0,
+	bool reduceAndCheckConvergence(cl_command_queue *que_, int iternum, bool setInitialRes = false, int num_wait = 0,
 		cl_event *wait = NULL, cl_event* evt = NULL);
 
 	bool reduceAndCheckConvergenceWithPrint(cl_command_queue* que_, int iterNum);
 
 	void copy_buffers(cl_mem *src_buf, cl_mem *dest_buf);
+
+	void copyToPrevSolution();
+
+	void copyFromPrevSolution();
 
 	void solve();
 

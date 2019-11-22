@@ -14,6 +14,45 @@
 // Turbulent viscosity is set to zero at wall (as expected from theory) and calculated from
 // k and omega (and other flow parameters as well) at all fluid nodes during collision step.
 
+//void kOmega::Solve()
+//{
+//	kOmegaUpdateDiffCoeffs.call_kernel();
+//	kOmegaUpdateCoeffs.call_kernel();
+//	clFinish(LBQUEUE);
+//	//if (saveFlagDebug)
+//	//{
+//	//	vlb.saveDebug();
+//	//	saveFlagDebug = false;
+//	//}
+//	Kappa.solve();
+//	Omega.solve();
+//}
+
+void kOmega::Solve()
+{
+	timeSinceTimeStepChange++;
+	if (timeSinceTimeStepChange >= timeBtwIncreaseTimeStep)
+		doubleTimeStep();
+
+	Kappa.copyToPrevSolution();
+	Omega.copyToPrevSolution();
+
+	curIter = 0;
+	while (curIter < stepsPerLB)
+	{
+		kOmegaUpdateDiffCoeffs.call_kernel();
+		kOmegaUpdateCoeffs.call_kernel();
+		clFinish(LBQUEUE);
+		//if (saveFlagDebug)
+		//{
+		//	vlb.saveDebug();
+		//	saveFlagDebug = false;
+		//}
+		Kappa.solve();
+		Omega.solve();
+		curIter++;
+	}
+}
 
 
 void kOmega::allocateArrays()
@@ -35,6 +74,8 @@ void kOmega::allocateArrays()
 	dKdO_array.zeros(p.nX, p.XsizeFull, p.nY, p.nY, 2, 2); //2*(1-f1)*sigma_w2/omega*dk/dxi
 
 	WallD.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
+	kappaPrev.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
+	omegaPrev.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
 }
 
 void kOmega::allocateBuffers()
@@ -159,7 +200,9 @@ void kOmega::ini()
 
 	sourceGenerator::SourceInstance()->addFile2Kernel("kOmegaKernels.cl");
 	
-
+	stepsPerLB = 1;
+	timeSinceTimeStepChange = 0;
+	timeStep = p.dTlb;
 
 	// initialize WallD array
 	iniWallD();
@@ -181,14 +224,17 @@ void kOmega::iniKOmegaArrays()
 	// set initial values of k, omega and nut
 	setInitialValues();
 
+
+	std::function<void(void)> halveTimePtr = std::bind(&kOmega::halveTimeStep, this);
+
 	// Initialize solver classes for k and omega
 	kOmegaInds.ini(p.nX, p.XsizeFull, p.nY, p.nY, &vls.nType);
-	Kappa.CreateSolver(&Kappa_array, &kOmegaInds, LBQUEUE_REF,
-		kappaMaxIters, kappaMaxRelTol, kappaMaxAbsTol);
+	Kappa.CreateSolverWithVarTime(&Kappa_array, &kappaPrev, halveTimePtr,
+		&kOmegaInds, LBQUEUE_REF, kappaMaxIters, kappaMaxRelTol, kappaMaxAbsTol);
 
 	//OmegaInds.ini(p.nX, p.XsizeFull, p.nY, p.nY, &vls.nType);
-	Omega.CreateSolver(&Omega_array, &kOmegaInds, LBQUEUE_REF,
-		omegaMaxIters, omegaMaxRelTol, omegaMaxAbsTol);
+	Omega.CreateSolverWithVarTime(&Omega_array, &omegaPrev, halveTimePtr,
+		&kOmegaInds, LBQUEUE_REF, omegaMaxIters, omegaMaxRelTol, omegaMaxAbsTol);
 
 	// initialize reduce classes for k and omega
 	sumOmega.ini(*Omega.getMacroArray(), vlb.restartRunFlag, "redOmega");
@@ -225,10 +271,6 @@ void kOmega::iniWallD()
 			WallD(i,j) = findMinDist(botSearchInds, topSearchInds, nLoc);
 		}
 	}
-
-#ifdef DEBUG_TURBARR
-	WallD.savetxt("WallD");
-#endif
 }
 
 
@@ -257,6 +299,7 @@ void kOmega::loadParams()
 
 	kIniVal = p.getParameter<double>("K Initial Val", -1.);
 	omegaIniVal = p.getParameter<double>("K Initial Val", -1.);
+	maxTurbVisc = p.getParameter("Max Turb Visc", MAX_TURB_VISC);
 }
 
 
@@ -266,6 +309,34 @@ void kOmega::renameSaveFiles()
 	Omega.xVec->RenameTxtFile();
 }
 
+void kOmega::halveTimeStep()
+{
+	stepsPerLB *= 2;
+	timeStep /= 2.0;
+#ifdef _DEBUG
+	std::cout << "Halving kOmega Solver timestep to " << timeStep << std::endl;
+#endif
+	kOmegaUpdateCoeffs.set_argument(21, &timeStep);
+	Kappa.copyFromPrevSolution();
+	Omega.copyFromPrevSolution();
+	curIter = 0;
+	timeSinceTimeStepChange = 0;
+}
+
+void kOmega::doubleTimeStep()
+{
+	timeSinceTimeStepChange = 0;
+	if (stepsPerLB == 1)
+	{
+		return;
+	}
+	stepsPerLB /= 2;
+	timeStep *= 2.0;
+#ifdef _DEBUG
+	std::cout << "Doubling kOmega Solver timestep to " << timeStep << std::endl;
+#endif
+	kOmegaUpdateCoeffs.set_argument(21, &timeStep);
+}
 
 void kOmega::save2file()
 {
@@ -305,8 +376,10 @@ void kOmega::saveDebug(int saveFl)
 	if (saveFl == koDbgSave || saveFl == DbgSave || saveFl == koDbgSave2)
 	{
 		std::vector<std::string> koDbgNames2{ "diffk_dx", "diffk_dy", "diffo_dx", "diffo_dy",
-			"Jx_omega", "Jy_omega", "Jx_k", "Jy_k", "Pk", "Sc", "Kc", "Ke", "Kw", "Kn", "Ks",
-			"Ksrc", "Wc", "We", "Ww", "Wn", "Ws", "Wsrc" };
+			"Jx_omega", "Jy_omega", "Jx_k", "Jy_k", "Pk", "PkAlt", "Sc", "Kc", "Ke", "Kw", "Kn", "Ks",
+			"Ksrc", "Wc", "We", "Ww", "Wn", "Ws", "Wsrc", "Xe_coeff", "Xw_coeff", "Xc_coeff",
+			"Yn_coeff", "Ys_coeff", "Yc_coeff", "Xe2_coeff", "Xw2_coeff", "Xc2_coeff",
+			"Yn2_coeff", "Ys2_coeff", "Yc2_coeff" };
 
 		koDbgArr2.read_from_buffer();
 
@@ -328,13 +401,13 @@ void kOmega::saveDebug(int saveFl)
 	//Fval_array.save_txt_from_device();
 	//Diff_Omega.save_txt_from_device();
 	//Diff_K.save_txt_from_device();
-	//Nut_array.save_txt_from_device();
+	Nut_array.save_txt_from_device();
 	WallD.save_txt_from_device();
 	//dKdO_array.save_txt_from_device_as_multi2D("dKdO");
 	//Sxy_array.save_txt_from_device_as_multi2D("Sxy");
-	Omega.saveAxb_w_indicies_from_device();
-	Kappa.saveAxb_w_indicies_from_device();
-
+	//Omega.saveAxb_w_indicies_from_device();
+	//Kappa.saveAxb_w_indicies_from_device();
+	//vls.saveDebug();
 
 
 //	save2file();
@@ -352,7 +425,7 @@ void kOmega::saveRestartFiles()
 void kOmega::saveParams()
 {
 	p.setParameter("Use Turb Model", kOmegaSolverFlag);
-
+	p.setParameter("Max Turb Visc", maxTurbVisc);
 	p.setParameter("Kappa Max Rel Tol", kappaMaxRelTol);
 	p.setParameter("Kappa Max Abs Tol", kappaMaxAbsTol);
 	p.setParameter("Kappa Max Iterations", kappaMaxIters);
@@ -424,6 +497,14 @@ void kOmega::setInitialValues()
 
 void kOmega::setKernelArgs()
 {
+#ifdef DEBUG_TURBARR
+	koDbgArr1.zeros(p.nX, p.XsizeFull, p.nY, p.nY, 5, 5);
+	koDbgArr2.zeros(p.nX, p.XsizeFull, p.nY, p.nY, 35, 35);
+	koDbgArr1.allocate_buffer_w_copy();
+	koDbgArr2.allocate_buffer_w_copy();
+#endif
+
+
 
 	cl_int ind = 0;
 	int zer = 0;
@@ -466,7 +547,7 @@ void kOmega::setKernelArgs()
 	kOmegaUpdateCoeffs.set_argument(ind++, vls.lsMap.get_buf_add());
 	kOmegaUpdateCoeffs.set_argument(ind++, vtr.wallShear.Tau.get_buf_add());
 	kOmegaUpdateCoeffs.set_argument(ind++, vls.nType.get_buf_add());
-	kOmegaUpdateCoeffs.set_argument(ind++, &p.dTlb);
+	kOmegaUpdateCoeffs.set_argument(ind++, &timeStep);
 #ifdef DEBUG_TURBARR
 	kOmegaUpdateCoeffs.set_argument(ind++, koDbgArr2.get_buf_add());
 #endif
@@ -506,9 +587,9 @@ void kOmega::setSourceDefines()
 #ifdef DEBUG_TURBARR
 	SETSOURCEDEFINE, "DEBUG_ARRAYS");
 #endif
-#ifdef DEBUG_TURBARR
-	SETSOURCEDEFINE, "DISABLE_TURBULENT_VISC");
-#endif
+//#ifdef DEBUG_TURBARR
+//	SETSOURCEDEFINE, "DISABLE_TURBULENT_VISC");
+//#endif
 
 	SETSOURCEDEFINE, "RE_TURBULENT", ReTurbVal);
 	SETSOURCEDEFINE, "UTAU_VAL", UtauVal);
@@ -519,6 +600,7 @@ void kOmega::setSourceDefines()
 	SETSOURCEDEFINE, "WALLD_SEARCH_RADIUS", wallDSearchRar);
 	if(kOmegaSolverFlag)
 		SETSOURCEDEFINE, "USING_KOMEGA_SOLVER");
+	SETSOURCEDEFINE, "MAX_TURB_VISC", maxTurbVisc);
 
 }
 

@@ -116,7 +116,9 @@
 // in kernels outside of initialization of variables and ifdefs will avoid need for if statements everywhere)
 
 
-
+// TODO: Set all diagonal elements to 1.0 at beginning of simulation
+//		Since preconditioning with diagonal preconditioner, these elements will
+//		always be 1.
 __kernel void Update_T_Coeffs_Implicit(__global int* __restrict__ IndArr,
 	__global NTYPE_TYPE* __restrict__ Map,
 	__global double* __restrict__ dXcur,
@@ -149,8 +151,12 @@ __kernel void Update_T_Coeffs_Implicit(__global int* __restrict__ IndArr,
 	if (ntype & M0_SOLID_NODE)
 		return;
 
-	double dx_e = dXcur[gid], dx_w = dXcur[gid + DIST_SIZE], dx_c = dx_e+dx_w;
-	double dy_n = dXcur[gid + DIST_SIZE * 2], dy_s = dXcur[gid + DIST_SIZE * 3], dy_c = dy_n+dy_s;
+	//double dx_e = dXcur[gid], dx_w = dXcur[gid + DIST_SIZE], dx_c = dx_e+dx_w;
+	//double dy_n = dXcur[gid + DIST_SIZE * 2], dy_s = dXcur[gid + DIST_SIZE * 3], dy_c = dy_n+dy_s;
+
+	double dx_e = max(dXcur[gid], 0.1), dx_w = max(dXcur[gid + DIST_SIZE], 0.1), dx_c = max(dx_e + dx_w, 0.1);
+	double dy_n = max(dXcur[gid + DIST_SIZE * 2], 0.1), dy_s = max(dXcur[gid + DIST_SIZE * 3], 0.1), dy_c = max(dy_n + dy_s, 0.1);
+
 
 	double dXe = dx_w / (dx_e * dx_c), dXw = -dx_e / (dx_w * dx_c), dXc = (dx_e - dx_w) / (dx_e * dx_w);
 	double dYn = dy_s / (dy_n * dy_c), dYs = -dy_n / (dy_s * dy_c), dYc = (dy_n - dy_s) / (dy_n * dy_s);
@@ -158,7 +164,19 @@ __kernel void Update_T_Coeffs_Implicit(__global int* __restrict__ IndArr,
 	double dX2e = 2. / (dx_e * dx_c), dX2w = 2. / (dx_w * dx_c), dX2c = -2. / (dx_e * dx_w);
 	double dY2n = 2. / (dy_n * dy_c), dY2s = 2. / (dy_s * dy_c), dY2c = -2. / (dy_n * dy_s);
 
+	if (fabs(dXc) > 10.)
+	{
+		dXe = 1.0 / dx_c;
+		dXw = -1.0 / dx_c;
+		dXc = 0.0;		
+	}
 
+	if (fabs(dYn) > 10.)
+	{
+		dYn = 1.0 / dy_c;
+		dYs = -1.0 / dy_c;
+		dYc = 0.0;
+	}
 
 	
 
@@ -214,7 +232,7 @@ __kernel void Update_T_Coeffs_Implicit(__global int* __restrict__ IndArr,
 		dYs * iNut[gid - CHANNEL_LENGTH_FULL] + dYc * alphatVal));
 	alphaVal += alphatVal;
 
-	double Tsrc = Temp[gid];
+	double Tsrc = min(max(0.0, Temp[gid]), TFD_X_IN_VAL);
 	double Ccoeff = 1. + DTFD * (Jx * dXc + Jy * dYc - alphaVal * (dX2c + dY2c));
 
 
@@ -223,32 +241,40 @@ __kernel void Update_T_Coeffs_Implicit(__global int* __restrict__ IndArr,
 
 	// No BCs to handle for south coefficient, so calculate and set element in A
 	// directly
-	Amat[IndArr[gid + DIST_SIZE * 4]] = DTFD * (Jy * dYs - alphaVal * dY2s);
-
+	Scoeff = DTFD * (Jy * dYs - alphaVal * dY2s);
+	
 	// W coefficient is 0 for inlet nodes, so Wcoeff must be multiplied
 	// by the inlet temperature and moved to the LHS of equation
 	double Wcoeff = DTFD * (Jx * dXw - alphaVal * dX2w);
-	if (i > 0)
-		Amat[IndArr[gid + DIST_SIZE * 2]] = Wcoeff;
-	else
-		Tsrc -= TFD_X_IN_VAL * Wcoeff;
-
+	Tsrc -= (i == 0) ? (TFD_X_IN_VAL * Wcoeff) : 0.;
+	
 	// E coefficient is 0 for outlet nodes and Ecoeff is added to
 	// Ccoeff to essentially set Temp of east node to temp of outlet node
 	double Ecoeff = DTFD * (Jx * dXe - alphaVal * dX2e);
+	Ccoeff += (i == CHANNEL_LENGTH-1) ? (Ecoeff) : 0.;
+
+
+
+	// now that Ccoeff will not change, setting Amat values with all values divided by Ccoeff
+	// Ccoeff inverted to multiply other coefficients by rather than dividing it
+	Ccoeff = 1. / Ccoeff;
+
+	Amat[IndArr[gid + DIST_SIZE * 4]] = Scoeff * Ccoeff;
+
+	if (i > 0)
+		Amat[IndArr[gid + DIST_SIZE * 2]] = Wcoeff * Ccoeff;
+
 	if (i < CHANNEL_LENGTH - 1)
-		Amat[IndArr[gid + DIST_SIZE]] = Ecoeff;
-	else
-		Ccoeff += Ecoeff;
+		Amat[IndArr[gid + DIST_SIZE]] = Ecoeff * Ccoeff;
 
 	// Set C coefficient after checking to see if Ecoeff is added to it
-	Amat[IndArr[gid]] = Ccoeff;
+	Amat[IndArr[gid]] = 1.;
 
 	// North coefficient Same situation as S coefficient, so set directly
-	Amat[IndArr[gid + DIST_SIZE * 3]] = DTFD*(Jy * dYn - alphaVal * dY2n);
+	Amat[IndArr[gid + DIST_SIZE * 3]] = DTFD*(Jy * dYn - alphaVal * dY2n) * Ccoeff;
 
 	// Set corresponding element in b vector.
-	bvec[gid] = Tsrc;
+	bvec[gid] = Tsrc * Ccoeff;
 }
 
 

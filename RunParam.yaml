@@ -10,7 +10,7 @@ Stop Time: 200000000
 TR Steps Per LB: 5
 TR Wall Steps Per LB: 3
 T Steps Per LB: 1
-Clumping Time: 100000
+Clumping Time: 10000000
 Save Bin Step: 1
 Save Avgs Start Time: 0
 Save Nu Start Time: 0
@@ -21,7 +21,7 @@ Save Avgs Num Steps: 2000
 Save Nu Num Steps: 2000
 Save Shear Num Steps: 2000
 Save IO Num Steps: 2000
-Dump Num Steps: 500
+Dump Num Steps: 1000
 Dump Steps Per Save: 1
 Start Dump Step Save: 0
 Start Dump Step Save: 0
@@ -30,11 +30,11 @@ Display Signal Freq: 20000
 currentDumpStep: 1
 nextDumpSave: 1
 nextDumpBin: 1
-Next_Clump_Time: 100000
+Next_Clump_Time: 10000000
 nextSaveAvgTime: 100000
 nextSaveNuTime: 100000
 nextSaveSSTime: 100000
-nextDumpStepTime: 400000
+nextDumpStepTime: 200000
 nextSaveIOTime: 100000
 Use OpenGL: true
 ---
@@ -61,6 +61,7 @@ Use Turb Vel BC: true
 load Vel Text: true
 Geometric Penalty Factor: 1
 Use Turb Model: true
+Max Turb Visc: 10
 Kappa Max Rel Tol: 0.0001
 Kappa Max Abs Tol: 1e-07
 Kappa Max Iterations: 1000
@@ -84,7 +85,7 @@ Calculate Nu: true
 Save Macros On Start: false
 Solve Steady Temp: true
 Use CHT Correction: true
-Pr Number: 0
+Pr Number: 0.708
 Pr Number: 0.9
 K Soot: 0.057
 K air: 0.042
@@ -145,15 +146,15 @@ Poisson Number Soot: 0.126
 Youngs Modulus Soot: 35000000000
 MFP Air: 6.8e-08
 Hamaker Constant: 1e-20
-Deposit Porosity: 0.98
+Dep Porosity: 0.92
 Wall Correction: 1.7
 Lift Coefficient: 81.2
-Num Each Par: 50
+Num Each Par: 10
 Dp Dists: [0.0110683172, 0.0753202321, 0.2190854271, 0.4078159151, 0.5895091551, 0.7342808391, 0.8366463241, 0.9036727872, 0.945448437, 0.9707091428, 0.9857431651, 0.99466071788, 1.00000000073]
 Par Diameters: [5e-08, 7e-08, 9e-08, 1.1e-07, 1.3e-07, 1.5e-07, 1.7e-07, 1.9e-07, 2.1e-07, 2.3e-07, 2.5e-07, 2.7e-07, 2.9e-07]
 Paricles Per GL Obj: 1
 GL Use Gridlines: true
-GL Point Sizes: 2
+GL Point Sizes: 5
 GL Line Sizes: 2
 GL Screen Width: 1800
 GL Screen Height: 1000
@@ -165,5 +166,6 @@ Update TR Active Freq: 20
 Neighs Per Side Smoothing: 3
 Number IO Indicies: 30
 Smoothing Percent: 0.05
+Min dX Dist: 0.001
 Weight Kernel: gaussian
 ...

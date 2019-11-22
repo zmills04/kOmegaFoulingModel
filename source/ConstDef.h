@@ -20,7 +20,7 @@
 
 #define CHECK_KERNEL_STATUS
 #define PRINT_ERROR_MESSAGES		
-//#define DEBUG_TURBARR
+#define DEBUG_TURBARR
 //#define PRINT_BICGSTAB_RESIDUALS
 
 
@@ -126,7 +126,7 @@
 #endif
 
 #define DUMP_STEP_START					(0)
-#define DUMP_STEP_NUM					(500)
+#define DUMP_STEP_NUM					(1000)
 #define DUMP_STEPS_PER_SAVE				(1)
 #define DUMP_STEP_START_SAVE			(0)
 #define DUMP_STEPS_PER_DUMP_BIN			(1)
@@ -146,7 +146,7 @@
 #define LB_STEPS_PER_TR_WALL		(3)
 #define LB_STEPS_PER_FD				(1)
 
-#define CLUMP_TIME					(100000)
+#define CLUMP_TIME					(10000000)
 /////////////////////////////////////////////////////////////
 //////              Fluid Solver Params                //////
 /////////////////////////////////////////////////////////////
@@ -188,7 +188,7 @@
 #define GEOMETRIC_PENALTY_FACTOR 1.0
 #define MAX_TURB_VISC_VALUE			1.0
 #define ROUGHNESS_FACTOR		9.
-
+#define MAX_TURB_VISC			1.0e1
 // Keep MU_NUMBER and FORCE_TERM_VAL as functions. (Do not set those directly here)
 #define UX_INLET				(0.02)
 #define RE_NUMBER				(10800.)
@@ -281,7 +281,7 @@
 #define STOP_DIST_X				1900
 #define K_coeff					0.4711
 
-#define NUM_EACH_PAR			(1.0) ////Min number of particles represented in a given Particle Size
+#define NUM_EACH_PAR			(10.) ////Min number of particles represented in a given Particle Size
 #define PARTICLE_VOL_MULTIPLIER	(NUM_EACH_PAR/(1. - DEP_POROSITY))
 #define TIME_BEFORE_RERELEASE	( 200000 / LB_STEPS_PER_TR_WALL )   //After the particle contacts surface this many times before fully depositing it is re-released
 #define TIME_BEFORE_STICK		( 20000 / LB_STEPS_PER_TR_WALL )
@@ -291,7 +291,7 @@
 #define SURF_ENERGY_SOOT			0.15
 #define Y_MOD_SOOT					(35e9)
 #define POISSON_SOOT				0.126
-#define DEP_POROSITY				0.98
+#define DEP_POROSITY				0.90//0.98
 #define THERMAL_CONDUCTIVITY_FOUL	0.057	//W/(m*K)
 #define DENSITY_SOOT				35.      //Kg/m^3
 #define	HAMAKER_CONST				1.e-20
@@ -353,7 +353,7 @@
 #define FL_SAVE_ON_START	false
 #define FL_WEIGHT_KERNEL		"Gaussian"
 
-#define UPDATE_TIME				(5000)
+#define UPDATE_TIME				(1000)
 #define NUM_INLET_OUTLET_NODES	30
 #define LS_SPACING				1.
 #define NUM_UPDATES_BTW_SMOOTHING	20
