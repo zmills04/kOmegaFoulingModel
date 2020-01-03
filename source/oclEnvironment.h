@@ -25,12 +25,14 @@
 #define TRQUEUE_REF		clEnv::instance()->getTRqueue()
 #define CLCONTEXT		*clEnv::instance()->getContext()
 #define CLCONTEXT_REF	clEnv::instance()->getContext()
+#define CLDEVICE		*clEnv::instance()->getDevice()
+#define CLDEVICE_REF	clEnv::instance()->getDevice()
 #define FINISH_QUEUES	clEnv::instance()->finishQueues()
 
 class clEnv
 {
 public:
-	enum programType { ReduceType = 0, BaseType = 1, BiCGSType = 2 };
+	enum programType { ReduceType = 0, BaseType = 1, BiCGSType = 2, GMRESType = 3 };
 	
 	static clEnv *instance()
 	{
@@ -101,7 +103,6 @@ public:
 		}
 		iniQueues();
 		LOGMESSAGE("openCL queues initialized");
-
 	}
 
 	void iniCLGLContext();

@@ -25,7 +25,7 @@ void Shift_walls(__global uint* __restrict__ BLdep,
 
 	for (int j = 0; j < NUM_PAR_SIZES; j++)
 	{
-		uint CurBLstart = BLstart + VTR_SIZE_BLDEP * j;
+		uint CurBLstart = BLstart + FL_NUM_ACTIVE_NODES * j;
 		double8 Depf = convert_double8((uint8)(BLdep[CurBLstart], BLdep[CurBLstart + 1],
 			BLdep[CurBLstart + 2], BLdep[CurBLstart + 3],
 			BLdep[CurBLstart + 4], BLdep[CurBLstart + 5],
@@ -33,7 +33,7 @@ void Shift_walls(__global uint* __restrict__ BLdep,
 
 		double disttemp = dot(Depf.lo, WeightL) + dot(Depf.hi, WeightR);
 		disttemp += BLdep_tot[i + FL_NUM_ACTIVE_NODES * j];
-		BLdep_tot[i + FL_NUM_ACTIVE_NODES*j] = disttemp;
+		BLdep_tot[i + FL_NUM_ACTIVE_NODES * j] = disttemp;
 		disp += (disttemp * Par_multiplier[j]);
 	}
 	flDisp[i] = disp;
@@ -43,7 +43,8 @@ void Shift_walls(__global uint* __restrict__ BLdep,
 
 __kernel __attribute__((reqd_work_group_size(WORKGROUPSIZE_FL_SHIFT, 1, 1)))
 void Smooth_walls1(__global double* __restrict__ BLdep_tot,
-	__global double* __restrict__ BLdep_tot2)
+	__global double* __restrict__ BLdep_tot2,
+	__global uint* __restrict__ blInds)
 {
 	int i = get_global_id(0);
 
@@ -60,10 +61,10 @@ void Smooth_walls1(__global double* __restrict__ BLdep_tot,
 		int k = kkstart;
 		while (k < kkstop)
 		{
-			Depf += BLdep_tot[k + NUM_PAR_SIZES * j] * PERCENT_USED_IN_SMOOTHING;
+			Depf += BLdep_tot[k + FL_NUM_ACTIVE_NODES * j] * PERCENT_USED_IN_SMOOTHING;
 			k++;
 		}
-		BLdep_tot2[i + NUM_PAR_SIZES * j] = PERCENT_NOT_USED_IN_SMOOTHING * BLdep_tot[i + NUM_PAR_SIZES * j] + Depf / num_locs;
+		BLdep_tot2[i + FL_NUM_ACTIVE_NODES * j] = PERCENT_NOT_USED_IN_SMOOTHING * BLdep_tot[i + FL_NUM_ACTIVE_NODES * j] + Depf / num_locs;
 	}
 }
 
@@ -84,7 +85,7 @@ void Smooth_walls2(__global double* __restrict__ BLdep_tot,
 
 	for (int j = 0; j < NUM_PAR_SIZES; j++)
 	{
-		disp += (BLdep_tot[i + NUM_PAR_SIZES * j] * Par_multiplier[j]);
+		disp += (BLdep_tot[i + FL_NUM_ACTIVE_NODES * j] * Par_multiplier[j]);
 	}
 
 	flDisp[i] = disp;

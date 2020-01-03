@@ -207,7 +207,7 @@
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <DisableSpecificWarnings>4068;26495;26439;%(DisableSpecificWarnings)</DisableSpecificWarnings>
-      <AdditionalIncludeDirectories>C:\Program Files %28x86%29\OCL_SDK_Light\include;C:\Users\Grant\Documents\Visual Studio 2013\Projects\clBlas_build\package\include;C:\Users\Grant\Downloads\clSPARSE-master\release\clSPARSE-package\include;C:\Users\Grant\YAML_CPP_DEBUG\include;C:\Users\zmj\Documents\OCL_SDK_Light\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Program Files %28x86%29\OCL_SDK_Light\include;C:\Users\Grant\Documents\Visual Studio 2013\Projects\clBlas_build\package\include;C:\Users\Grant\Downloads\clSPARSE-master\release\clSPARSE-package\include;C:\Users\Grant\YAML_CPP_DEBUG\include;C:\Users\zmj\Documents\OCL_SDK_Light\include;C:\Users\Grant\Downloads\ViennaCL-1.7.1\ViennaCL-1.7.1</AdditionalIncludeDirectories>
       <OpenMPSupport>true</OpenMPSupport>
     </ClCompile>
     <Link>
@@ -446,6 +446,8 @@
     <ClCompile Include="source\clVariablesLB.cpp" />
     <ClCompile Include="source\clVariablesLS.cpp" />
     <ClCompile Include="source\clVariablesTR.cpp" />
+    <ClCompile Include="source\GMRESGenerator.cpp" />
+    <ClCompile Include="source\GMRESSolver.cpp" />
     <ClCompile Include="source\HelperFuncs.cpp" />
     <ClCompile Include="source\Kernels.cpp" />
     <ClCompile Include="source\kOmega.cpp" />
@@ -477,6 +479,8 @@
     <ClInclude Include="source\clVariablesTR.h" />
     <ClInclude Include="source\ConstDef.h" />
     <ClInclude Include="source\foulStructs.h" />
+    <ClInclude Include="source\GMRESGenerator.h" />
+    <ClInclude Include="source\GMRESSolver.h" />
     <ClInclude Include="source\HelperFuncs.h" />
     <ClInclude Include="source\Kernels.h" />
     <ClInclude Include="source\kOmega.h" />

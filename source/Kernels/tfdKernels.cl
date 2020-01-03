@@ -119,17 +119,17 @@
 // TODO: Set all diagonal elements to 1.0 at beginning of simulation
 //		Since preconditioning with diagonal preconditioner, these elements will
 //		always be 1.
-__kernel void Update_T_Coeffs_Implicit(__global int* __restrict__ IndArr,
-	__global NTYPE_TYPE* __restrict__ Map,
-	__global double* __restrict__ dXcur,
-	__global double* __restrict__ Amat,
-	__global double* __restrict__ bvec,
-	__global double *__restrict__ Temp,
-	__global double* __restrict__ dAlpha,
-	__global double *__restrict__ ivx,
-	__global double *__restrict__ ivy,
+__kernel void Update_T_Coeffs_Implicit(__global int* __restrict__ IndArr,//0
+	__global NTYPE_TYPE* __restrict__ Map,//1
+	__global double* __restrict__ dXcur,//2
+	__global double* __restrict__ Amat,//3
+	__global double* __restrict__ bvec,//4
+	__global double *__restrict__ Temp,//5
+	__global double* __restrict__ dAlpha,//6
+	__global double *__restrict__ ivx,//7
+	__global double *__restrict__ ivy,//8
 #ifdef USING_KOMEGA_SOLVER
-	__global double* __restrict__ iNut,
+	__global double* __restrict__ iNut,//9
 #endif
 #ifdef USING_CHT_SOURCE_CORRECTION
 	__global double* __restrict__ dRhoCp,
@@ -241,7 +241,7 @@ __kernel void Update_T_Coeffs_Implicit(__global int* __restrict__ IndArr,
 
 	// No BCs to handle for south coefficient, so calculate and set element in A
 	// directly
-	Scoeff = DTFD * (Jy * dYs - alphaVal * dY2s);
+	double Scoeff = DTFD * (Jy * dYs - alphaVal * dY2s);
 	
 	// W coefficient is 0 for inlet nodes, so Wcoeff must be multiplied
 	// by the inlet temperature and moved to the LHS of equation

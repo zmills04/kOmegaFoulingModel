@@ -83,6 +83,7 @@ private:
 public:
 	friend class ReduceGenerator;
 	friend class BiCGStabGenerator;
+	friend class GMRESGenerator;
 	static sourceGenerator *SourceInstance()
 	{
 		if (!s_instance)

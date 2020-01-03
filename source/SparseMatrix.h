@@ -36,9 +36,9 @@ public:
 						  // etc). This is specifically for Omega and Kappa, since they share
 						  // a CSR_Inds instance.
 
-	Array1Di IA; // row information
-	Array1Di JA; // column information (i.e. the location in the domain that the element corresponds to (in 1D i.e. i+XsizeFull*j))
-	Array1Di RA; // RA(i) gives the full matrix row index of element i in CSR matrix (provides easier access to info, mainly used for saving files)
+	Array1Du IA; // row information
+	Array1Du JA; // column information (i.e. the location in the domain that the element corresponds to (in 1D i.e. i+XsizeFull*j))
+	Array1Du RA; // RA(i) gives the full matrix row index of element i in CSR matrix (provides easier access to info, mainly used for saving files)
 
 	NTYPE_TYPE solidFlag, fluidFlag, solidBoundFlag;
 

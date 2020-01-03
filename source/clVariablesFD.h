@@ -19,7 +19,10 @@
 class clVariablesFD
 {
 public:
-
+	int stepsPerLB, curIter, timeSinceTimeStepChange, timeStepInd;
+	double timeStep;
+	int timeBtwIncreaseTimeStep = 20;
+	Array2Dd tempPrev;
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                                               ///////////////
@@ -34,9 +37,13 @@ public:
 	clVariablesFD() : tempArray("temp"), rhoCpDer("rhoCpDer"), 
 		alphaDer("alpha"), Nu("Nu"), nuDist("nuDist"), 
 		nuDistVec("nuNodCInds"), nuYInds("nuYinds"), NuMean("NuMean"),
-		TempInds(M0_SOLID_NODE, M0_FLUID_NODE, SOLID_BOUNDARY_NODE0)
+		TempInds(M0_SOLID_NODE, M0_FLUID_NODE, SOLID_BOUNDARY_NODE0),
+		tempPrev("tempPrev")
 	{
 		loadParamsPtr = std::bind(&clVariablesFD::loadParams, this);
+		timeSinceTimeStepChange = 0;
+		curIter = 0;
+
 	};
 	virtual ~clVariablesFD(){ };
 
@@ -319,6 +326,9 @@ public:
 	// Updates Nu Coefficients
 	void updateNuCoeffs();
 
+	void halveTimeStep();
+	void doubleTimeStep();
+
 	////////////////////////////////////////////////////////////////////////////	
 	//////////////               Solving Functions               ///////////////
 	////////////////////////////////////////////////////////////////////////////
@@ -332,10 +342,20 @@ public:
 	// Enqueues kernels to solve T for current time step
 	void Solve(cl_command_queue* que = nullptr, int num_list = 0, cl_event* wait = nullptr)
 	{
-		return;
-		TempUpdateCoeffs.call_kernel(que, num_list, wait);
-		clFinish(FDQUEUE);
-		Temp.solve();
+		timeSinceTimeStepChange++;
+		if (timeSinceTimeStepChange >= timeBtwIncreaseTimeStep)
+			doubleTimeStep();
+
+		Temp.copyToPrevSolution();
+
+		curIter = 0;
+		while (curIter < stepsPerLB)
+		{
+			TempUpdateCoeffs.call_kernel(que, num_list, wait);
+			clFinish(FDQUEUE);
+			Temp.solve();
+			curIter++;
+		}
 	}
 
 

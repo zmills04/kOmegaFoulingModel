@@ -813,8 +813,8 @@ void clVariablesLB::setKernelArgs()
 	{
 		collisionKernel.set_argument(ind++, kOmegaClass.WallD.get_buf_add());
 		collisionKernel.set_argument(ind++, kOmegaClass.Nut_array.get_buf_add());
-		collisionKernel.set_argument(ind++, kOmegaClass.Kappa.get_add_Macro());
-		collisionKernel.set_argument(ind++, kOmegaClass.Omega.get_add_Macro());
+		collisionKernel.set_argument(ind++, kOmegaClass.Kappa_array.get_buf_add());
+		collisionKernel.set_argument(ind++, kOmegaClass.Omega_array.get_buf_add());
 		collisionKernel.set_argument(ind++, kOmegaClass.Sxy_array.get_buf_add());
 		if (turbVelBCFlag)
 		{

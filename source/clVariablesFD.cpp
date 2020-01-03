@@ -20,6 +20,7 @@ void clVariablesFD::allocateArrays()
 		rhoCpDer.allocate(p.nX, p.XsizeFull, p.nY, p.nY);
 		rhoCpDer.fill({ {0.,0.} });
 	}
+	tempPrev.zeros(p.nX, p.XsizeFull, p.nY, p.nY);
 	// Nu intialized in separate function (need to calculate
 	// number of nodes before initializing)
 	//dX_cur.allocate_buffer_w_copy(p.context, p.IOqueue);
@@ -198,6 +199,33 @@ void clVariablesFD::freeHostArrays()
 	alphaDer.FreeHost();
 }
 
+void clVariablesFD::halveTimeStep()
+{
+	stepsPerLB *= 2;
+	timeStep /= 2.0;
+#ifdef _DEBUG
+	std::cout << "Halving Temp Solver timestep to " << timeStep << std::endl;
+#endif
+	TempUpdateCoeffs.set_argument(timeStepInd, &timeStep);
+	Temp.copyFromPrevSolution();
+	curIter = 0;
+	timeSinceTimeStepChange = 0;
+}
+
+void clVariablesFD::doubleTimeStep()
+{
+	timeSinceTimeStepChange = 0;
+	if (stepsPerLB == 1)
+	{
+		return;
+	}
+	stepsPerLB /= 2;
+	timeStep *= 2.0;
+#ifdef _DEBUG
+	std::cout << "Doubling Temp Solver timestep to " << timeStep << std::endl;
+#endif
+	TempUpdateCoeffs.set_argument(timeStepInd, &timeStep);
+}
 
 void clVariablesFD::ini()
 {
@@ -216,15 +244,21 @@ void clVariablesFD::ini()
 	// Add source file to string containing source to be compiled
 	sourceGenerator::SourceInstance()->addFile2Kernel("tfdKernels.cl");
 	
+	stepsPerLB = (int)(1. / p.dTtfd);
+	timeSinceTimeStepChange = 0;
+	timeStep = p.dTtfd;
+
 	// initialize CSR storage arrays
 	TempInds.ini(p.nX, p.XsizeFull, p.nY, p.nY, &vls.nType);
 
 	// initialize alpha and rhoCp derivative arrays
 	iniDerivativeArrays();
 
-	// Create BiCGStab Solver for temperature
-	Temp.CreateSolver(&tempArray, &TempInds, FDQUEUE_REF,
-		tempMaxIters, tempMaxRelTol, tempMaxAbsTol);
+	std::function<void(void)> halveTimePtr = std::bind(&clVariablesFD::halveTimeStep, this);
+
+	// Initialize solver classes for k and omega
+	Temp.CreateSolverWithVarTime(&tempArray, &tempPrev, halveTimePtr,
+		&TempInds, FDQUEUE_REF, tempMaxIters, tempMaxRelTol, tempMaxAbsTol);
 
 	// Initialize reduction class for temp
 	sumTemp.ini(*Temp.getMacroArray(), restartRunFlag, "redTemp");
@@ -468,10 +502,10 @@ void clVariablesFD::nuFindNearestNode(const int i, const int shiftInd)
 	cl_int2 C0i = vls.min2(C0, C1), C1i = vls.max2(C0, C1);
 	C0i = { { C0i.x - 1, C0i.y - 1 } };
 	C1i = { { C1i.x + 1, C1i.y + 1 } };
-	C0i.x = max(C0i.x, vtr.trDomainXBounds.x);
-	C0i.y = max(C0i.y, 0);
-	C1i.x = min(C1i.x, vtr.trDomainXBounds.y - 1);
-	C1i.y = min(C1i.y, p.nY - 1);
+	C0i.x = MAX(C0i.x, vtr.trDomainXBounds.x);
+	C0i.y = MAX(C0i.y, 0);
+	C1i.x = MIN(C1i.x, vtr.trDomainXBounds.y - 1);
+	C1i.y = MIN(C1i.y, p.nY - 1);
 	if (C0i.x >= vtr.trDomainXBounds.y)
 		return;
 	if (C1i.x < vtr.trDomainXBounds.x)
@@ -542,7 +576,7 @@ void clVariablesFD::setKernelArgs()
 
 	TempUpdateCoeffs.set_argument(ind++, Temp.get_add_IndArr());
 	TempUpdateCoeffs.set_argument(ind++, vls.nType.get_buf_add());
-	TempUpdateCoeffs.set_argument(ind++, vls.dXArr.get_buf_add());
+	TempUpdateCoeffs.set_argument(ind++, vls.dXArr0.get_buf_add());
 	TempUpdateCoeffs.set_argument(ind++, Temp.get_add_A());
 	TempUpdateCoeffs.set_argument(ind++, Temp.get_add_b());
 	TempUpdateCoeffs.set_argument(ind++, Temp.get_add_Macro());
@@ -557,9 +591,10 @@ void clVariablesFD::setKernelArgs()
 	{
 		TempUpdateCoeffs.set_argument(ind++, rhoCpDer.get_buf_add());
 	}
-	TempUpdateCoeffs.set_argument(ind++, &p.dTtfd);
+	TempUpdateCoeffs.set_argument(ind, &p.dTtfd);
+	timeStepInd = ind;
 
-	
+
 	ind = 0;
 	SetSSCoeffs.set_argument(ind++, Temp.get_add_IndArr());
 	SetSSCoeffs.set_argument(ind++, vls.nType.get_buf_add());

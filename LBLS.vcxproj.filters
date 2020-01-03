@@ -74,6 +74,12 @@
     <ClCompile Include="source\kOmega.cpp">
       <Filter>Fluid\LBM</Filter>
     </ClCompile>
+    <ClCompile Include="source\GMRESGenerator.cpp">
+      <Filter>OpenCL</Filter>
+    </ClCompile>
+    <ClCompile Include="source\GMRESSolver.cpp">
+      <Filter>OpenCL</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Fluid">
@@ -191,6 +197,12 @@
     </ClInclude>
     <ClInclude Include="source\Array.h">
       <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="source\GMRESGenerator.h">
+      <Filter>OpenCL</Filter>
+    </ClInclude>
+    <ClInclude Include="source\GMRESSolver.h">
+      <Filter>OpenCL</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -146,10 +146,10 @@ Poisson Number Soot: 0.126
 Youngs Modulus Soot: 35000000000
 MFP Air: 6.8e-08
 Hamaker Constant: 1e-20
-Dep Porosity: 0.92
+Dep Porosity: 0.9
 Wall Correction: 1.7
 Lift Coefficient: 81.2
-Num Each Par: 10
+Num Each Par: 1
 Dp Dists: [0.0110683172, 0.0753202321, 0.2190854271, 0.4078159151, 0.5895091551, 0.7342808391, 0.8366463241, 0.9036727872, 0.945448437, 0.9707091428, 0.9857431651, 0.99466071788, 1.00000000073]
 Par Diameters: [5e-08, 7e-08, 9e-08, 1.1e-07, 1.3e-07, 1.5e-07, 1.7e-07, 1.9e-07, 2.1e-07, 2.3e-07, 2.5e-07, 2.7e-07, 2.9e-07]
 Paricles Per GL Obj: 1

@@ -400,14 +400,14 @@ void clVariablesLS::setKernelArgs()
 	updateNType.set_argument(3, vlb.Ux_array.get_buf_add());
 	updateNType.set_argument(4, vlb.Uy_array.get_buf_add());
 	updateNType.set_argument(5, vlb.Ro_array.get_buf_add());
-	updateNType.set_argument(6, vlb.kOmegaClass.Kappa.get_add_A());
-	updateNType.set_argument(7, vlb.kOmegaClass.Kappa.get_add_b());
-	updateNType.set_argument(8, vlb.kOmegaClass.Kappa.get_add_Macro());
-	updateNType.set_argument(9, vlb.kOmegaClass.Omega.get_add_A());
-	updateNType.set_argument(10, vlb.kOmegaClass.Omega.get_add_b());
-	updateNType.set_argument(11, vlb.kOmegaClass.Omega.get_add_Macro());
+	updateNType.set_argument(6, vlb.kOmegaClass.KappaGMRES.get_add_A());
+	updateNType.set_argument(7, vlb.kOmegaClass.KappaGMRES.get_add_b());
+	updateNType.set_argument(8, vlb.kOmegaClass.KappaGMRES.get_add_Macro());
+	updateNType.set_argument(9, vlb.kOmegaClass.OmegaGMRES.get_add_A());
+	updateNType.set_argument(10, vlb.kOmegaClass.OmegaGMRES.get_add_b());
+	updateNType.set_argument(11, vlb.kOmegaClass.OmegaGMRES.get_add_Macro());
 	updateNType.set_argument(12, vlb.kOmegaClass.Nut_array.get_buf_add());
-	updateNType.set_argument(13, vlb.kOmegaClass.Omega.get_add_IndArr());
+	updateNType.set_argument(13, vlb.kOmegaClass.OmegaGMRES.get_add_IndArr());
 
 	int ind = 0;
 	BLinks::arrName BLArrList[] = { BLinks::P01Arr, BLinks::vNArr,

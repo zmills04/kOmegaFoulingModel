@@ -31,11 +31,11 @@ __kernel void Update_kOmega_Diffusivities(__global NTYPE_TYPE *__restrict__ map,
 	if ((type & M_SOLID_NODE)) { return; }
 
 
-	double dx_e = dXcur[gid], dx_w = dXcur[gid + DIST_SIZE], dx_c = dx_e + dx_w;
-	double dy_n = dXcur[gid + DIST_SIZE * 2], dy_s = dXcur[gid + DIST_SIZE * 3], dy_c = dy_n + dy_s;
+	//double dx_e = dXcur[gid], dx_w = dXcur[gid + DIST_SIZE], dx_c = dx_e + dx_w;
+	//double dy_n = dXcur[gid + DIST_SIZE * 2], dy_s = dXcur[gid + DIST_SIZE * 3], dy_c = dy_n + dy_s;
 
-	//double dx_e = max(dXcur[gid]), dx_w = max(dXcur[gid + DIST_SIZE], 0.1), dx_c = max(dx_e + dx_w, 0.1);
-	//double dy_n = max(dXcur[gid + DIST_SIZE * 2], 0.1), dy_s = max(dXcur[gid + DIST_SIZE * 3], 0.1), dy_c = max(dy_n + dy_s, 0.1);
+	double dx_e = max(dXcur[gid], 0.1), dx_w = max(dXcur[gid + DIST_SIZE], 0.1), dx_c = max(dx_e + dx_w, 0.1);
+	double dy_n = max(dXcur[gid + DIST_SIZE * 2], 0.1), dy_s = max(dXcur[gid + DIST_SIZE * 3], 0.1), dy_c = max(dy_n + dy_s, 0.1);
 
 	double Xe_coeff = dx_w / (dx_e * dx_c), Xw_coeff = -dx_e / (dx_w * dx_c), Xc_coeff = (dx_e - dx_w) / (dx_e * dx_w);
 	double Yn_coeff = dy_s / (dy_n * dy_c), Ys_coeff = -dy_n / (dy_s * dy_c), Yc_coeff = (dy_n - dy_s) / (dy_n * dy_s);

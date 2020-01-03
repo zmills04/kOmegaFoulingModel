@@ -100,6 +100,9 @@ public:
 	// solving operations to overlap.
 	static cl_mem r0Hat, pVec, vVec, tVec;
 
+	viennacl::compressed_matrix<double> vclA;
+	viennacl::vector<double> vclX, vclB;
+
 	// Using two buffers for each intermediate set (alternates between the two, instead of one per reduce step)
 	static cl_mem *reduceBufSet1, *reduceBufSet2;
 	static bool staticVarInitialized;
@@ -153,13 +156,18 @@ public:
 
 
 	double avgRes;
-
+	int iterCount;
 	// Step f11: uses bNorm from step 1
 
 	enum ScalarIndex { indNormB = 0, indNormR = 1, indNormS = 2, indRho = 3, indOmega = 4, indAlpha = 5, indBeta = 6 };
 	enum { C, E, W, N, S };
 
-	BiCGStabSolver() : scalarBuf(7, "scalarBuf"), resetTimeFlag(false)
+
+	viennacl::linalg::gmres_tag my_gmres_tag;
+	viennacl::linalg::gmres_solver<viennacl::vector<double> > my_gmres_solver;
+
+	BiCGStabSolver() : scalarBuf(7, "scalarBuf"), resetTimeFlag(false), my_gmres_tag(1e-5, 30, 10),
+	my_gmres_solver(my_gmres_tag)
 	{
 		rowBlocks = nullptr;
 	}
@@ -218,6 +226,10 @@ public:
 	// initializes all static variables
 	static void ini(int xsize_, int xsizefull_, int ysize_);
 
+
+	void setArraysWithoutCreation(Array2Dd* macro_, CSR_Inds* inds_, cl_command_queue* calcque_, 
+		int maxiters_, double reltol_, double abstol_);
+
 	// creates CSR matrix and clsparsecontrol object, generates meta information, copies
 	// it over and deletes clsparse objects since they are no longer needed.
 	void getCSRMeta();
@@ -233,10 +245,9 @@ public:
 	void runReduce(RedKernelList &redlist_, cl_command_queue* que_, int num_wait = 0,
 		cl_event *wait = NULL, cl_event* evt = NULL);
 
-	bool reduceAndCheckConvergence(cl_command_queue *que_, int iternum, bool setInitialRes = false, int num_wait = 0,
+	bool reduceAndCheckConvergence(cl_command_queue *que_, bool setInitialRes = false, int num_wait = 0,
 		cl_event *wait = NULL, cl_event* evt = NULL);
 
-	bool reduceAndCheckConvergenceWithPrint(cl_command_queue* que_, int iterNum);
 
 	void copy_buffers(cl_mem *src_buf, cl_mem *dest_buf);
 
@@ -327,6 +338,10 @@ public:
 		tempArr.read_from_buffer_to_array(*mem_);
 		tempArr.savebin();
 	}
+
+
+	void debugCheckForNans();
+	void debugTestResidual(double residual_);
 
 };
 
@@ -501,6 +516,7 @@ public:
 		}
 		return false;
 	}
+
 
 	clsparseControl getControl()
 	{

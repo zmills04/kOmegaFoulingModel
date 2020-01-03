@@ -7,20 +7,6 @@
 
 
 
-
-#define TEST_RESIDUAL_DEBUG(residual_)	if (isnan(residual_))\
-										{\
-											bVec_copy.save_txt_from_device();\
-											xVec_copy.save_txt_from_device();\
-											vlb.saveDebug();\
-										}
-
-
-
-
-
-
-
 int BiCGStabSolver::fullSize = 0;
 int BiCGStabSolver::colSize = 0; 
 int BiCGStabSolver::Xsize = 0;
@@ -32,6 +18,7 @@ cl_mem BiCGStabSolver::r0Hat = nullptr;
 cl_mem BiCGStabSolver::pVec = nullptr;
 cl_mem BiCGStabSolver::vVec = nullptr;
 cl_mem BiCGStabSolver::tVec = nullptr;
+
 cl_mem* BiCGStabSolver::reduceBufSet1 = nullptr;
 cl_mem* BiCGStabSolver::reduceBufSet2 = nullptr;
 bool BiCGStabSolver::staticVarInitialized = false;
@@ -283,7 +270,6 @@ void BiCGStabSolver::ini(int xsize_, int xsizefull_, int ysize_)
 	iniBuffer(vVec, fullSize, "vVec");
 	iniBuffer(tVec, fullSize, "tVec");
 
-
 	staticVarInitialized = true;
 }
 
@@ -331,6 +317,74 @@ void BiCGStabSolver::CreateSolverWithVarTime(Array2Dd* macro_, Array2Dd* macroPr
 	resetTimeFlag = true;
 	CreateSolver(macro_, inds_, calcque_, maxiters_, reltol_, abstol_);
 }
+
+void BiCGStabSolver::setArraysWithoutCreation(Array2Dd* macro_, CSR_Inds* inds_, cl_command_queue* calcque_,
+	int maxiters_, double reltol_, double abstol_)
+{
+	calcQue = calcque_;
+	Name = macro_->getName() + "Solver";
+	Inds = inds_;
+	xVec = macro_;
+
+	Xsize = Inds->Xsize;
+	Ysize = Inds->Ysize;
+	XsizeFull = Inds->XsizeFull;
+	colSize = XsizeFull * Ysize;
+
+	NNZ = Inds->nnz();
+	maxIters = maxiters_;
+	relTol = reltol_;
+	absTol = abstol_;
+
+
+	ini(Inds->Xsize, Inds->XsizeFull, Inds->Ysize);
+
+	NNZ = Inds->nnz();
+	maxIters = maxiters_;
+	relTol = reltol_;
+	absTol = abstol_;
+
+
+	std::string Aname = Name + "_Amat";
+	std::string bname = Name + "_bVec";
+	std::string xname = Name + "_xVec";
+	std::string scalarname = Name + "_Scalar";
+
+	// Only want to call these once when a CSR_Inds instance is shared
+	// between BiCGStabSolver instances
+	std::string ianame = Name + "_IA";
+	std::string janame = Name + "_JA";
+	std::string raname = Name + "_RA";
+
+	Amat.zeros(Inds->nnz());
+	Amat.setName(Aname);
+	fillSolidBoundaryNodes();
+
+	Inds->IA.setName(ianame);
+	Inds->JA.setName(janame);
+	Inds->RA.setName(raname);
+
+	Inds->allocate_buffers(*clEnv::instance()->getContext());
+	Inds->copy_RA_to_device(clEnv::instance()->getIOqueue());
+	Inds->copy_to_device(clEnv::instance()->getIOqueue());
+	Inds->iniFlag = true;
+	
+	
+	bVec.zeros(fullSize);
+	bVec.setName(bname);
+	bVec.allocate_buffer_w_copy();
+	Amat.allocate_buffer_w_copy(CL_MEM_READ_WRITE);
+	xVec->allocate_buffer_size(p.FullSize);
+	xVec->copy_to_buffer();
+
+
+	vclA.setWithExistingBuffers(Inds->IA.get_buffer(), Inds->JA.get_buffer(),
+		Amat.get_buffer(), Inds->rows, Inds->cols, Inds->nnz(), viennacl::ocl::current_context());
+
+	vclX.setWithExistingBuffer(xVec->get_buffer(), Inds->rows, 0, 0, viennacl::ocl::current_context());
+	vclB.setWithExistingBuffer(bVec.get_buffer(), Inds->rows, 0, 0, viennacl::ocl::current_context());
+}
+
 
 //size_t globalSizeCSRMV, globalSizeAXPBY;
 void BiCGStabSolver::CreateSolver(Array2Dd *macro_, CSR_Inds *inds_, cl_command_queue *calcque_, int maxiters_, double reltol_, double abstol_)
@@ -426,6 +480,7 @@ void BiCGStabSolver::CreateSolver(Array2Dd *macro_, CSR_Inds *inds_, cl_command_
 
 }
 
+
 void BiCGStabSolver::fillSolidBoundaryNodes()
 {
 	for (int i = 0; i < Inds->Xsize; i++)
@@ -451,67 +506,41 @@ void BiCGStabSolver::runReduce(RedKernelList &redlist_, cl_command_queue* que_, 
 	}
 }
 
-bool BiCGStabSolver::reduceAndCheckConvergence(cl_command_queue *que_, int iternum, bool setInitialRes, int num_wait,
+bool BiCGStabSolver::reduceAndCheckConvergence(cl_command_queue *que_, bool setInitialRes, int num_wait,
 	cl_event *wait, cl_event* evt)
 {
 	runReduce(bNorm, que_, num_wait, wait, evt);
 	scalarBuf.read_from_buffer_size(2);
 	double residual = scalarBuf(1) / scalarBuf(0);
+	//avgRes = (avgRes * (double)(iterCount - 1) + residual) / ((double)iterCount);
 
 	if (setInitialRes)
 	{
 		initialResidual = residual;
 	}
 
-	
-	if (resetTimeFlag & (isnan(residual)))
-	{
-		resetTimeFunc();
-		return true;
-	}
 
+	if (resetTimeFlag)
+	{
+		if (isnan(residual) || (iterCount > 1 && residual > 10. * avgRes))
+		{
+			resetTimeFunc();
+			return true;
+		}
+	}
 #ifdef _DEBUG
-	TEST_RESIDUAL_DEBUG(residual)
+	debugTestResidual(residual);
 #endif
-
-	if (residual <= relTol || residual <= absTol * initialResidual)
-	{
-		return true;
-	}
-	return false;
-}
-
-
-bool BiCGStabSolver::reduceAndCheckConvergenceWithPrint(cl_command_queue* que_, int iterNum)
-{
-	runReduce(bNorm, que_);
-	scalarBuf.read_from_buffer_size(2);
-	double residual = scalarBuf(1) / scalarBuf(0);
-
-	if (iterNum == 1)
-	{
-		initialResidual = residual;
-	}
-
-
-	if (resetTimeFlag & (isnan(residual)))
-	{
-		resetTimeFunc();
-		return true;
-	}
-
-#ifdef _DEBUG
-	TEST_RESIDUAL_DEBUG(residual)
-#endif
-
 
 #ifdef PRINT_BICGSTAB_RESIDUALS
-	printf("Iteration %d Residual = %g\n", iterNum, residual);
+		printf("Iteration %d Residual = %g\n", iterCount, residual);
 #endif
+
 	if (residual <= relTol || residual <= absTol * initialResidual)
 	{
 		return true;
 	}
+	avgRes = residual;
 	return false;
 }
 
@@ -556,9 +585,18 @@ void BiCGStabSolver::copyFromPrevSolution()
 	}
 }
 
-void BiCGStabSolver::solve()
+void BiCGStabSolver::debugTestResidual(double residual_)
 {
-#ifdef _DEBUG
+	if (isnan(residual_))
+	{
+		bVec_copy.save_txt_from_device();
+		xVec_copy.save_txt_from_device();
+		vlb.saveDebug();
+	}
+}
+
+void BiCGStabSolver::debugCheckForNans()
+{
 	bVec_copy.enqueue_copy_to_buffer_blocking(bVec.get_buffer());
 	xVec_copy.enqueue_copy_to_buffer_blocking(xVec->get_buffer());
 	if (p.Time > 40000)
@@ -584,8 +622,17 @@ void BiCGStabSolver::solve()
 			vlb.saveDebug();
 		}
 	}
+}
+
+
+void BiCGStabSolver::solve()
+{
+#ifdef _DEBUG
+	//debugCheckForNans();
 #endif
+
 	avgRes = 0.;
+	iterCount = 0;
 
 	scalarBuf.FillBuffer(1.);
 	bNorm.setOutputIndex(indNormB);
@@ -601,7 +648,7 @@ void BiCGStabSolver::solve()
 	double h_norm_b = scalarBuf(0);
 
 #ifdef _DEBUG
-	TEST_RESIDUAL_DEBUG(h_norm_b)
+	debugTestResidual(h_norm_b);
 #endif
 
 	if (h_norm_b <= 1.0e-16)
@@ -623,11 +670,11 @@ void BiCGStabSolver::solve()
 	// Step 4
 	runReduce(rhoSqr, calcQue);
 
-	int iter = 1;
+
 	bool firstIter = true;
-	while (iter < maxIters)
+	while (iterCount < maxIters)
 	{
-		if (iter > 1)
+		if (iterCount > 0)
 		{
 			// Step f1, f2
 			runReduce(rhoDot, calcQue);
@@ -647,11 +694,8 @@ void BiCGStabSolver::solve()
 		shAXPBY(calcQue);
 
 		// Step f7
-#if defined(PRINT_BICGSTAB_RESIDUALS) | defined(_DEBUG)
-		if (reduceAndCheckConvergenceWithPrint(calcQue, iter))
-#else
+
 		if (reduceAndCheckConvergence(calcQue, firstIter))
-#endif
 		{
 			//converged, so h is correct result and already stored in x
 			return;
@@ -674,7 +718,7 @@ void BiCGStabSolver::solve()
 			return;
 		}
 
-		iter++;
+		iterCount++;
 	}
 }
 
@@ -962,7 +1006,7 @@ bool BiCGStabSolver::saveCSR_row_col_val(std::string outname, bool fromDevFlag)
 	}
 	else
 	{
-		ret &= Inds->saveJA(outname);
+		ret = Inds->saveJA(outname);
 		ret &= Inds->saveRA(outname);
 		outname.append("_A");
 		ret = Amat.savetxt(outname);

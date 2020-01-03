@@ -5,6 +5,7 @@
 
 #include "clProblem.h"
 #include "BiCGStabGenerator.h"
+#include "GMRESGenerator.h"
 
 
 
@@ -487,6 +488,7 @@ void clProblem::loadParams()
 	clEnv::instance()->iniOpenCL(DeviceID, useOpenGL);
 	sourceGenerator::SourceInstance();
 	BiCGStabGenerator::BiCGStabInstance()->ini(nX, XsizeFull, nY);
+	GMRESGenerator::GMRESInstance()->ini(nX, XsizeFull, nY);
 	ReduceGenerator::ReduceInstance()->ini(nX, nY);
 
 

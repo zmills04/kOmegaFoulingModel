@@ -11,6 +11,10 @@
 // TODO: make sure that this is working after change to 
 //		defining arrays as constants in opencl source
 
+// TODO: Have particles represent fractions of particles and
+//		compensate that by multiplying vol_multiplier by equivalent
+//		value. i.e. have Par.numpar /= 100 and vol_multiplier *= 100
+
 //void particleProperties::allocateArrays()
 //{
 //	this->allocateArrays();

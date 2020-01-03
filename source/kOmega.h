@@ -13,7 +13,7 @@
 #include "SparseMatrix.h"
 #include "Reducer.h"
 #include "BiCGStabSolver.h"
-
+#include "GMRESSolver.h"
 
 
 class kOmega
@@ -21,6 +21,10 @@ class kOmega
 public:
 	int timeBtwIncreaseTimeStep = 20;
 	bool saveFlagDebug = false;
+	viennacl::compressed_matrix<double> vclKappaA, vclOmegaA;
+	viennacl::vector<double> vclXkappa, vclXomega, vclBkappa, vclBomega;
+	viennacl::linalg::gmres_tag gmresOmegaTag, gmresKappaTag;
+	viennacl::linalg::gmres_solver<viennacl::vector<double> > gmresOmegaSolver, gmresKappaSolver;
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////	
 //////////////                                               ///////////////
@@ -34,7 +38,9 @@ public:
 		Diff_Omega("diffOmega"), Diff_K("diffK"), Fval_array("Fvals"),
 		Nut_array("lbnut"), dKdO_array("dKdO"), Sxy_array("lbsxy"),
 		Kappa_array("lbkappa"), Omega_array("lbomega"),
-		kOmegaInds(M_SOLID_NODE, M_FLUID_NODE, SOLID_BOUNDARY_NODE)//,
+		kOmegaInds(M_SOLID_NODE, M_FLUID_NODE, SOLID_BOUNDARY_NODE),
+		gmresKappaTag(1e-5, 30, 10), gmresOmegaTag(1e-5, 30, 10),
+		gmresOmegaSolver(gmresOmegaTag), gmresKappaSolver(gmresKappaTag)//,
 //		kappaDebug("kappaDebug"), omegaDebug("omegaDebug")
 	{}
 
@@ -68,6 +74,8 @@ public:
 	// Solvers for Kappa and Omega
 	BiCGStabSolver Kappa;
 	BiCGStabSolver Omega;
+
+	GMRESSolver KappaGMRES, OmegaGMRES;
 
 
 ////////////////////////////////////////////////////////////////////////////

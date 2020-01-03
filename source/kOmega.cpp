@@ -48,8 +48,26 @@ void kOmega::Solve()
 		//	vlb.saveDebug();
 		//	saveFlagDebug = false;
 		//}
-		Kappa.solve();
-		Omega.solve();
+
+		//OmegaGMRES.Inds->IA.save_bin_from_device_ignore_flag("Amat_IA");
+		//OmegaGMRES.Inds->JA.save_bin_from_device_ignore_flag("Amat_JA");
+		//OmegaGMRES.Amat.save_bin_from_device_ignore_flag("Amat");
+		//OmegaGMRES.bVec.save_bin_from_device_ignore_flag("Bvector");
+		//OmegaGMRES.xVec->save_bin_from_device_ignore_flag("Xvector");
+
+		//Array1Di sizeArray("sizeArray");
+		//sizeArray.zeros(5);
+		//sizeArray(0) = OmegaGMRES.Inds->IA.getFullSize();
+		//sizeArray(1) = OmegaGMRES.Inds->JA.getFullSize();
+		//sizeArray(2) = OmegaGMRES.Amat.getFullSize();
+		//sizeArray(3) = OmegaGMRES.xVec->getFullSize();
+		//sizeArray(4) = OmegaGMRES.bVec.getFullSize();
+
+		//sizeArray.savetxt("Amat_sizes");
+
+		OmegaGMRES.solve();
+
+		KappaGMRES.solve();
 		curIter++;
 	}
 }
@@ -200,7 +218,7 @@ void kOmega::ini()
 
 	sourceGenerator::SourceInstance()->addFile2Kernel("kOmegaKernels.cl");
 	
-	stepsPerLB = 1;
+	stepsPerLB = (int)(1. / p.dTlb);
 	timeSinceTimeStepChange = 0;
 	timeStep = p.dTlb;
 
@@ -227,20 +245,77 @@ void kOmega::iniKOmegaArrays()
 
 	std::function<void(void)> halveTimePtr = std::bind(&kOmega::halveTimeStep, this);
 
-	// Initialize solver classes for k and omega
-	kOmegaInds.ini(p.nX, p.XsizeFull, p.nY, p.nY, &vls.nType);
-	Kappa.CreateSolverWithVarTime(&Kappa_array, &kappaPrev, halveTimePtr,
-		&kOmegaInds, LBQUEUE_REF, kappaMaxIters, kappaMaxRelTol, kappaMaxAbsTol);
 
-	//OmegaInds.ini(p.nX, p.XsizeFull, p.nY, p.nY, &vls.nType);
-	Omega.CreateSolverWithVarTime(&Omega_array, &omegaPrev, halveTimePtr,
+	
+	//// Initialize solver classes for k and omega
+	kOmegaInds.ini(p.nX, p.XsizeFull, p.nY, p.nY, &vls.nType);
+	////OmegaInds.ini(p.nX, p.XsizeFull, p.nY, p.nY, &vls.nType);
+
+
+
+	//Kappa.CreateSolverWithVarTime(&Kappa_array, &kappaPrev, halveTimePtr,
+	//	&kOmegaInds, LBQUEUE_REF, kappaMaxIters, kappaMaxRelTol, kappaMaxAbsTol);
+	//Omega.CreateSolverWithVarTime(&Omega_array, &omegaPrev, halveTimePtr,
+	//	&kOmegaInds, LBQUEUE_REF, omegaMaxIters, omegaMaxRelTol, omegaMaxAbsTol);
+
+	KappaGMRES.CreateSolverWithVarTime(&Kappa_array, &kappaPrev, halveTimePtr,
+		&kOmegaInds, LBQUEUE_REF, kappaMaxIters, kappaMaxRelTol, kappaMaxAbsTol);
+	OmegaGMRES.CreateSolverWithVarTime(&Omega_array, &omegaPrev, halveTimePtr,
 		&kOmegaInds, LBQUEUE_REF, omegaMaxIters, omegaMaxRelTol, omegaMaxAbsTol);
 
+	viennacl::ocl::setup_context(0, CLCONTEXT, CLDEVICE, IOQUEUE);
+
+	//vclKappaA.set(Kappa.Inds->IA.get_array(), Kappa.Inds->JA.get_array(), Kappa.Amat.get_array(),
+	//	Kappa.Inds->rows, Kappa.Inds->cols, Kappa.Inds->nnz());
+	//vclOmegaA.set(Kappa.Inds->IA.get_array(), Kappa.Inds->JA.get_array(), Omega.Amat.get_array(),
+	//	Kappa.Inds->rows, Kappa.Inds->cols, Kappa.Inds->nnz());
+
+	//vclBkappa.resize(Kappa.Inds->rows, false);
+	//vclXkappa.resize(Kappa.Inds->rows, false);
+	//vclBomega.resize(Kappa.Inds->rows, false);
+	//vclXomega.resize(Kappa.Inds->rows, false);
+
+	//std::vector<double> bVecTemp(Kappa.Inds->rows, 0.0), xVecTemp(Kappa.Inds->rows, 0.0);
+	//for (int i = 0; i < p.XsizeFull*p.nY; i++)
+	//{
+	//	xVecTemp[i] = Kappa_array[i];
+	//	bVecTemp[i] = Kappa.bVec[i];
+	//}
+	//viennacl::copy(xVecTemp.begin(), xVecTemp.end(), vclXkappa.begin());
+	//viennacl::copy(bVecTemp.begin(), bVecTemp.end(), vclBkappa.begin());
+
+	//for (int i = 0; i < p.XsizeFull * p.nY; i++)
+	//{
+	//	xVecTemp[i] = Omega_array[i];
+	//	bVecTemp[i] = Omega.bVec[i];
+	//}
+	//viennacl::copy(xVecTemp.begin(), xVecTemp.end(), vclXomega.begin());
+	//viennacl::copy(bVecTemp.begin(), bVecTemp.end(), vclBomega.begin());
+
+	//cl_context clcont = *Kappa_array.context;
+
+	//Kappa.Amat.replaceBuffer(vclKappaA.handle().opencl_handle());
+	//Kappa.bVec.replaceBuffer(vclBkappa.handle().opencl_handle());
+	//Kappa.xVec->replaceBuffer(vclXkappa.handle().opencl_handle());
+
+	//Omega.Amat.replaceBuffer(vclOmegaA.handle().opencl_handle());
+	//Omega.bVec.replaceBuffer(vclBomega.handle().opencl_handle());
+	//Omega.xVec->replaceBuffer(vclXomega.handle().opencl_handle());
+
+	//gmresOmegaSolver.set_initial_guess(vclXomega);
+	//gmresKappaSolver.set_initial_guess(vclXkappa);
+	
+	//kappa.setarrayswithoutcreation(&kappa_array, &komegainds, lbqueue_ref,
+	//	kappamaxiters, kappamaxreltol, kappamaxabstol);
+	//omega.setarrayswithoutcreation(&omega_array, &komegainds, lbqueue_ref,
+	//	omegamaxiters, omegamaxreltol, omegamaxabstol);
+
+
 	// initialize reduce classes for k and omega
-	sumOmega.ini(*Omega.getMacroArray(), vlb.restartRunFlag, "redOmega");
-	sumKappa.ini(*Kappa.getMacroArray(), vlb.restartRunFlag, "redKappa");
-	minOmega.ini(*Omega.getMacroArray(), vlb.restartRunFlag, "minOmega");
-	minKappa.ini(*Kappa.getMacroArray(), vlb.restartRunFlag, "minKappa");
+	sumOmega.ini(*OmegaGMRES.getMacroArray(), vlb.restartRunFlag, "redOmega");
+	sumKappa.ini(*KappaGMRES.getMacroArray(), vlb.restartRunFlag, "redKappa");
+	minOmega.ini(*OmegaGMRES.getMacroArray(), vlb.restartRunFlag, "minOmega");
+	minKappa.ini(*KappaGMRES.getMacroArray(), vlb.restartRunFlag, "minKappa");
 }
 
 void kOmega::iniTimeData()
@@ -305,8 +380,8 @@ void kOmega::loadParams()
 
 void kOmega::renameSaveFiles()
 {
-	Kappa.xVec->RenameTxtFile();
-	Omega.xVec->RenameTxtFile();
+	Kappa_array.RenameTxtFile();
+	Omega_array.RenameTxtFile();
 }
 
 void kOmega::halveTimeStep()
@@ -340,8 +415,8 @@ void kOmega::doubleTimeStep()
 
 void kOmega::save2file()
 {
-	Kappa.savetxt_from_device();
-	Omega.savetxt_from_device();
+	Kappa_array.save_txt_from_device();
+	Omega_array.save_txt_from_device();
 }
 
 void kOmega::saveDebug(int saveFl)
@@ -416,8 +491,8 @@ void kOmega::saveDebug(int saveFl)
 
 void kOmega::saveRestartFiles()
 {
-	Kappa.saveCheckPoint();
-	Omega.saveCheckPoint();
+	KappaGMRES.saveCheckPoint();
+	OmegaGMRES.saveCheckPoint();
 }
 
 
@@ -510,8 +585,8 @@ void kOmega::setKernelArgs()
 	int zer = 0;
 
 	kOmegaUpdateDiffCoeffs.set_argument(ind++, vls.nType.get_buf_add());
-	kOmegaUpdateDiffCoeffs.set_argument(ind++, Kappa.get_add_Macro());
-	kOmegaUpdateDiffCoeffs.set_argument(ind++, Omega.get_add_Macro());
+	kOmegaUpdateDiffCoeffs.set_argument(ind++, Kappa_array.get_buf_add());
+	kOmegaUpdateDiffCoeffs.set_argument(ind++, Omega_array.get_buf_add());
 	kOmegaUpdateDiffCoeffs.set_argument(ind++, Nut_array.get_buf_add());
 	kOmegaUpdateDiffCoeffs.set_argument(ind++, WallD.get_buf_add());
 	kOmegaUpdateDiffCoeffs.set_argument(ind++, Diff_K.get_buf_add());
@@ -526,9 +601,9 @@ void kOmega::setKernelArgs()
 
 
 	ind = 0;
-	kOmegaUpdateCoeffs.set_argument(ind++, Omega.get_add_IndArr());
-	kOmegaUpdateCoeffs.set_argument(ind++, Kappa.get_add_Macro());
-	kOmegaUpdateCoeffs.set_argument(ind++, Omega.get_add_Macro());
+	kOmegaUpdateCoeffs.set_argument(ind++, OmegaGMRES.get_add_IndArr());
+	kOmegaUpdateCoeffs.set_argument(ind++, Kappa_array.get_buf_add());
+	kOmegaUpdateCoeffs.set_argument(ind++, Omega_array.get_buf_add());
 	kOmegaUpdateCoeffs.set_argument(ind++, Nut_array.get_buf_add());
 	kOmegaUpdateCoeffs.set_argument(ind++, Diff_K.get_buf_add());
 	kOmegaUpdateCoeffs.set_argument(ind++, Diff_Omega.get_buf_add());
@@ -538,10 +613,10 @@ void kOmega::setKernelArgs()
 	kOmegaUpdateCoeffs.set_argument(ind++, vlb.Ro_array.get_buf_add());
 	kOmegaUpdateCoeffs.set_argument(ind++, vlb.Ux_array.get_buf_add());
 	kOmegaUpdateCoeffs.set_argument(ind++, vlb.Uy_array.get_buf_add());
-	kOmegaUpdateCoeffs.set_argument(ind++, Kappa.get_add_A());
-	kOmegaUpdateCoeffs.set_argument(ind++, Omega.get_add_A());
-	kOmegaUpdateCoeffs.set_argument(ind++, Kappa.get_add_b());
-	kOmegaUpdateCoeffs.set_argument(ind++, Omega.get_add_b());
+	kOmegaUpdateCoeffs.set_argument(ind++, KappaGMRES.get_add_A());
+	kOmegaUpdateCoeffs.set_argument(ind++, OmegaGMRES.get_add_A());
+	kOmegaUpdateCoeffs.set_argument(ind++, KappaGMRES.get_add_b());
+	kOmegaUpdateCoeffs.set_argument(ind++, OmegaGMRES.get_add_b());
 	kOmegaUpdateCoeffs.set_argument(ind++, vls.dXArr.get_buf_add());
 	kOmegaUpdateCoeffs.set_argument(ind++, WallD.get_buf_add());
 	kOmegaUpdateCoeffs.set_argument(ind++, vls.lsMap.get_buf_add());

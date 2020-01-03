@@ -56,7 +56,7 @@
 #define CL_HPP_CL_1_2_DEFAULT_BUILD
 #endif
 
-
+#define VIENNACL_WITH_OPENCL
 
 //#ifdef USE_OPENGL
 #include <Windows.h>
@@ -99,6 +99,12 @@
 #pragma warning( push )
 #pragma warning( disable : 4146)
 #include <yaml-cpp/yaml.h>
+#include "viennacl/scalar.hpp"
+#include "viennacl/vector.hpp"
+#include "viennacl/compressed_matrix.hpp"
+#include "viennacl/linalg/prod.hpp"
+#include "viennacl/linalg/gmres.hpp"
+
 #pragma warning( pop )
 
 typedef unsigned int localSize_t;

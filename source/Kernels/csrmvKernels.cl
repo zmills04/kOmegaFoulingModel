@@ -677,3 +677,5 @@ csrmv_adaptive(__global const VALUE_TYPE * restrict const vals,
 #undef ROWS_FOR_VECTOR
 #undef SIZE_TYPE
 #undef INDEX_TYPE
+
+

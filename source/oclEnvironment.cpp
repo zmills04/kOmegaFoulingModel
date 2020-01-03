@@ -465,14 +465,22 @@ void clEnv::buildProgram(cl_program &program, std::string &KerString,
 	ERROR_CHECKING(status, "Error getting platform information", ERROR_OCL_INITIALIZATION);
 
 	std::string platver(oclVersion, oclVersionSize);
+	std::string bldOpts;
 	if (platver.find("OpenCL 2.") != std::string::npos)
 	{
-		status = clBuildProgram(program, 1, &device, "-cl-mad-enable -cl-std=CL1.2", nullptr, nullptr);
+		bldOpts.append("-cl-std=CL1.2");
 	}
 	else
 	{
-		status = clBuildProgram(program, 1, &device, "-cl-std=CL2.0 -cl-mad-enable", nullptr, nullptr);
+		bldOpts.append("-cl-std=CL2.2");
 	}
+
+	if (ptype_ != clEnv::GMRESType)
+	{
+		bldOpts.append(" -cl-mad-enable");
+	}
+
+	status = clBuildProgram(program, 1, &device, bldOpts.c_str(), nullptr, nullptr);
 
 	printBuildInfo(program, status, name_);
 	ERROR_CHECKING(status, "Build program failed", ERROR_OCL_INITIALIZATION);

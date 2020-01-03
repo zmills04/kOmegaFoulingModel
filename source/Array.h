@@ -106,12 +106,21 @@ public:
 
 	cl_kernel& getKernel() { return ker; }
 
-	int operator()(const cl_command_queue *que_, const int num_wait = 0,
+	int operator()(const cl_command_queue* que_, const int num_wait = 0,
 		cl_event* wait = NULL, cl_event* evt = NULL)
 	{
+#ifdef _DEBUG
+		int status = clEnqueueNDRangeKernel(*que_, ker, 1, NULL, &gsize, &lsize, num_wait, wait, evt);
+		if (status)
+		{
+			printf("Error in ThinKernel: Code: %d\n", status);
+			exit(status);
+		}
+		return status;
+#else
 		return clEnqueueNDRangeKernel(*que_, ker, 1, NULL, &gsize, &lsize, num_wait, wait, evt);
+#endif
 	}
-
 	int createKernel(cl_program *program, std::string name_)
 	{
 		kerCreated = true;
@@ -350,6 +359,9 @@ protected:
 
 		Device_Alloc_Flag = 1;
 	}
+
+
+
 	
 
 	void Copy_HtoD(cl_command_queue *queue = NULL, cl_bool block_flag = CL_TRUE, int num_wait = 0, cl_event *wait = NULL, cl_event *evt = NULL)
@@ -517,6 +529,14 @@ public:
 	int getHostAllocFlag() { return Host_Alloc_Flag; }
 	int getDeviceAllocFlag() { return Device_Alloc_Flag; }
 	int getclFlags() { return clFlags; }
+
+	void setPreAllocatedBuffer(const cl_mem& buffptr, int buffersize = -1)
+	{
+		if (buffersize == -1)
+			buffersize = FullSize;
+		Buffer = buffptr;
+		Device_Alloc_Flag = 1;
+	}
 
 	bool checkForNans(bool readFromDevice = true)
 	{
@@ -690,6 +710,16 @@ public:
 		}
 		return false;
 	}
+
+	void replaceBuffer(cl_mem bufnew)
+	{
+		if (Device_Alloc_Flag)
+			ArrayBase<T>::FreeDevice();
+
+		Buffer = bufnew;
+		Device_Alloc_Flag = 1;
+	}
+
 
 
 /////////////////////////////////////////////////////////////////////
@@ -1759,6 +1789,47 @@ public:
 		return save2file_w_skip(Buf, skip_val);
 	}
 
+	bool save2fileSize(int size_, std::string FileName = "")
+	{
+		int i;
+		if (FileName.length() == 0)
+			FileName = Name;
+		FileName.append(".txt");
+
+		std::fstream stream;
+		if (fileopen(stream, FileName, FileOut) == false)
+			return false;
+
+		for (i = 0; i < size_; i++)
+		{
+			stream << getEl(i) << "\n";
+		}
+		stream.close();
+		return true;
+	}
+
+	bool save2fileSize2D(int size1_, int size2_, std::string FileName = "")
+	{
+		int i;
+		if (FileName.length() == 0)
+			FileName = Name;
+		FileName.append(".txt");
+
+		std::fstream stream;
+		if (fileopen(stream, FileName, FileOut) == false)
+			return false;
+
+		for (i = 0; i < size1_; i++)
+		{
+			for (int j = 0; j < size2_; j++)
+			{
+				stream << getEl(i + size1_ * j) << "\t";
+			}
+			stream << "\n";
+		}
+		stream.close();
+		return true;
+	}
 
 	bool save2file(std::string FileName = "")
 	{
