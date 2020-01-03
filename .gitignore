@@ -2,3 +2,4 @@
 results/
 x64/
 .vs/
+*.bin
